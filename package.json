@@ -1,0 +1,48 @@
+{
+  "name": "worldnotion",
+  "private": false,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "autoprefixer": "^10.5.0",
+    "gray-matter": "^4.0.3",
+    "lucide-react": "^1.8.0",
+    "postcss": "^8.5.9",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "remark": "^15.0.1",
+    "remark-parse": "^11.0.0",
+    "tailwindcss": "^4.2.2",
+    "unified": "^11.0.5",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  },
+  "description": "Desktop worldbuilding vault app for the Everend Forge suite.",
+  "author": "Everendforge",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Everendforge/worldnotion.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Everendforge/worldnotion/issues"
+  },
+  "homepage": "https://github.com/Everendforge/worldnotion#readme"
+}
