@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   BookOpen,
@@ -15,9 +15,8 @@ import {
   Sun,
 } from "lucide-react";
 import "./App.css";
-import { TiptapEditor, ContextMenu } from "./components";
+import { ContextMenu, CodeMirrorEditor, MarkdownPreview } from "./components";
 import type { ContextMenuAction } from "./components";
-import { htmlToMarkdown } from "./utils/editor-adapters";
 import {
   Entity,
   EntityTemplate,
@@ -28,13 +27,12 @@ import {
   VaultTreeNode,
   WriteResult,
   indexVault,
-  joinMarkdown,
   splitMarkdown,
 } from "./domain";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type ThemeChoice = "light" | "dark";
-type EditorMode = "rendered" | "markdown" | "tiptap";
+type EditorMode = "source" | "preview";
 type AppView = "home" | "workspace";
 
 type BrowserFileHandle = {
@@ -93,36 +91,6 @@ function isTauriRuntime() {
 
 function canUseBrowserDirectoryPicker() {
   return "showDirectoryPicker" in window;
-}
-
-function renderMarkdownPreview(body: string) {
-  return body.split("\n").map((line, index) => {
-    const key = `${index}-${line}`;
-    if (line.startsWith("# ")) return <h1 key={key}>{line.slice(2)}</h1>;
-    if (line.startsWith("## ")) return <h2 key={key}>{line.slice(3)}</h2>;
-    if (line.startsWith("### ")) return <h3 key={key}>{line.slice(4)}</h3>;
-    if (line.startsWith("- ")) return <li key={key}>{line.slice(2)}</li>;
-    if (!line.trim()) return <div key={key} className="markdown-gap" />;
-    return <p key={key}>{line}</p>;
-  });
-}
-
-function markdownToEditableText(markdown: string): string {
-  return markdown
-    .split("\n")
-    .map((line) => line.replace(/^#{1,6}\s+/, "").replace(/^-\s+/, "• "))
-    .join("\n")
-    .trim();
-}
-
-function editableTextToMarkdown(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => {
-      if (line.startsWith("• ")) return `- ${line.slice(2)}`;
-      return line;
-    })
-    .join("\n");
 }
 
 function formatValue(value: unknown): string {
@@ -380,7 +348,7 @@ function App() {
   const [query, setQuery] = useState("");
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [editorMode, setEditorMode] = useState<EditorMode>("rendered");
+  const [editorMode, setEditorMode] = useState<EditorMode>("source");
   const [editor, setEditor] = useState<EditorState>();
   const [message, setMessage] = useState("");
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
@@ -393,7 +361,6 @@ function App() {
     targetPath: string;
     targetKind: "file" | "folder";
   } | null>(null);
-  const renderedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -581,7 +548,7 @@ function App() {
       dirty: false,
       mode: path.startsWith(".everend/templates/") ? "template" : "file",
     });
-    setEditorMode("rendered");
+    setEditorMode("source");
   }
 
   function selectPath(path: string) {
@@ -680,20 +647,6 @@ function App() {
     );
   }
 
-  function updateRenderedText(text: string) {
-    setEditor((current) => {
-      if (!current) return current;
-      const bodyMarkdown = editableTextToMarkdown(text);
-      const rawMarkdown = joinMarkdown(current.frontmatterRaw, bodyMarkdown);
-      return {
-        ...current,
-        bodyMarkdown,
-        rawMarkdown,
-        dirty: rawMarkdown !== current.savedMarkdown,
-      };
-    });
-  }
-
   async function saveEditor() {
     if (!editor) return;
     setMessage("");
@@ -731,8 +684,6 @@ function App() {
       setErrorMessage(error instanceof Error ? error.message : String(error));
     }
   }
-
-  const bodyForRendered = editor ? markdownToEditableText(editor.bodyMarkdown) : "";
 
   if (view === "home" || !index) {
     return (
@@ -888,28 +839,19 @@ function App() {
           <div className="editor-actions">
             <button
               type="button"
-              className={editorMode === "rendered" ? "active" : ""}
-              onClick={() => setEditorMode("rendered")}
+              className={editorMode === "source" ? "active" : ""}
+              onClick={() => setEditorMode("source")}
               disabled={!editor}
             >
-              Rendered
+              Source
             </button>
             <button
               type="button"
-              className={editorMode === "markdown" ? "active" : ""}
-              onClick={() => setEditorMode("markdown")}
+              className={editorMode === "preview" ? "active" : ""}
+              onClick={() => setEditorMode("preview")}
               disabled={!editor}
             >
-              Markdown
-            </button>
-            <button
-              type="button"
-              className={editorMode === "tiptap" ? "active" : ""}
-              onClick={() => setEditorMode("tiptap")}
-              disabled={!editor}
-              title="WYSIWYG Editor"
-            >
-              Editor
+              Preview
             </button>
             <button
               type="button"
@@ -931,31 +873,15 @@ function App() {
 
         {editor ? (
           <div className="editor-surface">
-            {editorMode === "markdown" ? (
-              <textarea value={editor.rawMarkdown} onChange={(event) => updateRawMarkdown(event.target.value)} />
-            ) : editorMode === "tiptap" ? (
-              <TiptapEditor
-                content={editor.rawMarkdown}
-                onChange={(html) => {
-                  const markdown = htmlToMarkdown(html);
-                  updateRawMarkdown(markdown);
-                }}
-                disabled={!canWrite}
+            {editorMode === "source" ? (
+              <CodeMirrorEditor
+                value={editor.rawMarkdown}
+                onChange={updateRawMarkdown}
+                theme={settings.theme}
+                readOnly={!canWrite}
               />
             ) : (
-              <div className="rendered-editor-wrap">
-                <div
-                  key={editor.path}
-                  ref={renderedRef}
-                  className="rendered-editor"
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={(event: FormEvent<HTMLDivElement>) => updateRenderedText(event.currentTarget.innerText)}
-                >
-                  {bodyForRendered}
-                </div>
-                <div className="rendered-preview">{renderMarkdownPreview(editor.bodyMarkdown)}</div>
-              </div>
+              <MarkdownPreview markdown={editor.bodyMarkdown} />
             )}
           </div>
         ) : (

@@ -602,3 +602,127 @@ button:hover:not(:disabled),
   letter-spacing: 0.05em;
 }
 
+/* CodeMirror Wikilinks */
+.cm-wikilink {
+  color: var(--wn-accent);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.cm-wikilink:hover {
+  background: var(--wn-accent-soft);
+  text-decoration-style: solid;
+}
+
+/* Markdown Preview */
+.markdown-preview {
+  padding: 16px;
+  line-height: 1.6;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  margin-top: 24px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.markdown-preview h1 {
+  font-size: 2em;
+  border-bottom: 1px solid var(--wn-border);
+  padding-bottom: 8px;
+}
+
+.markdown-preview h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--wn-border);
+  padding-bottom: 6px;
+}
+
+.markdown-preview h3 {
+  font-size: 1.25em;
+}
+
+.markdown-preview p {
+  margin-bottom: 12px;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  margin-bottom: 12px;
+  padding-left: 24px;
+}
+
+.markdown-preview li {
+  margin-bottom: 4px;
+}
+
+.markdown-preview code {
+  background: var(--wn-card);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 0.9em;
+}
+
+.markdown-preview pre {
+  background: var(--wn-card);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.markdown-preview pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-preview blockquote {
+  border-left: 4px solid var(--wn-border);
+  padding-left: 16px;
+  margin: 12px 0;
+  color: var(--wn-text-muted);
+}
+
+.markdown-preview a,
+.markdown-preview .wikilink {
+  color: var(--wn-accent);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+}
+
+.markdown-preview a:hover,
+.markdown-preview .wikilink:hover {
+  background: var(--wn-accent-soft);
+  text-decoration-style: solid;
+}
+
+.markdown-preview table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid var(--wn-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background: var(--wn-card);
+  font-weight: 600;
+}
+
