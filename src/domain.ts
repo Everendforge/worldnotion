@@ -212,7 +212,7 @@ function basenameWithoutExtension(path: string): string {
   return filename.replace(/\.[^.]+$/, "");
 }
 
-function dirname(path: string): string {
+export function dirname(path: string): string {
   const parts = path.split("/");
   parts.pop();
   return parts.join("/");
@@ -320,17 +320,40 @@ function buildTree(files: VaultFile[]): VaultTreeNode[] {
   const folders = new Map<string, VaultTreeNode>();
   
   // Build set of folder description file paths to exclude from tree
+  // A folder description is {FolderName}.md at the same level as {FolderName}/ folder
   const descriptionFiles = new Set<string>();
+  const folderPaths = new Set<string>();
+  
+  // First pass: collect all folder paths
+  files.forEach((file) => {
+    const parentPath = dirname(file.relativePath);
+    if (parentPath) {
+      folderPaths.add(parentPath);
+      // Also add all ancestor folders
+      let current = parentPath;
+      while (current) {
+        folderPaths.add(current);
+        const parent = dirname(current);
+        if (parent === current) break;
+        current = parent;
+      }
+    }
+  });
+  
+  // Second pass: identify description files
   files.forEach((file) => {
     if (isHiddenMetadata(file.relativePath)) return;
     
     const parentPath = dirname(file.relativePath);
     const fileName = file.relativePath.split("/").pop() ?? "";
     
-    // Check if this file is a folder description ({FolderName}.md)
-    if (parentPath && fileName.endsWith(".md")) {
-      const folderName = parentPath.split("/").pop() ?? "";
-      if (fileName === `${folderName}.md`) {
+    // Check if this is a folder description file
+    // Example: Characters.md is a description for Characters/ folder
+    if (fileName.endsWith(".md")) {
+      const folderName = fileName.replace(/\.md$/, "");
+      const potentialFolderPath = parentPath ? `${parentPath}/${folderName}` : folderName;
+      
+      if (folderPaths.has(potentialFolderPath)) {
         descriptionFiles.add(file.relativePath);
       }
     }
@@ -374,7 +397,8 @@ function buildTree(files: VaultFile[]): VaultTreeNode[] {
   // Mark folders that have description files
   folders.forEach((folder) => {
     const folderName = folder.name;
-    const expectedDescPath = `${folder.path}/${folderName}.md`;
+    const parentPath = dirname(folder.path);
+    const expectedDescPath = parentPath ? `${parentPath}/${folderName}.md` : `${folderName}.md`;
     if (descriptionFiles.has(expectedDescPath)) {
       folder.hasDescription = true;
     }

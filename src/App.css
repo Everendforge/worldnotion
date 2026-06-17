@@ -336,6 +336,26 @@ button:hover:not(:disabled),
   font-weight: 500;
 }
 
+.folder-description-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--wn-accent);
+  opacity: 0.5;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+.folder-description-button:hover {
+  opacity: 1;
+  background: var(--wn-accent-soft);
+}
+
 .description-badge {
   margin-left: auto;
   font-size: 8px;

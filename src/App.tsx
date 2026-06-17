@@ -13,6 +13,7 @@ import {
   Save,
   Search,
   Sun,
+  FileEdit,
 } from "lucide-react";
 import "./App.css";
 import { ContextMenu, CodeMirrorEditor } from "./components";
@@ -28,6 +29,7 @@ import {
   WriteResult,
   indexVault,
   splitMarkdown,
+  dirname,
 } from "./domain";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
@@ -206,17 +208,6 @@ function TreeNode({
             if (hasChildren) {
               onToggleExpand(node.path);
             }
-            // Also try to open folder description
-            const folderName = node.name;
-            const descriptionPath = `${node.path}/${folderName}.md`;
-            if (node.hasDescription) {
-              onSelectPath(descriptionPath);
-            } else {
-              const shouldCreate = confirm(`No description found for ${folderName}. Create one?`);
-              if (shouldCreate) {
-                onCreateFolderDescription(node.path);
-              }
-            }
           } else if (node.kind === "file") {
             onSelectPath(node.path);
           }
@@ -238,7 +229,22 @@ function TreeNode({
           <FileText size={14} />
         )}
         <span>{node.name}</span>
-        {node.hasDescription && <span className="description-badge" title="Has description">●</span>}
+        {node.kind === "folder" && node.hasDescription && (
+          <button
+            type="button"
+            className="folder-description-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const folderName = node.name;
+              const parentPath = dirname(node.path);
+              const descriptionPath = parentPath ? `${parentPath}/${folderName}.md` : `${folderName}.md`;
+              onSelectPath(descriptionPath);
+            }}
+            title={`Edit ${node.name} description`}
+          >
+            <FileEdit size={12} />
+          </button>
+        )}
       </button>
       {node.kind === "folder" && hasChildren && isExpanded && (
         <div className="tree-children">
@@ -517,11 +523,12 @@ function App() {
           relativePath: folderPath,
         });
         
-        // Auto-create folder description file
-        const descriptionPath = `${folderPath}/${name}.md`;
+        // Auto-create folder description file at same level as folder
+        const descriptionPath = parentPath ? `${parentPath}/${name}.md` : `${name}.md`;
+        const fullDescPath = `${index.rootPath}/${descriptionPath}`;
+        
         await invoke("save_file", {
-          vaultPath: index.rootPath,
-          relativePath: descriptionPath,
+          path: fullDescPath,
           content: `---\nid: ${crypto.randomUUID()}\ntype: folder-description\nfolder: ${name}\n---\n\n# ${name}\n\nDescription of this folder's contents.\n`,
         });
         
@@ -542,12 +549,13 @@ function App() {
     if (!index) return;
     
     const folderName = folderPath.split("/").pop() ?? folderPath;
-    const descriptionPath = `${folderPath}/${folderName}.md`;
+    const parentPath = dirname(folderPath);
+    const descriptionPath = parentPath ? `${parentPath}/${folderName}.md` : `${folderName}.md`;
+    const fullPath = `${index.rootPath}/${descriptionPath}`;
     
     try {
       await invoke("save_file", {
-        vaultPath: index.rootPath,
-        relativePath: descriptionPath,
+        path: fullPath,
         content: `---\nid: ${crypto.randomUUID()}\ntype: folder-description\nfolder: ${folderName}\n---\n\n# ${folderName}\n\nDescription of this folder's contents.\n`,
       });
       
@@ -565,6 +573,7 @@ function App() {
     
     const vaultName = pathName(index.rootPath);
     const descriptionPath = `${vaultName}.md`;
+    const fullPath = `${index.rootPath}/${descriptionPath}`;
     
     // Check if file exists in index
     const exists = index.files.some(f => f.relativePath === descriptionPath);
@@ -573,8 +582,7 @@ function App() {
       // Create world description file
       try {
         await invoke("save_file", {
-          vaultPath: index.rootPath,
-          relativePath: descriptionPath,
+          path: fullPath,
           content: `---\nid: ${crypto.randomUUID()}\ntype: world-description\nname: ${vaultName}\n---\n\n# ${vaultName}\n\nDescription of this world.\n`,
         });
         
