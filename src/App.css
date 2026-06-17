@@ -319,6 +319,17 @@ button:hover:not(:disabled),
   white-space: nowrap;
 }
 
+.tree-chevron {
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.tree-button:hover .tree-chevron {
+  opacity: 1;
+}
+
 .tree-children {
   margin-left: 12px;
   padding-left: 8px;
@@ -535,3 +546,59 @@ button:hover:not(:disabled),
 .finding-warning {
   color: var(--wn-warning);
 }
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  min-width: 200px;
+  background: var(--wn-card);
+  border: 1px solid var(--wn-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  z-index: 1000;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.context-menu-item:hover {
+  background: var(--wn-accent-soft);
+}
+
+.context-menu-subitem {
+  padding-left: 20px;
+  font-size: 0.9em;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: var(--wn-border);
+  margin: 4px 0;
+}
+
+.context-menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.context-menu-label {
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--wn-text-muted);
+  padding: 6px 12px 4px 12px;
+  letter-spacing: 0.05em;
+}
+

@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   BookOpen,
+  ChevronDown,
+  ChevronRight,
   FileText,
   Folder,
   FolderOpen,
@@ -13,7 +15,8 @@ import {
   Sun,
 } from "lucide-react";
 import "./App.css";
-import { TiptapEditor } from "./components";
+import { TiptapEditor, ContextMenu } from "./components";
+import type { ContextMenuAction } from "./components";
 import { htmlToMarkdown } from "./utils/editor-adapters";
 import {
   Entity,
@@ -26,7 +29,6 @@ import {
   WriteResult,
   indexVault,
   joinMarkdown,
-  slugify,
   splitMarkdown,
 } from "./domain";
 
@@ -142,27 +144,6 @@ function rememberUniverse(settings: AppSettings, rootPath: string): AppSettings 
   return { ...settings, recentUniverse: rootPath, recentUniverses };
 }
 
-function parentPath(path: string | undefined): string {
-  if (!path || path.startsWith(".everend/")) return "";
-  const parts = path.split("/");
-  parts.pop();
-  return parts.join("/");
-}
-
-function templateContent(index: VaultIndex | undefined, entityType: string, name: string) {
-  const slug = slugify(name);
-  const template = index?.templates.find((candidate) => candidate.type === entityType);
-  if (template) {
-    return template.content
-      .replace(/\{\{id\}\}/g, slug)
-      .replace(/\{\{type\}\}/g, entityType)
-      .replace(/\{\{name\}\}/g, name)
-      .replace(/\{\{status\}\}/g, "draft");
-  }
-
-  return `---\nid: ${slug}\ntype: ${entityType}\nname: ${name}\nstatus: draft\n---\n\n# ${name}\n`;
-}
-
 async function readBrowserUniverse(root: BrowserDirectoryHandle): Promise<VaultReadResult> {
   const files: VaultFile[] = [];
   const errors: VaultReadResult["errors"] = [];
@@ -232,29 +213,65 @@ function TreeNode({
   node,
   selectedPath,
   onSelectPath,
+  expandedPaths,
+  onToggleExpand,
+  onContextMenu,
 }: {
   node: VaultTreeNode;
   selectedPath?: string;
   onSelectPath: (path: string) => void;
+  expandedPaths: Set<string>;
+  onToggleExpand: (path: string) => void;
+  onContextMenu: (event: React.MouseEvent, path: string, kind: "file" | "folder") => void;
 }) {
+  const isExpanded = expandedPaths.has(node.path);
+  const hasChildren = node.children.length > 0;
+
   return (
     <div className="tree-node">
       <button
         type="button"
         className={`tree-button ${selectedPath === node.path ? "active" : ""}`}
-        onClick={() => node.kind === "file" && onSelectPath(node.path)}
+        onClick={() => {
+          if (node.kind === "folder" && hasChildren) {
+            onToggleExpand(node.path);
+          } else if (node.kind === "file") {
+            onSelectPath(node.path);
+          }
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onContextMenu(event, node.path, node.kind);
+        }}
         title={node.path}
       >
-        {node.kind === "folder" ? <Folder size={14} /> : <FileText size={14} />}
+        {node.kind === "folder" && hasChildren && (
+          <span className="tree-chevron">
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </span>
+        )}
+        {node.kind === "folder" ? (
+          isExpanded ? <FolderOpen size={14} /> : <Folder size={14} />
+        ) : (
+          <FileText size={14} />
+        )}
         <span>{node.name}</span>
       </button>
-      {node.children.length > 0 ? (
+      {node.kind === "folder" && hasChildren && isExpanded && (
         <div className="tree-children">
           {node.children.map((child) => (
-            <TreeNode key={child.path} node={child} selectedPath={selectedPath} onSelectPath={onSelectPath} />
+            <TreeNode
+              key={child.path}
+              node={child}
+              selectedPath={selectedPath}
+              onSelectPath={onSelectPath}
+              expandedPaths={expandedPaths}
+              onToggleExpand={onToggleExpand}
+              onContextMenu={onContextMenu}
+            />
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -366,6 +383,16 @@ function App() {
   const [editorMode, setEditorMode] = useState<EditorMode>("rendered");
   const [editor, setEditor] = useState<EditorState>();
   const [message, setMessage] = useState("");
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
+    const stored = localStorage.getItem("worldnotion.expandedPaths");
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  });
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    targetPath: string;
+    targetKind: "file" | "folder";
+  } | null>(null);
   const renderedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -418,6 +445,87 @@ function App() {
       return { ...node, children };
     }
     return undefined;
+  }
+
+  useEffect(() => {
+    localStorage.setItem("worldnotion.expandedPaths", JSON.stringify(Array.from(expandedPaths)));
+  }, [expandedPaths]);
+
+  function toggleExpand(path: string) {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }
+
+  function handleContextMenu(event: React.MouseEvent, targetPath: string, targetKind: "file" | "folder") {
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      targetPath,
+      targetKind,
+    });
+  }
+
+  async function handleContextMenuAction(action: ContextMenuAction, templateType?: string) {
+    if (!index || !contextMenu) return;
+
+    const targetPath = contextMenu.targetPath;
+    const parentPath = contextMenu.targetKind === "folder" ? targetPath : targetPath.split("/").slice(0, -1).join("/");
+
+    try {
+      if (action === "newBlankPage") {
+        const name = prompt("Enter page name:");
+        if (!name) return;
+        
+        const fileName = name.endsWith(".md") ? name : `${name}.md`;
+        const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
+        
+        await invoke("save_file", {
+          vaultPath: index.rootPath,
+          relativePath: filePath,
+          content: `---\nid: ${crypto.randomUUID()}\n---\n\n# ${name}\n`,
+        });
+        
+        await refreshUniverse(filePath);
+        setMessage(`Created ${fileName}`);
+      } else if (action === "newPageFromTemplate" && templateType) {
+        const name = prompt(`Enter ${templateType} name:`);
+        if (!name) return;
+        
+        await invoke("create_entity", {
+          vaultPath: index.rootPath,
+          templateType,
+          name,
+          parentPath: parentPath || undefined,
+        });
+        
+        const fileName = `${name}.md`;
+        const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
+        await refreshUniverse(filePath);
+        setMessage(`Created ${templateType}: ${name}`);
+      } else if (action === "newFolder") {
+        const name = prompt("Enter folder name:");
+        if (!name) return;
+        
+        await invoke("create_folder", {
+          vaultPath: index.rootPath,
+          relativePath: parentPath ? `${parentPath}/${name}` : name,
+        });
+        
+        await refreshUniverse();
+        setExpandedPaths((prev) => new Set(prev).add(parentPath ? `${parentPath}/${name}` : name));
+        setMessage(`Created folder: ${name}`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function updateSettings(next: Partial<AppSettings>) {
@@ -624,71 +732,6 @@ function App() {
     }
   }
 
-  async function createFolder() {
-    if (!index) return;
-    const name = window.prompt("Folder name");
-    if (!name) return;
-    const base = selectedEntity ? parentPath(selectedEntity.path) : "";
-    const relativePath = base ? `${base}/${name}` : name;
-    setMessage("");
-    setErrorMessage("");
-    try {
-      if (browserRoot) {
-        await getBrowserDirectory(browserRoot, relativePath, true);
-        setMessage("Folder created.");
-        await refreshUniverse();
-        return;
-      }
-
-      const result = await invoke<WriteResult>("create_folder", {
-        vaultPath: index.rootPath,
-        relativePath,
-      });
-      if (!result.ok) throw new Error(result.message ?? "Could not create folder.");
-      setMessage("Folder created.");
-      await refreshUniverse();
-    } catch (error) {
-      setLoadState("error");
-      setErrorMessage(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function createNote() {
-    if (!index) return;
-    const name = window.prompt("Note name");
-    if (!name) return;
-    const base = selectedEntity ? parentPath(selectedEntity.path) : "";
-    const entityType = "concept";
-    const slug = slugify(name);
-    const relativePath = base ? `${base}/${slug}.md` : `${slug}.md`;
-    setMessage("");
-    setErrorMessage("");
-    try {
-      if (browserRoot) {
-        const existing = index.files.some((file) => file.relativePath === relativePath);
-        if (existing) throw new Error("Entity file already exists.");
-        await writeBrowserFile(browserRoot, relativePath, templateContent(index, entityType, name));
-        setMessage("Note created.");
-        await refreshUniverse(relativePath);
-        return;
-      }
-
-      const result = await invoke<WriteResult>("create_entity", {
-        vaultPath: index.rootPath,
-        universePath: "",
-        folderPath: base,
-        entityType,
-        name,
-      });
-      if (!result.ok) throw new Error(result.message ?? "Could not create note.");
-      setMessage("Note created.");
-      await refreshUniverse(relativePath);
-    } catch (error) {
-      setLoadState("error");
-      setErrorMessage(error instanceof Error ? error.message : String(error));
-    }
-  }
-
   const bodyForRendered = editor ? markdownToEditableText(editor.bodyMarkdown) : "";
 
   if (view === "home" || !index) {
@@ -788,17 +831,6 @@ function App() {
           </button>
         </div>
 
-        <div className="action-row">
-          <button type="button" onClick={createFolder}>
-            <Plus size={15} />
-            Folder
-          </button>
-          <button type="button" onClick={createNote}>
-            <Plus size={15} />
-            Note
-          </button>
-        </div>
-
         <label className="search-box">
           <Search size={15} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search files" />
@@ -809,7 +841,15 @@ function App() {
           <div className="tree-list">
             {visibleTree.length ? (
               visibleTree.map((node) => (
-                <TreeNode key={node.path} node={node} selectedPath={selectedPath} onSelectPath={selectPath} />
+                <TreeNode
+                  key={node.path}
+                  node={node}
+                  selectedPath={selectedPath}
+                  onSelectPath={selectPath}
+                  expandedPaths={expandedPaths}
+                  onToggleExpand={toggleExpand}
+                  onContextMenu={handleContextMenu}
+                />
               ))
             ) : (
               <p className="muted">No files yet.</p>
@@ -928,6 +968,18 @@ function App() {
       </section>
 
       <Inspector entity={selectedEntity} template={selectedTemplate} index={index} />
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          targetPath={contextMenu.targetPath}
+          targetKind={contextMenu.targetKind}
+          templates={index?.templates.map((t) => t.type) || []}
+          onAction={handleContextMenuAction}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </main>
   );
 }
