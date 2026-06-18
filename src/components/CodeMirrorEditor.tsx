@@ -4,7 +4,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { EditorState as CodeMirrorState, Prec } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap } from "@codemirror/view";
-import { selectSubwordBackward, selectSubwordForward } from "@codemirror/commands";
+import { selectSubwordBackward, selectSubwordForward, indentMore, indentLess } from "@codemirror/commands";
 import { foldGutter, foldKeymap } from "@codemirror/language";
 import { markdownSyntaxPlugin } from "./markdownSyntaxPlugin";
 import { wikilinkPlugin } from "./wikilinkPlugin";
@@ -324,6 +324,32 @@ export function CodeMirrorEditor({
     return false;
   }
 
+  // Helper functions for smart keybindings
+  function isInList(view: EditorView): boolean {
+    const selection = view.state.selection.main;
+    const line = view.state.doc.lineAt(selection.from);
+    const lineText = line.text;
+    // Match unordered lists (-, *), ordered lists (1.), or checkboxes (- [ ])
+    return /^(\s*)([-*]\s|(\d+\.)\s|[-*]\s\[\s*[\sx]\s*\])\s/.test(lineText);
+  }
+
+  function getListItemPrefix(lineText: string): { indent: string; prefix: string } {
+    const match = /^(\s*)([-*]|(\d+)\.|\[\s*[\sx]\s*\])\s/.exec(lineText);
+    if (!match) return { indent: "", prefix: "" };
+    const indent = match[1];
+    const itemType = match[2];
+    
+    if (itemType.startsWith("-") || itemType.startsWith("*")) {
+      return { indent, prefix: itemType === "- [ ]" || itemType === "- [x]" || itemType === "- [X]" ? "- [ ] " : itemType + " " };
+    }
+    if (/^\d+\./.test(itemType)) {
+      // Increment ordered list number
+      const num = parseInt(itemType.slice(0, -1), 10) + 1;
+      return { indent, prefix: `${num}. ` };
+    }
+    return { indent, prefix: "- " };
+  }
+
   return (
     <div className="codemirror-wrap">
       <CodeMirror
@@ -375,38 +401,57 @@ export function CodeMirrorEditor({
             },
             {
               key: "Tab",
-              run: () => {
+              run: (view) => {
+                // Tab only hijacks if a menu is active
                 if (wikilinkMenu && filteredNoteSuggestions.length) {
                   applyWikilinkSuggestion(filteredNoteSuggestions[wikilinkIndex] ?? filteredNoteSuggestions[0]);
                   return true;
                 }
-                if (!slashMenu || !filteredSlashCommands.length) return false;
-                void applySlashCommand(filteredSlashCommands[slashIndex]?.id ?? filteredSlashCommands[0].id);
-                return true;
+                if (slashMenu && filteredSlashCommands.length) {
+                  void applySlashCommand(filteredSlashCommands[slashIndex]?.id ?? filteredSlashCommands[0].id);
+                  return true;
+                }
+                // Default: indent normally
+                return indentMore(view);
+              },
+            },
+            {
+              key: "Shift-Tab",
+              run: (view) => {
+                // Always dedent (don't hijack for menus)
+                return indentLess(view);
               },
             },
             {
               key: "Enter",
-              run: () => {
+              run: (view) => {
+                // First check if menus are active
                 if (wikilinkMenu && filteredNoteSuggestions.length) {
                   applyWikilinkSuggestion(filteredNoteSuggestions[wikilinkIndex] ?? filteredNoteSuggestions[0]);
                   return true;
                 }
-                if (!slashMenu || !filteredSlashCommands.length) return false;
-                void applySlashCommand(filteredSlashCommands[slashIndex]?.id ?? filteredSlashCommands[0].id);
-                return true;
-              },
-            },
-            {
-              key: "Shift-Enter",
-              run: () => {
-                if (wikilinkMenu && filteredNoteSuggestions.length) {
-                  applyWikilinkSuggestion(filteredNoteSuggestions[wikilinkIndex] ?? filteredNoteSuggestions[0]);
+                if (slashMenu && filteredSlashCommands.length) {
+                  void applySlashCommand(filteredSlashCommands[slashIndex]?.id ?? filteredSlashCommands[0].id);
                   return true;
                 }
-                if (!slashMenu || !filteredSlashCommands.length) return false;
-                void applySlashCommand(filteredSlashCommands[slashIndex]?.id ?? filteredSlashCommands[0].id);
-                return true;
+                // Default behavior: auto-continue lists or normal Enter
+                const selection = view.state.selection.main;
+                const line = view.state.doc.lineAt(selection.from);
+                
+                if (isInList(view)) {
+                  const before = line.text.slice(0, selection.from - line.from);
+                  // Only auto-continue if we're at the end of a non-empty list item
+                  if (before.match(/^(\s*)([-*]|(\d+)\.|\[\s*[\sx]\s*\])\s+\S/)) {
+                    const { indent, prefix } = getListItemPrefix(line.text);
+                    view.dispatch({
+                      changes: { from: selection.from, insert: "\n" + indent + prefix },
+                      selection: { anchor: selection.from + indent.length + prefix.length + 1 },
+                    });
+                    return true;
+                  }
+                }
+                // Return false to use default Enter behavior
+                return false;
               },
             },
             {
