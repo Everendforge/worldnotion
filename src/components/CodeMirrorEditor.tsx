@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useRef } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState as CodeMirrorState, Prec } from "@codemirror/state";
@@ -102,6 +102,10 @@ export function CodeMirrorEditor({
   const [slashIndex, setSlashIndex] = useState(0);
   const [wikilinkMenu, setWikilinkMenu] = useState<WikilinkMenuState>();
   const [wikilinkIndex, setWikilinkIndex] = useState(0);
+  
+  // Debounce timers for menu detection (100ms debounce)
+  const slashMenuDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const wikilinkMenuDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const handleChange = useCallback(
     (newValue: string) => {
       onChange(newValue);
@@ -247,7 +251,48 @@ export function CodeMirrorEditor({
     return false;
   }
 
+  // Helper: Check if cursor is in a context where menus should not appear
+  function isInIgnoredContext(view: EditorView, selection: { from: number }): boolean {
+    const line = view.state.doc.lineAt(selection.from);
+    const lineText = line.text;
+    const cursorPos = selection.from - line.from;
+    
+    // Check for code blocks (triple backticks or indented code)
+    if (lineText.trim().startsWith("```") || /^\s{4,}/.test(lineText)) {
+      return true;
+    }
+    
+    // Check if inside backticks (inline code)
+    const beforeCursor = lineText.slice(0, cursorPos);
+    const afterCursor = lineText.slice(cursorPos);
+    const backtickCountBefore = (beforeCursor.match(/`/g) || []).length;
+    const backtickCountAfter = (afterCursor.match(/`/g) || []).length;
+    if (backtickCountBefore % 2 === 1 && backtickCountAfter % 2 === 1) {
+      return true;
+    }
+    
+    // Check if inside quotes or blockquote
+    if (lineText.trim().startsWith(">")) {
+      return true;
+    }
+    
+    // Check if previous line is a fence start (for code block continuation)
+    if (line.number > 1) {
+      const prevLine = view.state.doc.line(line.number - 1);
+      if (prevLine.text.trim().startsWith("```")) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
   function detectSlashMenu(view: EditorView) {
+    // Clear any pending debounce
+    if (slashMenuDebounceRef.current) {
+      clearTimeout(slashMenuDebounceRef.current);
+    }
+
     if (mode !== "write") {
       setSlashMenu(undefined);
       return;
@@ -257,6 +302,13 @@ export function CodeMirrorEditor({
       setSlashMenu(undefined);
       return;
     }
+    
+    // Check if in ignored context
+    if (isInIgnoredContext(view, selection)) {
+      setSlashMenu(undefined);
+      return;
+    }
+    
     const line = view.state.doc.lineAt(selection.from);
     const before = view.state.doc.sliceString(line.from, selection.from);
     const match = /(?:^|\s)\/([\w-]*)$/.exec(before);
@@ -264,19 +316,28 @@ export function CodeMirrorEditor({
       setSlashMenu(undefined);
       return;
     }
-    const coords = view.coordsAtPos(selection.from);
-    if (!coords) return;
-    setSlashMenu({
-      from: selection.from - (match[1]?.length ?? 0) - 1,
-      to: selection.from,
-      query: match[1] ?? "",
-      x: coords.left,
-      y: coords.bottom + 8,
-    });
-    setSlashIndex(0);
+    
+    // Debounce the actual menu display (100ms)
+    slashMenuDebounceRef.current = setTimeout(() => {
+      const coords = view.coordsAtPos(selection.from);
+      if (!coords) return;
+      setSlashMenu({
+        from: selection.from - (match[1]?.length ?? 0) - 1,
+        to: selection.from,
+        query: match[1] ?? "",
+        x: coords.left,
+        y: coords.bottom + 8,
+      });
+      setSlashIndex(0);
+    }, 100);
   }
 
   function detectWikilinkMenu(view: EditorView) {
+    // Clear any pending debounce
+    if (wikilinkMenuDebounceRef.current) {
+      clearTimeout(wikilinkMenuDebounceRef.current);
+    }
+
     if (mode !== "write") {
       setWikilinkMenu(undefined);
       return;
@@ -286,6 +347,13 @@ export function CodeMirrorEditor({
       setWikilinkMenu(undefined);
       return;
     }
+    
+    // Check if in ignored context
+    if (isInIgnoredContext(view, selection)) {
+      setWikilinkMenu(undefined);
+      return;
+    }
+    
     const line = view.state.doc.lineAt(selection.from);
     const before = view.state.doc.sliceString(line.from, selection.from);
     const lastOpen = before.lastIndexOf("[[");
@@ -298,16 +366,20 @@ export function CodeMirrorEditor({
       setWikilinkMenu(undefined);
       return;
     }
-    const coords = view.coordsAtPos(selection.from);
-    if (!coords) return;
-    setWikilinkMenu({
-      from: line.from + lastOpen,
-      to: selection.from,
-      query: fragment,
-      x: coords.left,
-      y: coords.bottom + 8,
-    });
-    setWikilinkIndex(0);
+    
+    // Debounce the actual menu display (100ms)
+    wikilinkMenuDebounceRef.current = setTimeout(() => {
+      const coords = view.coordsAtPos(selection.from);
+      if (!coords) return;
+      setWikilinkMenu({
+        from: line.from + lastOpen,
+        to: selection.from,
+        query: fragment,
+        x: coords.left,
+        y: coords.bottom + 8,
+      });
+      setWikilinkIndex(0);
+    }, 100);
   }
 
   function openUrlAtEvent(event: MouseEvent, view: EditorView) {
