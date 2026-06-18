@@ -22,8 +22,7 @@ export function MarkdownPreview({ markdown }: MarkdownPreviewProps) {
         /\[\[([^\]]+)\]\]/g,
         '<span class="wikilink" data-target="$1">$1</span>'
       );
-    } catch (error) {
-      console.error("Markdown rendering error:", error);
+    } catch {
       return "<div class='error'>Error rendering markdown</div>";
     }
   }, [markdown]);

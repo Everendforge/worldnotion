@@ -15,6 +15,8 @@ types:
     properties:
       climate:
         type: text
+      governingOrganization:
+        type: entityRef
   item:
     label: Item
     description: Portable object, relic, tool, artifact, or inventory-relevant entity.
@@ -24,6 +26,31 @@ types:
         options: [common, rare, legendary]
       relatedCharacters:
         type: entityRefList
+  organization:
+    label: Organization
+    description: Faction, institution, guild, house, or political body.
+    properties:
+      headquarters:
+        type: entityRef
+      relatedCharacters:
+        type: entityRefList
+  concept:
+    label: Concept
+    description: Rule, myth, system, abstract idea, or research note.
+    properties:
+      relatedEntities:
+        type: entityRefList
   story:
     label: Story
     description: Narrative container for arcs and scenes.
+  scene:
+    label: Scene
+    description: Narrative planning unit used by WorldNotion.
+    properties:
+      location:
+        type: entityRef
+      viewpointCharacter:
+        type: entityRef
+      draftStatus:
+        type: select
+        options: [outline, draft, revised, final]

@@ -315,7 +315,7 @@ function parseTemplates(files: VaultFile[]): EntityTemplate[] {
     .sort((a, b) => a.type.localeCompare(b.type));
 }
 
-function buildTree(files: VaultFile[]): VaultTreeNode[] {
+export function buildTree(files: VaultFile[], includeHiddenMetadata = false): VaultTreeNode[] {
   const roots: VaultTreeNode[] = [];
   const folders = new Map<string, VaultTreeNode>();
   
@@ -342,7 +342,7 @@ function buildTree(files: VaultFile[]): VaultTreeNode[] {
   
   // Second pass: identify description files
   files.forEach((file) => {
-    if (isHiddenMetadata(file.relativePath)) return;
+    if (!includeHiddenMetadata && isHiddenMetadata(file.relativePath)) return;
     
     const parentPath = dirname(file.relativePath);
     const fileName = file.relativePath.split("/").pop() ?? "";
@@ -378,7 +378,7 @@ function buildTree(files: VaultFile[]): VaultTreeNode[] {
   }
 
   files
-    .filter((file) => !isHiddenMetadata(file.relativePath) && !descriptionFiles.has(file.relativePath))
+    .filter((file) => (includeHiddenMetadata || !isHiddenMetadata(file.relativePath)) && !descriptionFiles.has(file.relativePath))
     .forEach((file) => {
       const parentPath = dirname(file.relativePath);
       const node: VaultTreeNode = {

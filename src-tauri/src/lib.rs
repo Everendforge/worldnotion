@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::UNIX_EPOCH;
 use tauri_plugin_dialog::DialogExt;
 
@@ -118,6 +119,177 @@ fn ensure_inside(root: &Path, path: &Path) -> Result<(), String> {
         Ok(())
     } else {
         Err("Resolved path is outside the vault.".to_string())
+    }
+}
+
+fn resolve_vault_path(vault_path: &str, relative_path: &str) -> Result<(PathBuf, PathBuf), String> {
+    let root = PathBuf::from(vault_path);
+    let relative = normalize_relative_path(relative_path)?;
+    let path = root.join(relative);
+    ensure_inside(&root, &path)?;
+    Ok((root, path))
+}
+
+fn copy_dir_recursive(source: &Path, target: &Path) -> Result<(), String> {
+    fs::create_dir_all(target).map_err(|error| error.to_string())?;
+    for entry in fs::read_dir(source).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_dir_recursive(&source_path, &target_path)?;
+        } else {
+            fs::copy(&source_path, &target_path).map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn duplicate_target(path: &Path, target_name: Option<String>) -> Result<PathBuf, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Path has no parent directory.".to_string())?;
+
+    if let Some(name) = target_name {
+        return Ok(parent.join(sanitize_segment(&name)?));
+    }
+
+    let stem = path
+        .file_stem()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Copy".to_string());
+    let extension = path.extension().map(|value| value.to_string_lossy().to_string());
+
+    for index in 1..1000 {
+        let candidate_name = if let Some(extension) = &extension {
+            format!("{stem} copy {index}.{extension}")
+        } else {
+            format!("{stem} copy {index}")
+        };
+        let candidate = parent.join(candidate_name);
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+
+    Err("Could not find an available duplicate name.".to_string())
+}
+
+fn reveal_in_system(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg("-R")
+            .arg(path)
+            .status()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(format!("/select,{}", path.to_string_lossy()))
+            .status()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let target = if path.is_dir() {
+            path
+        } else {
+            path.parent().unwrap_or(path)
+        };
+        Command::new("xdg-open")
+            .arg(target)
+            .status()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+}
+
+fn open_in_system(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(path)
+            .status()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(path)
+            .status()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(path)
+            .status()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+}
+
+fn move_to_system_trash(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "tell application \"Finder\" to delete POSIX file \"{}\"",
+            path.to_string_lossy().replace('"', "\\\"")
+        );
+        let status = Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .status()
+            .map_err(|error| error.to_string())?;
+        return if status.success() {
+            Ok(())
+        } else {
+            Err("Could not move item to Trash.".to_string())
+        };
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let method = if path.is_dir() { "DeleteDirectory" } else { "DeleteFile" };
+        let script = format!(
+            "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::{method}('{}','OnlyErrorDialogs','SendToRecycleBin')",
+            path.to_string_lossy().replace('\'', "''")
+        );
+        let status = Command::new("powershell")
+            .arg("-NoProfile")
+            .arg("-Command")
+            .arg(script)
+            .status()
+            .map_err(|error| error.to_string())?;
+        return if status.success() {
+            Ok(())
+        } else {
+            Err("Could not move item to Recycle Bin.".to_string())
+        };
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let status = Command::new("gio")
+            .arg("trash")
+            .arg(path)
+            .status()
+            .map_err(|error| error.to_string())?;
+        return if status.success() {
+            Ok(())
+        } else {
+            Err("Could not move item to Trash.".to_string())
+        };
     }
 }
 
@@ -390,6 +562,159 @@ fn save_template(
 }
 
 #[tauri::command]
+fn rename_path(vault_path: String, relative_path: String, new_name: String) -> Result<WriteResult, String> {
+    let (root, path) = resolve_vault_path(&vault_path, &relative_path)?;
+    if !path.exists() {
+        return Err("Path does not exist.".to_string());
+    }
+
+    let safe_name = sanitize_segment(&new_name)?;
+    let target = path
+        .parent()
+        .ok_or_else(|| "Path has no parent directory.".to_string())?
+        .join(safe_name);
+    ensure_inside(&root, &target)?;
+    if target.exists() {
+        return Ok(WriteResult {
+            ok: false,
+            path: target.to_string_lossy().to_string(),
+            modified_ms: modified_ms(&target),
+            message: Some("Target path already exists.".to_string()),
+        });
+    }
+
+    fs::rename(&path, &target).map_err(|error| error.to_string())?;
+    Ok(WriteResult {
+        ok: true,
+        path: target.to_string_lossy().to_string(),
+        modified_ms: modified_ms(&target),
+        message: None,
+    })
+}
+
+#[tauri::command]
+fn move_path(
+    vault_path: String,
+    from_relative_path: String,
+    to_folder_relative_path: String,
+) -> Result<WriteResult, String> {
+    let (root, source) = resolve_vault_path(&vault_path, &from_relative_path)?;
+    if !source.exists() {
+        return Err("Source path does not exist.".to_string());
+    }
+
+    let target_folder = root.join(normalize_relative_path(&to_folder_relative_path)?);
+    ensure_inside(&root, &target_folder)?;
+    if !target_folder.exists() || !target_folder.is_dir() {
+        return Err("Target folder does not exist.".to_string());
+    }
+
+    let file_name = source
+        .file_name()
+        .ok_or_else(|| "Source path has no file name.".to_string())?;
+    let target = target_folder.join(file_name);
+    ensure_inside(&root, &target)?;
+    if target.exists() {
+        return Ok(WriteResult {
+            ok: false,
+            path: target.to_string_lossy().to_string(),
+            modified_ms: modified_ms(&target),
+            message: Some("Target path already exists.".to_string()),
+        });
+    }
+
+    fs::rename(&source, &target).map_err(|error| error.to_string())?;
+    Ok(WriteResult {
+        ok: true,
+        path: target.to_string_lossy().to_string(),
+        modified_ms: modified_ms(&target),
+        message: None,
+    })
+}
+
+#[tauri::command]
+fn duplicate_path(
+    vault_path: String,
+    relative_path: String,
+    target_name: Option<String>,
+) -> Result<WriteResult, String> {
+    let (root, source) = resolve_vault_path(&vault_path, &relative_path)?;
+    if !source.exists() {
+        return Err("Source path does not exist.".to_string());
+    }
+
+    let target = duplicate_target(&source, target_name)?;
+    ensure_inside(&root, &target)?;
+    if target.exists() {
+        return Ok(WriteResult {
+            ok: false,
+            path: target.to_string_lossy().to_string(),
+            modified_ms: modified_ms(&target),
+            message: Some("Target path already exists.".to_string()),
+        });
+    }
+
+    if source.is_dir() {
+        copy_dir_recursive(&source, &target)?;
+    } else {
+        fs::copy(&source, &target).map_err(|error| error.to_string())?;
+    }
+
+    Ok(WriteResult {
+        ok: true,
+        path: target.to_string_lossy().to_string(),
+        modified_ms: modified_ms(&target),
+        message: None,
+    })
+}
+
+#[tauri::command]
+fn trash_path(vault_path: String, relative_path: String) -> Result<WriteResult, String> {
+    let (_root, path) = resolve_vault_path(&vault_path, &relative_path)?;
+    if !path.exists() {
+        return Err("Path does not exist.".to_string());
+    }
+
+    move_to_system_trash(&path)?;
+    Ok(WriteResult {
+        ok: true,
+        path: path.to_string_lossy().to_string(),
+        modified_ms: None,
+        message: None,
+    })
+}
+
+#[tauri::command]
+fn reveal_path(path: String) -> Result<WriteResult, String> {
+    let path = PathBuf::from(path);
+    if !path.exists() {
+        return Err("Path does not exist.".to_string());
+    }
+    reveal_in_system(&path)?;
+    Ok(WriteResult {
+        ok: true,
+        path: path.to_string_lossy().to_string(),
+        modified_ms: modified_ms(&path),
+        message: None,
+    })
+}
+
+#[tauri::command]
+fn reveal_vault(vault_path: String) -> Result<WriteResult, String> {
+    let path = PathBuf::from(vault_path);
+    if !path.exists() || !path.is_dir() {
+        return Err("Vault path does not exist.".to_string());
+    }
+    open_in_system(&path)?;
+    Ok(WriteResult {
+        ok: true,
+        path: path.to_string_lossy().to_string(),
+        modified_ms: modified_ms(&path),
+        message: None,
+    })
+}
+
+#[tauri::command]
 fn list_theme_files(vault_path: String) -> Result<Vec<ThemeManifest>, String> {
     let root = PathBuf::from(&vault_path);
     let theme_dir = root.join(".everend").join("themes");
@@ -434,6 +759,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             open_vault_dialog,
             index_vault,
@@ -444,6 +770,12 @@ pub fn run() {
             save_file,
             save_taxonomy,
             save_template,
+            rename_path,
+            move_path,
+            duplicate_path,
+            trash_path,
+            reveal_path,
+            reveal_vault,
             list_theme_files
         ])
         .run(tauri::generate_context!())
