@@ -1125,6 +1125,18 @@ button:hover:not(:disabled),
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
+.floating-format-toolbar::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  bottom: -44px;
+  width: 1px;
+  background: var(--wn-border);
+  transform: translateX(-0.5px);
+  pointer-events: none;
+}
+
 .floating-format-toolbar button {
   display: inline-flex;
   align-items: center;

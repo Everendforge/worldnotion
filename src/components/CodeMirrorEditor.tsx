@@ -33,6 +33,7 @@ export interface CodeMirrorEditorProps {
   onOpenUrl?: (url: string) => void;
   onRequestUrl?: () => Promise<string | null>;
   onSelectionChange?: (rect?: DOMRect) => void;
+  onCursorMove?: () => void; // Called on any cursor/selection change
   onEditorReady?: (view: EditorView) => void;
 }
 
@@ -95,6 +96,7 @@ export function CodeMirrorEditor({
   onOpenUrl,
   onRequestUrl,
   onSelectionChange,
+  onCursorMove,
   onEditorReady,
 }: CodeMirrorEditorProps) {
   const [editorView, setEditorView] = useState<EditorView | null>(null);
@@ -402,24 +404,45 @@ export function CodeMirrorEditor({
     const line = view.state.doc.lineAt(selection.from);
     const lineText = line.text;
     // Match unordered lists (-, *), ordered lists (1.), or checkboxes (- [ ])
-    return /^(\s*)([-*]\s|(\d+\.)\s|[-*]\s\[\s*[\sx]\s*\])\s/.test(lineText);
+    return /^(\s*)([-*]|(\d+)\.|\-\s\[[\sx]\])\s/.test(lineText);
+  }
+
+  function isInQuote(view: EditorView): boolean {
+    const selection = view.state.selection.main;
+    const line = view.state.doc.lineAt(selection.from);
+    const lineText = line.text;
+    // Match quote lines starting with >
+    return /^(\s*)>/.test(lineText);
   }
 
   function getListItemPrefix(lineText: string): { indent: string; prefix: string } {
-    const match = /^(\s*)([-*]|(\d+)\.|\[\s*[\sx]\s*\])\s/.exec(lineText);
-    if (!match) return { indent: "", prefix: "" };
-    const indent = match[1];
-    const itemType = match[2];
+    // Handle bullet lists with - or *
+    const bulletMatch = /^(\s*)([-*])\s/.exec(lineText);
+    if (bulletMatch) {
+      return { indent: bulletMatch[1], prefix: bulletMatch[2] + " " };
+    }
     
-    if (itemType.startsWith("-") || itemType.startsWith("*")) {
-      return { indent, prefix: itemType === "- [ ]" || itemType === "- [x]" || itemType === "- [X]" ? "- [ ] " : itemType + " " };
+    // Handle ordered lists (1., 2., etc.)
+    const orderedMatch = /^(\s*)(\d+)\.\s/.exec(lineText);
+    if (orderedMatch) {
+      const num = parseInt(orderedMatch[2], 10) + 1;
+      return { indent: orderedMatch[1], prefix: `${num}. ` };
     }
-    if (/^\d+\./.test(itemType)) {
-      // Increment ordered list number
-      const num = parseInt(itemType.slice(0, -1), 10) + 1;
-      return { indent, prefix: `${num}. ` };
+    
+    // Handle checkboxes (- [ ], - [x], - [X])
+    const checkboxMatch = /^(\s*)-\s\[([\sx])\]\s/.exec(lineText);
+    if (checkboxMatch) {
+      return { indent: checkboxMatch[1], prefix: "- [ ] " };
     }
-    return { indent, prefix: "- " };
+    
+    return { indent: "", prefix: "" };
+  }
+
+  function getQuotePrefix(lineText: string): string {
+    const match = /^(\s*)>/.exec(lineText);
+    if (!match) return "> ";
+    const indent = match[1];
+    return indent + "> ";
   }
 
   // Smart markdown helpers for bold/italic toggling
@@ -452,8 +475,78 @@ export function CodeMirrorEditor({
     }
   }
 
-  // Cache for selection change calculations to avoid redundant DOM measurements
-  const selectionCacheRef = useRef<{ prev: string; rect?: DOMRect }>({ prev: "" });
+  // Check if selection is inside or adjacent to special markdown syntax
+  const isSelectionInSpecialSyntax = useCallback((view: EditorView, from: number, to: number): boolean => {
+    // Get the line containing the selection
+    const lineFrom = view.state.doc.lineAt(from);
+    const lineTo = view.state.doc.lineAt(to);
+    
+    // If selection spans multiple lines, allow toolbar
+    if (lineFrom.number !== lineTo.number) {
+      return false;
+    }
+    
+    const lineText = lineFrom.text;
+    const selStart = from - lineFrom.from;
+    const selEnd = to - lineFrom.from;
+    
+    // Check for wikilinks [[...]]
+    const wikilinkRegex = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]/g;
+    let match: RegExpExecArray | null;
+    while ((match = wikilinkRegex.exec(lineText)) !== null) {
+      const matchStart = match.index;
+      const matchEnd = matchStart + match[0].length;
+      
+      // Check if selection overlaps or is adjacent to wikilink
+      if (selStart <= matchEnd && selEnd >= matchStart) {
+        return true;
+      }
+    }
+    
+    // Check for inline code `...`
+    const codeRegex = /`[^`]+`/g;
+    while ((match = codeRegex.exec(lineText)) !== null) {
+      const matchStart = match.index;
+      const matchEnd = matchStart + match[0].length;
+      
+      if (selStart <= matchEnd && selEnd >= matchStart) {
+        return true;
+      }
+    }
+    
+    return false;
+  }, []);
+
+  // Simple selection rect calculation
+  const handleSelectionChange = useCallback((view: EditorView) => {
+    const selection = view.state.selection.main;
+    if (selection.empty) {
+      onSelectionChange?.(undefined);
+      return;
+    }
+
+    // Don't show toolbar if selection is inside special syntax
+    if (isSelectionInSpecialSyntax(view, selection.from, selection.to)) {
+      onSelectionChange?.(undefined);
+      return;
+    }
+
+    const fromCoords = view.coordsAtPos(selection.from);
+    const toCoords = view.coordsAtPos(selection.to);
+
+    if (!fromCoords || !toCoords) {
+      onSelectionChange?.(undefined);
+      return;
+    }
+
+    const left = Math.min(fromCoords.left, toCoords.left);
+    const right = Math.max((fromCoords.right ?? fromCoords.left), (toCoords.right ?? toCoords.left));
+    const top = Math.min(fromCoords.top, toCoords.top);
+    const bottom = Math.max(fromCoords.bottom, toCoords.bottom);
+
+    const rect = new DOMRect(left, top, right - left, bottom - top);
+    onSelectionChange?.(rect);
+  }, [onSelectionChange, isSelectionInSpecialSyntax]);
 
   return (
     <div className="codemirror-wrap">
@@ -539,10 +632,21 @@ export function CodeMirrorEditor({
                   void applySlashCommand(filteredSlashCommands[slashIndex]?.id ?? filteredSlashCommands[0].id);
                   return true;
                 }
-                // Default behavior: auto-continue lists or normal Enter
+                
                 const selection = view.state.selection.main;
                 const line = view.state.doc.lineAt(selection.from);
                 
+                // Handle quotes: continue with > prefix
+                if (isInQuote(view)) {
+                  const quotePrefix = getQuotePrefix(line.text);
+                  view.dispatch({
+                    changes: { from: selection.from, insert: "\n" + quotePrefix },
+                    selection: { anchor: selection.from + 1 + quotePrefix.length },
+                  });
+                  return true;
+                }
+                
+                // Handle lists: auto-continue with proper prefix
                 if (isInList(view)) {
                   const before = line.text.slice(0, selection.from - line.from);
                   // Only auto-continue if we're at the end of a non-empty list item
@@ -555,8 +659,13 @@ export function CodeMirrorEditor({
                     return true;
                   }
                 }
-                // Return false to use default Enter behavior
-                return false;
+                
+                // Default: insert plain newline
+                view.dispatch({
+                  changes: { from: selection.from, insert: "\n" },
+                  selection: { anchor: selection.from + 1 },
+                });
+                return true;
               },
             },
             {
@@ -619,48 +728,20 @@ export function CodeMirrorEditor({
             },
           }),
           EditorView.updateListener.of((update) => {
-            // Debounced menu detection
+            // Menu detection
             if (update.docChanged || update.selectionSet) {
               detectSlashMenu(update.view);
               detectWikilinkMenu(update.view);
             }
-            
-            // Optimized selection change with caching
+
+            // Cursor move callback
             if (update.selectionSet || update.docChanged) {
-              const selection = update.state.selection.main;
-              // Create a unique key for this selection state
-              const selectionKey = `${selection.from},${selection.to}`;
-              
-              // Only recalculate if selection actually changed
-              if (selectionCacheRef.current.prev !== selectionKey) {
-                selectionCacheRef.current.prev = selectionKey;
-                
-                if (!selection.empty) {
-                  const from = update.view.coordsAtPos(selection.from);
-                  const to = update.view.coordsAtPos(selection.to);
-                  if (from && to && from.left !== undefined && from.top !== undefined && to.left !== undefined && to.top !== undefined) {
-                    const minLeft = Math.min(from.left, to.left);
-                    const minTop = Math.min(from.top, to.top);
-                    const width = Math.max(1, Math.abs(to.left - from.left));
-                    const height = Math.max(from.bottom - from.top, to.bottom - to.top);
-                    
-                    // Validate coordinates are numbers and not NaN
-                    if (Number.isFinite(minLeft) && Number.isFinite(minTop) && Number.isFinite(width) && Number.isFinite(height)) {
-                      selectionCacheRef.current.rect = new DOMRect(minLeft, minTop, width, height);
-                      onSelectionChange?.(selectionCacheRef.current.rect);
-                      return;
-                    }
-                  }
-                } else if (selectionCacheRef.current.rect) {
-                  // Selection was empty, clear cache
-                  selectionCacheRef.current.rect = undefined;
-                  onSelectionChange?.(undefined);
-                }
-              } else if (selectionCacheRef.current.rect && selection.empty) {
-                // Selection is empty and we had a cached rect, clear it
-                selectionCacheRef.current.rect = undefined;
-                onSelectionChange?.(undefined);
-              }
+              onCursorMove?.();
+            }
+
+            // Selection change callback
+            if (update.selectionSet) {
+              handleSelectionChange(update.view);
             }
           }),
           EditorView.theme({

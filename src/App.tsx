@@ -3165,16 +3165,17 @@ function App() {
           </button>
         </div>
 
-        {floatingToolbarRect && activeTab?.mode === "write" && Number.isFinite(floatingToolbarRect.left) && Number.isFinite(floatingToolbarRect.top) ? (
+        {floatingToolbarRect && activeTab?.mode === "write" ? (
           <div
             className="floating-format-toolbar"
             style={(() => {
               const shellRect = editorShellRef.current?.getBoundingClientRect();
               const shellLeft = shellRect?.left ?? 0;
               const shellTop = shellRect?.top ?? 0;
-              const left = Math.max(12, floatingToolbarRect.left - shellLeft);
-              const top = Math.max(36, floatingToolbarRect.top - shellTop - 44);
-              return Number.isFinite(left) && Number.isFinite(top) ? { left, top } : { display: 'none' };
+              return {
+                left: Math.max(12, floatingToolbarRect.left - shellLeft),
+                top: Math.max(36, floatingToolbarRect.top - shellTop - 44),
+              };
             })()}
           >
             <FontSelector
@@ -3222,7 +3223,9 @@ function App() {
           >
             <CodeMirrorEditor
               value={activeEditorValue}
-              onChange={updateRawMarkdown}
+              onChange={(value) => {
+                updateRawMarkdown(value);
+              }}
               theme={settings.theme}
               mode={activeTab.mode}
               settings={settings.editor}
@@ -3235,14 +3238,16 @@ function App() {
                 void openUrl(url);
               }}
               onRequestUrl={() => promptUser("Insert link", "https://example.com", "https://")}
-              onSelectionChange={(rect) => {
-                setFloatingToolbarRect(rect);
-                // Update cursor line for outline
+              onCursorMove={() => {
+                // Update cursor line for outline on any cursor/selection movement
                 if (editorViewRef.current) {
                   const pos = editorViewRef.current.state.selection.main.head;
                   const line = editorViewRef.current.state.doc.lineAt(pos);
                   setCursorLine(line.number - 1); // 0-indexed
                 }
+              }}
+              onSelectionChange={(rect) => {
+                setFloatingToolbarRect(rect);
               }}
               onEditorReady={(view) => {
                 editorViewRef.current = view;

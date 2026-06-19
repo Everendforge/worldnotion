@@ -26,6 +26,10 @@ export function wikilinkPlugin(options: {
         if (!rawTarget) continue;
         const label = linkLabel(rawTarget, match[2]);
         const resolved = options.resolveWikilink?.(rawTarget) ?? { label, status: "missing" as const };
+        
+        const matchStart = from + match.index;
+        const matchEnd = matchStart + match[0].length;
+        
         decorations.push(
           Decoration.mark({
             class: `cm-wikilink cm-wikilink-${resolved.status}${match[2] ? " cm-wikilink-aliased" : ""}`,
@@ -33,7 +37,7 @@ export function wikilinkPlugin(options: {
               "data-wikilink": rawTarget,
               title: resolved.targetPath ? `Cmd/Ctrl-click to open ${resolved.targetPath}` : `Missing wikilink: ${rawTarget}`,
             },
-          }).range(from + match.index, from + match.index + match[0].length),
+          }).range(matchStart, matchEnd),
         );
       }
     }

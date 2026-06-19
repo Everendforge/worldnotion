@@ -32,7 +32,7 @@ function lineClass(className: string, from: number) {
 
 function selectionTouches(selectionFrom: number, selectionTo: number, from: number, to: number) {
   if (selectionFrom === selectionTo) {
-    return selectionFrom >= from && selectionFrom < to;
+    return selectionFrom >= from && selectionFrom <= to;
   }
   return selectionFrom <= to && selectionTo >= from;
 }
