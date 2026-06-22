@@ -6,6 +6,7 @@ import type { EditorView } from "@codemirror/view";
 import {
   BookOpen,
   Check,
+  Circle,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -29,6 +30,7 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { ContextMenu, type ContextMenuAction } from "./components/ContextMenu";
+import { IconPicker, type IconName } from "./components/IconPicker";
 import { OutlineGuide } from "./components/OutlineGuide";
 import { FontSelector } from "./components/FontSelector";
 import { InputDialog } from "./components/InputDialog";
@@ -45,6 +47,7 @@ import {
   AppSettingsV4,
   EditorCommandId,
   FloatingFormatCommand,
+  DocumentTabGroup,
   DockPanelKind,
   DockTabRef,
   NoteSuggestion,
@@ -100,7 +103,6 @@ import {
   selectedAbsolutePath as getSelectedAbsolutePath,
 } from "./utils/pathUtils";
 import {
-  closeOpenTab,
   closeOtherOpenTabs,
   closeSavedOpenTabs,
   closeTabsToRightOf,
@@ -113,8 +115,22 @@ import {
   updateOpenTabsForPathChange,
 } from "./utils/tabUtils";
 import {
+  DOCUMENT_TAB_GROUP_COLORS,
+  createGroupFromTab,
+  moveDocumentTabInGroups,
+  normalizeDocumentTabGroups,
+  removeTabFromGroups,
+  renameDocumentTabGroup,
+  setDocumentTabGroupColor,
+  toggleDocumentTabGroupCollapsed,
+  ungroupDocumentTabGroup,
+  updateGroupsForPathChange,
+  type DocumentTabMoveInput,
+} from "./utils/documentTabGroups";
+import {
   entityToFrontmatterRaw,
   fontFamilyInsertion,
+  footnoteInsertion,
   headingLine,
   listLine,
   markdownLinkInsertion,
@@ -143,6 +159,11 @@ import { planUniverseWorkspaceState } from "./utils/universeApply";
 import { markSavedTabInList, saveFilePayloadForTab } from "./utils/editorPersistence";
 import { resolveWikilinkInIndex } from "./utils/wikilinkResolver";
 import { currentHeaderForLine, editorDisplayValue, outlineForTab } from "./utils/editorDerivedState";
+import {
+  frontmatterNormalizationConflict,
+  planFrontmatterNormalization,
+  type FrontmatterNormalizationItem,
+} from "./utils/frontmatterNormalizer";
 import {
   activateDockTab,
   addDocumentToLayout,
@@ -201,6 +222,18 @@ const FLOATING_FORMAT_COMMANDS: FloatingFormatCommand[] = [
   { id: "wikilink", label: "[[]]" },
   { id: "unorderedList", label: "List" },
   { id: "blockquote", label: "Quote" },
+  { id: "spaceBefore", label: "↑ Espacio" },
+  { id: "spaceAfter", label: "Espacio ↓" },
+];
+
+const FLOATING_SELECTION_COMMANDS: FloatingFormatCommand[] = [
+  { id: "bold", label: "B" },
+  { id: "italic", label: "I" },
+  { id: "inlineCode", label: "<>" },
+  { id: "link", label: "Link" },
+  { id: "wikilink", label: "[[]]" },
+  { id: "unorderedList", label: "List" },
+  { id: "blockquote", label: "Quote" },
 ];
 
 const FLOATING_HEADING_COMMANDS: FloatingFormatCommand[] = [
@@ -226,6 +259,7 @@ function App() {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [tabs, setTabs] = useState<OpenTab[]>([]);
+  const [documentTabGroups, setDocumentTabGroups] = useState<DocumentTabGroup[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string>();
   const [workspaceLayout, setWorkspaceLayout] = useState(() => createDefaultWorkspaceLayout());
   const [activeWorkspacePreset, setActiveWorkspacePreset] = useState<ActiveWorkspacePreset>("default");
@@ -281,6 +315,16 @@ function App() {
     x: number;
     y: number;
     groupId: string;
+  } | null>(null);
+  const [documentGroupContextMenu, setDocumentGroupContextMenu] = useState<{
+    x: number;
+    y: number;
+    groupId: string;
+  } | null>(null);
+  const [iconPickerState, setIconPickerState] = useState<{
+    x: number;
+    y: number;
+    targetPath: string;
   } | null>(null);
   const [missingRecentPaths, setMissingRecentPaths] = useState<Set<string>>(new Set());
   const [inputDialog, setInputDialog] = useState<{
@@ -357,16 +401,20 @@ function App() {
 
   useEffect(() => {
     if (!index || !settings.editor.persistTabs) return;
-    const session = serializeWorkspaceSession(index.rootPath, activeTabPath, tabs, workspaceLayout);
+    const session = serializeWorkspaceSession(index.rootPath, activeTabPath, tabs, workspaceLayout, documentTabGroups);
     setSettings((current) => ({
       ...current,
       sessions: { ...current.sessions, [index.rootPath]: session },
     }));
-  }, [activeTabPath, index?.rootPath, settings.editor.persistTabs, tabs, workspaceLayout]);
+  }, [activeTabPath, documentTabGroups, index?.rootPath, settings.editor.persistTabs, tabs, workspaceLayout]);
 
   useEffect(() => {
     setWorkspaceLayout((current) => syncLayoutWithOpenTabs(current, tabs, activeTabPath));
   }, [activeTabPath, tabs]);
+
+  useEffect(() => {
+    setDocumentTabGroups((current) => normalizeDocumentTabGroups(current, tabs));
+  }, [tabs]);
 
   useEffect(() => {
     const recent = settings.recentUniverse;
@@ -475,6 +523,25 @@ function App() {
   }, [dockPanelContextMenu]);
 
   useEffect(() => {
+    if (!documentGroupContextMenu) return;
+
+    function closeDocumentGroupMenu() {
+      setDocumentGroupContextMenu(null);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") closeDocumentGroupMenu();
+    }
+
+    document.addEventListener("mousedown", closeDocumentGroupMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeDocumentGroupMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [documentGroupContextMenu]);
+
+  useEffect(() => {
     if (!layoutHasPanel(workspaceLayout, "outline")) return;
     setWorkspaceLayout((current) => closeDockLayoutTab(current, panelDockTabId("outline")));
   }, [workspaceLayout]);
@@ -537,6 +604,7 @@ function App() {
       entityCount: index.entities.length,
       templateCount: index.templates.length,
       findingCount: index.findings.length,
+      taxonomyConfig: index.taxonomyConfig,
     };
   }, [index]);
   const favoriteItems = useMemo(() => {
@@ -655,6 +723,14 @@ function App() {
     setSettings((current) => ({ ...current, explorer: { ...current.explorer, ...next } }));
   }
 
+  function setCustomIcon(path: string, iconName: IconName) {
+    const nextIcons = { ...settings.explorer.customIcons };
+    delete nextIcons[path];
+    updateExplorer({
+      customIcons: iconName === "default" ? nextIcons : { ...nextIcons, [path]: iconName },
+    });
+  }
+
   function toggleFavorite(path: string, kind: "file" | "folder") {
     const exists = settings.explorer.favorites.some((favorite) => favorite.path === path);
     const favorites = exists
@@ -678,6 +754,7 @@ function App() {
   function updateTabsForPathChange(change: PathChangeSet) {
     setTabs((current) => updateOpenTabsForPathChange(current, change, index?.rootPath));
     setWorkspaceLayout((current) => updateLayoutForPathChange(current, change));
+    setDocumentTabGroups((current) => updateGroupsForPathChange(current, change));
     if (pathIsAffectedByChanges(activeTabPath, change) && activeTabPath) {
       setActiveTabPath(pathAfterChanges(activeTabPath, change));
     }
@@ -753,8 +830,8 @@ function App() {
         try {
           const fileName = name.endsWith(".md") ? name : `${name}.md`;
           const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
-          const content = `---\nid: ${slugify(name)}\ntype: concept\nname: ${name.replace(/\.md$/i, "")}\nstatus: draft\n---\n\n# ${name.replace(/\.md$/i, "")}\n`;
-
+          const cleanName = name.replace(/\.md$/i, "");
+          const content = `---\nid: ${slugify(cleanName)}\ntype: concept\nname: ${cleanName}\nstatus: draft\n---\n`;
 
           if (browserRoot) {
             await writeBrowserFile(browserRoot, filePath, content);
@@ -894,6 +971,16 @@ function App() {
         await moveExplorerPath(targetPath, targetFolder, targetKind);
       } else if (action === "toggleFavorite" && targetKind !== "empty") {
         toggleFavorite(targetPath, targetKind);
+      } else if (action === "changeIcon" && targetKind !== "empty") {
+        // Show icon picker modal
+        if (contextMenu) {
+          setIconPickerState({
+            x: contextMenu.x,
+            y: contextMenu.y,
+            targetPath,
+          });
+          setContextMenu(null);
+        }
       } else if (action === "editFolderDescription" && targetKind === "folder") {
         await createFolderDescription(targetPath);
       } else if (action === "reveal") {
@@ -1135,6 +1222,76 @@ function App() {
     }
   }
 
+  function scanFrontmatterNormalization() {
+    if (!index) return [];
+    return planFrontmatterNormalization({
+      rootPath: index.rootPath,
+      files: index.files,
+      directories: index.directories,
+      defaultType: "concept",
+    });
+  }
+
+  async function applyFrontmatterNormalization(items: FrontmatterNormalizationItem[]) {
+    if (!index || items.length === 0) {
+      return { applied: 0, skipped: 0, errors: [] };
+    }
+
+    const dirtyPaths = new Set(tabs.filter((tab) => tab.dirty).map((tab) => tab.path));
+    const currentRead = await readCurrentUniverse();
+    const currentFiles = new Map((currentRead?.files ?? index.files).map((file) => [file.relativePath, file]));
+    const errors: string[] = [];
+    const appliedPaths: string[] = [];
+    let applied = 0;
+    let skipped = 0;
+
+    for (const item of items) {
+      if (dirtyPaths.has(item.path)) {
+        skipped += 1;
+        errors.push(`Save or close unsaved edits before normalizing: ${item.path}`);
+        continue;
+      }
+
+      const conflict = frontmatterNormalizationConflict(item, currentFiles.get(item.path));
+      if (conflict) {
+        skipped += 1;
+        errors.push(conflict);
+        continue;
+      }
+
+      try {
+        if (browserRoot) {
+          await writeBrowserFile(browserRoot, item.path, item.nextContent);
+        } else {
+          const result = await invoke<WriteResult>("save_file", {
+            path: `${index.rootPath}/${item.path}`,
+            content: item.nextContent,
+            expectedModifiedMs: item.modifiedMs ?? null,
+          });
+          if (!result.ok) {
+            throw new Error(result.message ?? `Could not normalize ${item.path}.`);
+          }
+        }
+        applied += 1;
+        appliedPaths.push(item.path);
+      } catch (error) {
+        skipped += 1;
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    if (applied > 0) {
+      await refreshUniverse(appliedPaths[0]);
+      showToast(`Normalized ${applied} note${applied === 1 ? "" : "s"}.`);
+    }
+
+    if (errors.length > 0) {
+      showToast(`Skipped ${skipped} note${skipped === 1 ? "" : "s"} during normalization.`);
+    }
+
+    return { applied, skipped, errors };
+  }
+
   async function handleAcceptTaxonomy(taxonomy: import("./editorTypes.js").TaxonomyConfig) {
     await saveTaxonomyConfig(taxonomy);
     setShowTaxonomyMigration(false);
@@ -1172,6 +1329,7 @@ function App() {
       activeTabPath,
       selectedPath,
       workspaceLayout,
+      documentTabGroups,
       sessions: settings.sessions,
       persistTabs: settings.editor.persistTabs,
       preferredPath,
@@ -1179,6 +1337,7 @@ function App() {
     });
 
     setWorkspaceLayout(workspacePlan.layout);
+    setDocumentTabGroups(workspacePlan.documentTabGroups);
     setActiveWorkspacePreset("custom");
     if (workspacePlan.tabs.length) {
       setTabs(workspacePlan.tabs);
@@ -1354,19 +1513,82 @@ function App() {
       }
 
       if (!canUseBrowserDirectoryPicker()) {
-        throw new Error("Folder picker is unavailable in this browser. Run the Tauri app or use a Chromium browser.");
+        throw new Error("Folder picker is unavailable in this browser. Please use a Chromium-based browser (Chrome, Edge, Brave) or the Tauri desktop app.");
+      }
+
+      // Diagnostics for VS Code web limitations
+      const isVSCodeElectron = navigator.userAgent.includes("Electron");
+      console.log("[openUniverse] Browser environment check:", {
+        canUseBrowserDirectoryPicker: canUseBrowserDirectoryPicker(),
+        hasShowDirectoryPicker: "showDirectoryPicker" in window,
+        isVSCodeElectron,
+        userAgent: navigator.userAgent.substring(0, 100),
+      });
+
+      if (isVSCodeElectron) {
+        throw new Error(
+          "File picker is restricted in VS Code's embedded browser. " +
+          "Please use the Tauri desktop app instead: npm run tauri dev"
+        );
       }
 
       const picker = window as unknown as {
         showDirectoryPicker: (options?: { mode?: "read" | "readwrite" }) => Promise<BrowserDirectoryHandle>;
       };
-      const root = await picker.showDirectoryPicker({ mode: "readwrite" });
+      
+      console.log("[openUniverse] Showing directory picker...");
+      let root: BrowserDirectoryHandle;
+      try {
+        // Try with readwrite first, but fall back to read-only if it fails in restricted environments
+        root = await picker.showDirectoryPicker({ mode: "readwrite" });
+        console.log("[openUniverse] Directory selected (readwrite):", root.name);
+      } catch (pickerError: unknown) {
+        const errorName = (pickerError as any)?.name;
+        const errorCode = (pickerError as any)?.code;
+        console.log("[openUniverse] Readwrite picker failed:", { errorName, errorCode });
+        
+        // If readwrite fails with AbortError in restricted environment, try read-only
+        if (errorName === "AbortError") {
+          console.log("[openUniverse] Trying read-only mode...");
+          try {
+            root = await picker.showDirectoryPicker();
+            console.log("[openUniverse] Directory selected (read-only):", root.name);
+          } catch (readonlyError: unknown) {
+            const roErrorName = (readonlyError as any)?.name;
+            console.log("[openUniverse] Read-only picker also failed:", { roErrorName });
+            if (roErrorName === "AbortError") {
+              console.log("[openUniverse] User cancelled directory selection");
+              setLoadState(index ? "ready" : "idle");
+              return;
+            }
+            throw readonlyError;
+          }
+        } else {
+          throw pickerError;
+        }
+      }
+      
+      console.log("[openUniverse] Ensuring write permission...");
       await ensureBrowserWritePermission(root);
+      console.log("[openUniverse] Permission check complete (read-only or read-write mode)");
+      console.log("[openUniverse] Setting browser root...");
       setBrowserRoot(root);
-      applyUniverse(await readBrowserUniverse(root));
+      console.log("[openUniverse] Reading browser universe...");
+      const universeData = await readBrowserUniverse(root);
+      console.log("[openUniverse] Universe data loaded, entries:", Object.keys(universeData).length, "applying...");
+      applyUniverse(universeData);
+      console.log("[openUniverse] Success!");
     } catch (error) {
+      console.error("[openUniverse] Error:", error);
+      if (error instanceof Error) {
+        console.error("[openUniverse] Error name:", error.name);
+        console.error("[openUniverse] Error message:", error.message);
+        console.error("[openUniverse] Error stack:", error.stack);
+      }
       setLoadState("error");
-      setErrorMessage(error instanceof Error ? error.message : String(error));
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error("[openUniverse] Final error message set:", errorMsg);
+      setErrorMessage(errorMsg);
     }
   }
 
@@ -1469,6 +1691,22 @@ function App() {
     updateActiveFrontmatter(entityToFrontmatterRaw(updatedEntity));
   }
 
+  function addFrontmatterToActiveTab() {
+    if (!activeTabPath || !activeTab) return;
+    
+    let frontmatterRaw: string;
+    if (selectedEntity) {
+      // If we have an indexed entity, use its metadata
+      frontmatterRaw = entityToFrontmatterRaw(selectedEntity);
+    } else {
+      // If no entity (note without frontmatter), generate basic frontmatter
+      const fileName = activeTab.path.split("/").pop()?.replace(/\.md$/, "") || "untitled";
+      const slug = slugify(fileName);
+      frontmatterRaw = `---\nid: ${slug}\ntype: concept\nname: ${fileName}\nstatus: draft\n---`;
+    }
+    updateActiveFrontmatter(frontmatterRaw);
+  }
+
   async function saveEditor() {
     if (!activeTabPath) return;
     await saveTab(activeTabPath);
@@ -1555,6 +1793,34 @@ function App() {
     view.focus();
   }
 
+  function insertFootnoteAtSelection() {
+    const view = editorViewRef.current;
+    if (!view) return;
+    const selection = view.state.selection.main;
+    const fullText = view.state.doc.toString();
+    const insertion = footnoteInsertion(fullText);
+    
+    // Extract footnote number from insertion text: "[^1]" -> "1"
+    const footnoteMatch = insertion.text.match(/\[\^(\d+)\]/);
+    const footnoteNum = footnoteMatch ? footnoteMatch[1] : "1";
+    
+    // Add the footnote definition at the end of the document
+    const docLength = view.state.doc.length;
+    const footnoteDefinition = `\n\n[^${footnoteNum}]: `;
+    
+    view.dispatch({
+      changes: [
+        { from: selection.from, to: selection.to, insert: insertion.text },
+        { from: docLength, to: docLength, insert: footnoteDefinition },
+      ],
+      selection: {
+        anchor: docLength + footnoteDefinition.length,
+        head: docLength + footnoteDefinition.length,
+      },
+    });
+    view.focus();
+  }
+
   async function insertMarkdownLinkAtSelection() {
     const view = editorViewRef.current;
     if (!view) return;
@@ -1633,15 +1899,22 @@ function App() {
   // Helper to actually close a tab without confirmation
   function doCloseTab(path: string) {
     setActiveWorkspacePreset("custom");
-    setWorkspaceLayout((current) => closeDockLayoutTab(current, documentDockTabId(path)));
-    setTabs((current) => {
-      const result = closeOpenTab(current, activeTabPath, path);
-      if (result.activePath !== activeTabPath) {
-        setActiveTabPath(result.activePath);
-        setSelectedPath(result.activePath);
+    
+    // Determine the next active tab before closing
+    const currentIndex = tabs.findIndex((tab) => tab.path === path);
+    if (activeTabPath === path && currentIndex >= 0) {
+      // If closing the active tab, select the previous tab first
+      const previousTabIndex = Math.max(0, currentIndex - 1);
+      const nextActiveTab = tabs[previousTabIndex];
+      if (nextActiveTab?.path !== activeTabPath) {
+        setActiveTabPath(nextActiveTab?.path);
+        setSelectedPath(nextActiveTab?.path);
       }
-      return result.tabs;
-    });
+    }
+    
+    setWorkspaceLayout((current) => closeDockLayoutTab(current, documentDockTabId(path)));
+    setDocumentTabGroups((current) => removeTabFromGroups(current, path));
+    setTabs((current) => current.filter((tab) => tab.path !== path));
   }
 
   async function closeTab(path = activeTabPath) {
@@ -1773,6 +2046,99 @@ function App() {
     setTabContextMenu(null);
   }
 
+  function reorderedTabsForDocumentMove(current: OpenTab[], input: DocumentTabMoveInput) {
+    const movingTab = current.find((tab) => tab.path === input.path);
+    if (!movingTab) return current;
+    const remaining = current.filter((tab) => tab.path !== input.path);
+    const targetIndex = input.targetPath ? remaining.findIndex((tab) => tab.path === input.targetPath) : remaining.length;
+    const insertIndex = targetIndex === -1 ? remaining.length : targetIndex;
+    return [...remaining.slice(0, insertIndex), movingTab, ...remaining.slice(insertIndex)];
+  }
+
+  function moveDocumentTab(input: DocumentTabMoveInput) {
+    setActiveWorkspacePreset("custom");
+    setTabs((current) => {
+      const nextTabs = reorderedTabsForDocumentMove(current, input);
+      setDocumentTabGroups((currentGroups) => normalizeDocumentTabGroups(moveDocumentTabInGroups(currentGroups, input), nextTabs));
+      return nextTabs;
+    });
+    setWorkspaceLayout((current) =>
+      moveDockTab(current, {
+        tabId: documentDockTabId(input.path),
+        sourceGroupId: "dock-documents",
+        targetGroupId: "dock-documents",
+        position: "center",
+        targetTabId: input.targetPath ? documentDockTabId(input.targetPath) : undefined,
+      }),
+    );
+  }
+
+  function createDocumentGroup(path: string) {
+    setDocumentTabGroups((current) => normalizeDocumentTabGroups([...removeTabFromGroups(current, path), createGroupFromTab(path, current)], tabs));
+    setTabContextMenu(null);
+  }
+
+  function addTabToDocumentGroup(path: string, groupId: string) {
+    moveDocumentTab({ path, targetGroupId: groupId });
+    setTabContextMenu(null);
+  }
+
+  function removeTabFromDocumentGroup(path: string) {
+    setDocumentTabGroups((current) => removeTabFromGroups(current, path));
+    setTabContextMenu(null);
+  }
+
+  async function renameDocumentGroup(groupId: string) {
+    const group = documentTabGroups.find((candidate) => candidate.id === groupId);
+    if (!group) return;
+    const name = await promptUser("Rename tab group", "Group name", group.name);
+    if (!name) return;
+    setDocumentTabGroups((current) => renameDocumentTabGroup(current, groupId, name));
+    setDocumentGroupContextMenu(null);
+  }
+
+  function cycleDocumentGroupColor(groupId: string) {
+    const group = documentTabGroups.find((candidate) => candidate.id === groupId);
+    if (!group) return;
+    const colorIndex = DOCUMENT_TAB_GROUP_COLORS.indexOf(group.color as (typeof DOCUMENT_TAB_GROUP_COLORS)[number]);
+    const nextColor = DOCUMENT_TAB_GROUP_COLORS[(colorIndex + 1) % DOCUMENT_TAB_GROUP_COLORS.length];
+    setDocumentTabGroups((current) => setDocumentTabGroupColor(current, groupId, nextColor));
+    setDocumentGroupContextMenu(null);
+  }
+
+  function toggleDocumentGroup(groupId: string) {
+    setDocumentTabGroups((current) => toggleDocumentTabGroupCollapsed(current, groupId));
+    setDocumentGroupContextMenu(null);
+  }
+
+  function ungroupDocumentGroup(groupId: string) {
+    setDocumentTabGroups((current) => ungroupDocumentTabGroup(current, groupId));
+    setDocumentGroupContextMenu(null);
+  }
+
+  function closeDocumentGroupTabs(groupId: string) {
+    const group = documentTabGroups.find((candidate) => candidate.id === groupId);
+    if (!group) return;
+    const pathSet = new Set(group.tabPaths);
+    const tabsToClose = tabs.filter((tab) => pathSet.has(tab.path));
+    const dirtyPaths = getDirtyTabPaths(tabsToClose, settings.editor.confirmCloseDirtyTab);
+    if (dirtyPaths.length > 0) {
+      const queue = pendingCloseQueueFromDirtyPaths(dirtyPaths);
+      setPendingClosePaths(queue.pendingClosePaths);
+      setUnsavedDialogPath(queue.unsavedDialogPath);
+      setDocumentGroupContextMenu(null);
+      return;
+    }
+    setTabs((current) => current.filter((tab) => !pathSet.has(tab.path)));
+    setDocumentTabGroups((current) => current.filter((candidate) => candidate.id !== groupId));
+    if (activeTabPath && pathSet.has(activeTabPath)) {
+      const next = tabs.find((tab) => !pathSet.has(tab.path));
+      setActiveTabPath(next?.path);
+      setSelectedPath(next?.path);
+    }
+    setDocumentGroupContextMenu(null);
+  }
+
   function activateAdjacentTab(direction: 1 | -1) {
     const nextPath = nextAdjacentTabPath(tabs, activeTabPath, direction);
     if (!nextPath) return;
@@ -1787,7 +2153,7 @@ function App() {
     const folderPath = getActiveCreationFolder(selectedExplorerTarget, selectedPath);
     const slug = slugify(name);
     const relativePath = folderPath ? `${folderPath}/${slug}.md` : `${slug}.md`;
-    const content = `---\nid: ${slug}\ntype: concept\nname: ${name}\nstatus: draft\n---\n\n# ${name}\n`;
+    const content = `---\nid: ${slug}\ntype: concept\nname: ${name}\nstatus: draft\n---\n`;
 
     try {
       if (browserRoot) {
@@ -1846,6 +2212,9 @@ function App() {
       case "wikilink":
         insertWikilinkAtSelection();
         break;
+      case "footnote":
+        insertFootnoteAtSelection();
+        break;
       case "insert":
         insertAtCursor(action.markdown);
         break;
@@ -1884,6 +2253,10 @@ function App() {
         break;
       case "activateAdjacentTab":
         activateAdjacentTab(action.direction);
+        break;
+      case "paragraphSpacing":
+        // Visual spacing only - no actual content modification
+        // The spacing is handled through editor visual separation
         break;
     }
   }
@@ -2328,6 +2701,7 @@ function App() {
                     }
                     isPointerClickSuppressed={() => suppressTreeClickRef.current}
                     entityTagColors={entityTagColors}
+                    customIcons={settings.explorer.customIcons}
                   />
                 ))
               ) : (
@@ -2427,17 +2801,45 @@ function App() {
               Source
             </button>
           </div>
-          <button type="button" onClick={toggleBuiltinTheme} title="Toggle theme">
-            {isDarkTheme(settings.theme) ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
           <button type="button" onClick={() => saveTab(documentTab.path)} disabled={!canWrite} title="Save">
             <Save size={15} />
           </button>
         </div>
 
+        {documentTab.mode === "write" && documentTab.path === activeTabPath && settings.editor.floatingToolbarEnabled ? (
+          <div className="floating-format-toolbar-fixed">
+            <FontSelector availableFonts={fonts} onSelectFont={applyFontFamily} />
+            {FLOATING_FORMAT_COMMANDS.map((command) => (
+              <button
+                key={command.id}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => executeCommand(command.id)}
+              >
+                {command.label}
+              </button>
+            ))}
+            <details className="floating-format-group">
+              <summary>H</summary>
+              <div>
+                {FLOATING_HEADING_COMMANDS.map((command) => (
+                  <button
+                    key={command.id}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => executeCommand(command.id)}
+                  >
+                    {command.label}
+                  </button>
+                ))}
+              </div>
+            </details>
+          </div>
+        ) : null}
+
         {floatingToolbarRect && documentTab.mode === "write" && documentTab.path === activeTabPath ? (
           <div
-            className="floating-format-toolbar"
+            className="floating-format-toolbar-selection"
             style={(() => {
               const shellRect = editorShellRef.current?.getBoundingClientRect();
               const shellLeft = shellRect?.left ?? 0;
@@ -2448,8 +2850,7 @@ function App() {
               };
             })()}
           >
-            <FontSelector availableFonts={fonts} onSelectFont={applyFontFamily} />
-            {FLOATING_FORMAT_COMMANDS.map((command) => (
+            {FLOATING_SELECTION_COMMANDS.map((command) => (
               <button
                 key={command.id}
                 type="button"
@@ -2528,6 +2929,7 @@ function App() {
             <OutlineGuide
               outline={documentOutline}
               currentHeader={documentCurrentHeader}
+              position={settings.editor.outlinePosition}
               onNavigate={(line) => {
                 if (editorViewRef.current) {
                   const pos = editorViewRef.current.state.doc.line(line + 1).from;
@@ -2585,6 +2987,7 @@ function App() {
       activeTab={activeTab}
       onChangeFrontmatter={updateActiveFrontmatter}
       onUpdateEntity={updateEntityMetadata}
+      onAddFrontmatter={addFrontmatterToActiveTab}
       onOpenEntity={(path) => {
         openOrCreateTab(path);
         setSelectedPath(path);
@@ -2697,6 +3100,21 @@ function App() {
 
   function handleDockMove(request: DockMoveRequest) {
     if (!isDockMoveAllowedAroundDocumentAnchor(request)) return;
+    if (request.tabId.startsWith("document:")) {
+      const path = request.tabId.slice("document:".length);
+      const targetPath = request.targetTabId?.startsWith("document:")
+        ? request.targetTabId.slice("document:".length)
+        : undefined;
+      const targetGroup = targetPath
+        ? documentTabGroups.find((group) => group.tabPaths.includes(targetPath))
+        : undefined;
+      moveDocumentTab({
+        path,
+        targetPath,
+        targetGroupId: targetGroup?.id ?? null,
+      });
+      return;
+    }
     setActiveWorkspacePreset("custom");
     const nextLayout = moveDockTab(workspaceLayout, request);
     setWorkspaceLayout(nextLayout);
@@ -2854,6 +3272,8 @@ function App() {
       <DockWorkspace
         layout={workspaceLayout}
         renderTab={renderDockTab}
+        dirtyDocumentPaths={dirtyTabPaths}
+        documentTabGroups={documentTabGroups}
         onSelectTab={handleDockSelect}
         onCloseTab={handleDockClose}
         onTabContextMenu={(tab, x, y) => {
@@ -2863,6 +3283,8 @@ function App() {
         }}
         onGroupContextMenu={(groupId, x, y) => setDockPanelContextMenu({ groupId, x, y })}
         onMoveTab={handleDockMove}
+        onDocumentGroupToggle={(group) => toggleDocumentGroup(group.id)}
+        onDocumentGroupContextMenu={(group, x, y) => setDocumentGroupContextMenu({ groupId: group.id, x, y })}
         onResizeSplit={handleDockResize}
         onOpenDocument={() => setShowCommandPalette(true)}
       />
@@ -2889,6 +3311,34 @@ function App() {
           ))}
         </div>
       ) : null}
+      {documentGroupContextMenu ? (
+        <div
+          className="context-menu document-group-context-menu"
+          style={{ left: `${documentGroupContextMenu.x}px`, top: `${documentGroupContextMenu.y}px` }}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button type="button" className="context-menu-item" onClick={() => void renameDocumentGroup(documentGroupContextMenu.groupId)}>
+            <FileEdit size={16} />
+            <span>Rename group</span>
+          </button>
+          <button type="button" className="context-menu-item" onClick={() => cycleDocumentGroupColor(documentGroupContextMenu.groupId)}>
+            <Circle size={16} />
+            <span>Change color</span>
+          </button>
+          <button type="button" className="context-menu-item" onClick={() => toggleDocumentGroup(documentGroupContextMenu.groupId)}>
+            <ChevronRight size={16} />
+            <span>Collapse / Expand</span>
+          </button>
+          <button type="button" className="context-menu-item" onClick={() => ungroupDocumentGroup(documentGroupContextMenu.groupId)}>
+            <Files size={16} />
+            <span>Ungroup tabs</span>
+          </button>
+          <button type="button" className="context-menu-item danger" onClick={() => closeDocumentGroupTabs(documentGroupContextMenu.groupId)}>
+            <X size={16} />
+            <span>Close group tabs</span>
+          </button>
+        </div>
+      ) : null}
       {showSettings ? (
         <Suspense fallback={<LazyPanelFallback label="Loading settings..." />}>
           <SettingsModal
@@ -2897,6 +3347,9 @@ function App() {
             initialSection={settingsInitialSection}
             onChange={setSettings}
             onSaveUniverseProfile={saveUniverseProfile}
+            onSaveTaxonomyConfig={saveTaxonomyConfig}
+            onScanFrontmatterNormalization={scanFrontmatterNormalization}
+            onApplyFrontmatterNormalization={applyFrontmatterNormalization}
             onClose={() => setShowSettings(false)}
             onRevealUniverse={() => {
               void revealExplorerPath();
@@ -2997,12 +3450,54 @@ function App() {
         />
       )}
 
+      {iconPickerState && (
+        <IconPicker
+          x={iconPickerState.x}
+          y={iconPickerState.y}
+          onSelect={(iconName) => {
+            setCustomIcon(iconPickerState.targetPath, iconName);
+            showToast(`Icon changed to ${iconName}`);
+          }}
+          onClose={() => setIconPickerState(null)}
+        />
+      )}
+
       {tabContextMenu ? (
         <div
           className="context-menu tab-context-menu"
           style={{ left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px` }}
           onMouseDown={(event) => event.stopPropagation()}
         >
+          <button
+            type="button"
+            className="context-menu-item"
+            onClick={() => createDocumentGroup(tabContextMenu.path)}
+          >
+            <Files size={16} />
+            <span>New group from tab</span>
+          </button>
+          {documentTabGroups.map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              className="context-menu-item"
+              onClick={() => addTabToDocumentGroup(tabContextMenu.path, group.id)}
+            >
+              <Circle size={16} style={{ color: group.color }} />
+              <span>Add to {group.name}</span>
+            </button>
+          ))}
+          {documentTabGroups.some((group) => group.tabPaths.includes(tabContextMenu.path)) ? (
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => removeTabFromDocumentGroup(tabContextMenu.path)}
+            >
+              <Files size={16} />
+              <span>Remove from group</span>
+            </button>
+          ) : null}
+          <div className="context-menu-separator" />
           <button
             type="button"
             className="context-menu-item"

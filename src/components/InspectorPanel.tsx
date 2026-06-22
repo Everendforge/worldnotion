@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
-import type { Entity, EntityTemplate, ValidationFinding, VaultIndex } from "../domain";
+import type { Entity, EntityTemplate, ValidationFinding, VaultIndex, ParsedMarkdown } from "../domain";
+import { parseMarkdownFrontmatter } from "../domain";
 import type { OpenTab } from "../editorTypes";
 import { rawToEditorParts } from "../utils/contentTemplates";
 import { LazyPanelFallback } from "./LazyPanelFallback";
@@ -19,6 +20,7 @@ export type InspectorPanelProps = {
   onChangeFrontmatter?: (frontmatterRaw: string) => void;
   onUpdateEntity?: (updates: Partial<Entity>) => void;
   onOpenEntity?: (path: string) => void;
+  onAddFrontmatter?: () => void;
 };
 
 function formatValue(value: unknown): string {
@@ -40,6 +42,7 @@ export function InspectorPanel({
   onChangeFrontmatter,
   onUpdateEntity,
   onOpenEntity,
+  onAddFrontmatter,
 }: InspectorPanelProps) {
   if (!index) {
     return (
@@ -60,6 +63,29 @@ export function InspectorPanel({
     );
   }
 
+  // Check if we have an active tab without a corresponding entity (e.g., note without frontmatter)
+  if (!entity && activeTab) {
+    const tabFrontmatter = rawToEditorParts(activeTab.rawMarkdown).frontmatterRaw;
+    const tabHasFrontmatter = tabFrontmatter.trim().length > 0;
+    
+    if (!tabHasFrontmatter && onAddFrontmatter && onChangeFrontmatter) {
+      return (
+        <aside className="inspector">
+          <h2>{activeTab.path.split("/").pop()}</h2>
+          <p className="path-line">{activeTab.path}</p>
+          <section>
+            <div className="no-frontmatter-notice">
+              <p className="muted">This note has no frontmatter.</p>
+              <button className="btn btn-primary" onClick={onAddFrontmatter}>
+                Add Frontmatter
+              </button>
+            </div>
+          </section>
+        </aside>
+      );
+    }
+  }
+
   if (!entity) {
     return (
       <aside className="inspector">
@@ -72,6 +98,17 @@ export function InspectorPanel({
   const findings = index.findings.filter((finding) => finding.file === entity.path);
   const typeDefinition = index.taxonomy?.types[entity.type];
   const editableFrontmatter = activeTab?.path === entity.path ? rawToEditorParts(activeTab.rawMarkdown).frontmatterRaw : "";
+  const hasFrontmatter = editableFrontmatter.trim().length > 0;
+
+  // Parse metadata in real-time from activeTab if available
+  let parsedRealTimeMetadata: ParsedMarkdown | null = null;
+  if (activeTab?.path === entity.path && hasFrontmatter) {
+    try {
+      parsedRealTimeMetadata = parseMarkdownFrontmatter(activeTab.rawMarkdown);
+    } catch (e) {
+      // Invalid YAML, keep null
+    }
+  }
 
   return (
     <aside className="inspector">
@@ -80,15 +117,41 @@ export function InspectorPanel({
 
       <section>
         {activeTab?.path === entity.path && onChangeFrontmatter && onUpdateEntity ? (
-          <Suspense fallback={<LazyPanelFallback label="Loading metadata..." />}>
-            <MetadataEditor
-              entity={entity}
-              taxonomyConfig={index.taxonomyConfig}
-              rawYaml={editableFrontmatter || "---\n\n---"}
-              onUpdate={(updates) => onUpdateEntity(updates)}
-              onUpdateRawYaml={(yaml) => onChangeFrontmatter(yaml)}
-            />
-          </Suspense>
+          <>
+            {!hasFrontmatter && onAddFrontmatter ? (
+              <div className="no-frontmatter-notice">
+                <p className="muted">This note has no frontmatter.</p>
+                <button className="btn btn-primary" onClick={onAddFrontmatter}>
+                  Add Frontmatter
+                </button>
+              </div>
+            ) : (
+              <>
+                <Suspense fallback={<LazyPanelFallback label="Loading metadata..." />}>
+                  <MetadataEditor
+                    entity={entity}
+                    taxonomyConfig={index.taxonomyConfig}
+                    rawYaml={editableFrontmatter || "---\n\n---"}
+                    onUpdate={(updates) => onUpdateEntity(updates)}
+                    onUpdateRawYaml={(yaml) => onChangeFrontmatter(yaml)}
+                  />
+                </Suspense>
+                {parsedRealTimeMetadata && (
+                  <div className="metadata-realtime-preview">
+                    <h4>Real-time Preview</h4>
+                    <dl className="metadata-list">
+                      {Object.entries(parsedRealTimeMetadata.data).map(([key, value]) => (
+                        <div key={key} className="metadata-pair">
+                          <dt>{key}</dt>
+                          <dd>{formatValue(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
+              </>
+            )}
+          </>
         ) : (
           <>
             <h3>Metadata</h3>

@@ -1,6 +1,7 @@
 import type { MouseEvent } from "react";
 import { ChevronDown, ChevronRight, FileEdit, FileText, Folder, FolderOpen, Star, StarOff } from "lucide-react";
 import type { VaultTreeNode } from "../domain";
+import { getIconComponent } from "./IconPicker";
 
 export type ExplorerTreeNodeProps = {
   node: VaultTreeNode;
@@ -18,6 +19,7 @@ export type ExplorerTreeNodeProps = {
   onPointerDragStart: (path: string, kind: "file" | "folder", x: number, y: number) => void;
   isPointerClickSuppressed: () => boolean;
   entityTagColors?: Map<string, string>;
+  customIcons?: Record<string, string>;
 };
 
 export function ExplorerTreeNode({
@@ -36,6 +38,7 @@ export function ExplorerTreeNode({
   onPointerDragStart,
   isPointerClickSuppressed,
   entityTagColors,
+  customIcons,
 }: ExplorerTreeNodeProps) {
   const isExpanded = expandedPaths.has(node.path);
   const hasChildren = node.children.length > 0;
@@ -43,6 +46,8 @@ export function ExplorerTreeNode({
   const isOpen = openTabPaths.has(node.path);
   const isDirty = dirtyTabPaths.has(node.path);
   const tagColor = entityTagColors?.get(node.path);
+  const customIcon = customIcons?.[node.path];
+  const IconComponent = customIcon ? getIconComponent(customIcon) : undefined;
 
   const activateNode = () => {
     if (isPointerClickSuppressed()) return;
@@ -112,7 +117,9 @@ export function ExplorerTreeNode({
         {tagColor && node.kind === "file" && (
           <span className="tree-tag-indicator" style={{ backgroundColor: tagColor }} title="Tag color" />
         )}
-        {node.kind === "folder" ? (
+        {IconComponent ? (
+          <IconComponent size={14} />
+        ) : node.kind === "folder" ? (
           isExpanded ? <FolderOpen size={14} /> : <Folder size={14} />
         ) : (
           <FileText size={14} />
@@ -120,32 +127,34 @@ export function ExplorerTreeNode({
         <span>{node.name}</span>
         {isDirty ? <strong className="tree-dirty">*</strong> : null}
         {isFavorite ? <Star size={12} className="tree-favorite" /> : null}
-        {node.kind === "folder" && node.hasDescription && (
+        <div className="tree-node-buttons">
+          {node.kind === "folder" && node.hasDescription && (
+            <button
+              type="button"
+              className="folder-description-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (node.descriptionPath) {
+                  onSelectPath(node.descriptionPath);
+                }
+              }}
+              title={`Edit ${node.name} description`}
+            >
+              <FileEdit size={12} />
+            </button>
+          )}
           <button
             type="button"
-            className="folder-description-button"
+            className="folder-favorite-button"
             onClick={(event) => {
               event.stopPropagation();
-              if (node.descriptionPath) {
-                onSelectPath(node.descriptionPath);
-              }
+              onToggleFavorite(node.path, node.kind);
             }}
-            title={`Edit ${node.name} description`}
+            title={isFavorite ? "Remove favorite" : "Add favorite"}
           >
-            <FileEdit size={12} />
+            {isFavorite ? <StarOff size={12} /> : <Star size={12} />}
           </button>
-        )}
-        <button
-          type="button"
-          className="folder-description-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleFavorite(node.path, node.kind);
-          }}
-          title={isFavorite ? "Remove favorite" : "Add favorite"}
-        >
-          {isFavorite ? <StarOff size={12} /> : <Star size={12} />}
-        </button>
+        </div>
       </div>
       {node.kind === "folder" && hasChildren && isExpanded && (
         <div className="tree-children">
@@ -167,6 +176,7 @@ export function ExplorerTreeNode({
               onPointerDragStart={onPointerDragStart}
               isPointerClickSuppressed={isPointerClickSuppressed}
               entityTagColors={entityTagColors}
+              customIcons={customIcons}
             />
           ))}
         </div>

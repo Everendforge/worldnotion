@@ -1,6 +1,7 @@
 ---
 id: mara-voss
 type: character
+name: Mara Voss
 status: canon
 aliases:
   - Mara

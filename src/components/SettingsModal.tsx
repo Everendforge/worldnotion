@@ -12,6 +12,7 @@ import {
 } from "../editorTypes";
 import type { UniverseProfile } from "../domain";
 import { createDefaultTaxonomyConfig } from "../domain";
+import type { FrontmatterNormalizationItem } from "../utils/frontmatterNormalizer";
 import { themeById } from "../themes";
 import { TaxonomyManager } from "./TaxonomyManager";
 import "../App.css";
@@ -31,6 +32,10 @@ type SettingsModalProps = {
   onChange: (settings: AppSettingsV4) => void;
   onSaveUniverseProfile?: (profile: UniverseProfile) => Promise<void>;
   onSaveTaxonomyConfig?: (config: TaxonomyConfig) => Promise<void>;
+  onScanFrontmatterNormalization?: () => FrontmatterNormalizationItem[] | Promise<FrontmatterNormalizationItem[]>;
+  onApplyFrontmatterNormalization?: (
+    items: FrontmatterNormalizationItem[],
+  ) => Promise<{ applied: number; skipped: number; errors: string[] }>;
   onClose: () => void;
   onRevealUniverse?: () => void;
   onOpenUniverseNote?: () => void;
@@ -93,7 +98,7 @@ function readImageFile(file: File) {
   });
 }
 
-type SettingsSection = "overview" | "taxonomy" | "editor" | "shortcuts" | "tabs" | "explorer";
+type SettingsSection = "overview" | "taxonomy" | "normalize" | "editor" | "shortcuts" | "tabs" | "explorer";
 
 export function SettingsModal({
   settings,
@@ -101,6 +106,8 @@ export function SettingsModal({
   onChange,
   onSaveUniverseProfile,
   onSaveTaxonomyConfig,
+  onScanFrontmatterNormalization,
+  onApplyFrontmatterNormalization,
   onClose,
   onRevealUniverse,
   onOpenUniverseNote,
@@ -118,6 +125,12 @@ export function SettingsModal({
     universe?.taxonomyConfig ?? createDefaultTaxonomyConfig()
   );
   const [taxonomySaving, setTaxonomySaving] = useState(false);
+  const [normalizationItems, setNormalizationItems] = useState<FrontmatterNormalizationItem[]>([]);
+  const [selectedNormalizationPaths, setSelectedNormalizationPaths] = useState<Set<string>>(new Set());
+  const [normalizationScanning, setNormalizationScanning] = useState(false);
+  const [normalizationApplying, setNormalizationApplying] = useState(false);
+  const [normalizationResult, setNormalizationResult] = useState("");
+  const [normalizationErrors, setNormalizationErrors] = useState<string[]>([]);
 
   useEffect(() => {
     if (initialSection) setActiveSection(initialSection);
@@ -130,8 +143,13 @@ export function SettingsModal({
       icon: universe.profile?.icon ?? { type: "preset", value: "book" },
     });
     setTaxonomyDraft(universe.taxonomyConfig ?? createDefaultTaxonomyConfig());
+    setNormalizationItems([]);
+    setSelectedNormalizationPaths(new Set());
+    setNormalizationResult("");
+    setNormalizationErrors([]);
   }, [
     universe?.name,
+    universe?.rootPath,
     universe?.profile?.name,
     universe?.profile?.icon?.type,
     universe?.profile?.icon?.value,
@@ -164,6 +182,45 @@ export function SettingsModal({
     });
   }
 
+  async function scanFrontmatterNormalization() {
+    if (!onScanFrontmatterNormalization) return;
+    setNormalizationScanning(true);
+    setNormalizationResult("");
+    setNormalizationErrors([]);
+    try {
+      const items = await onScanFrontmatterNormalization();
+      setNormalizationItems(items);
+      setSelectedNormalizationPaths(new Set(items.map((item) => item.path)));
+      setNormalizationResult(items.length ? `Found ${items.length} note${items.length === 1 ? "" : "s"} to normalize.` : "No notes need normalization.");
+    } catch (error) {
+      setNormalizationErrors([error instanceof Error ? error.message : String(error)]);
+    } finally {
+      setNormalizationScanning(false);
+    }
+  }
+
+  async function applyFrontmatterNormalization(items: FrontmatterNormalizationItem[]) {
+    if (!onApplyFrontmatterNormalization || items.length === 0) return;
+    setNormalizationApplying(true);
+    setNormalizationErrors([]);
+    setNormalizationResult("");
+    try {
+      const result = await onApplyFrontmatterNormalization(items);
+      setNormalizationItems((current) => current.filter((item) => !items.some((applied) => applied.path === item.path)));
+      setSelectedNormalizationPaths((current) => {
+        const next = new Set(current);
+        items.forEach((item) => next.delete(item.path));
+        return next;
+      });
+      setNormalizationErrors(result.errors);
+      setNormalizationResult(`Applied ${result.applied}. Skipped ${result.skipped}.`);
+    } catch (error) {
+      setNormalizationErrors([error instanceof Error ? error.message : String(error)]);
+    } finally {
+      setNormalizationApplying(false);
+    }
+  }
+
   return (
     <div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Settings">
       <div className="settings-modal">
@@ -189,6 +246,10 @@ export function SettingsModal({
                 <button className={activeSection === "taxonomy" ? "active" : ""} onClick={() => setActiveSection("taxonomy")} type="button">
                   <Hash size={14} />
                   Ecosistema
+                </button>
+                <button className={activeSection === "normalize" ? "active" : ""} onClick={() => setActiveSection("normalize")} type="button">
+                  <Sparkles size={14} />
+                  Normalize Notes
                 </button>
               </div>
             ) : null}
@@ -409,6 +470,15 @@ export function SettingsModal({
                   <span>Outline Guide (Cmd+Shift+O)</span>
                   <input type="checkbox" checked={settings.editor.outlineGuideEnabled} onChange={(event) => updateEditor({ outlineGuideEnabled: event.target.checked })} />
                 </label>
+                {settings.editor.outlineGuideEnabled && (
+                  <label>
+                    <span>Outline Position</span>
+                    <select value={settings.editor.outlinePosition} onChange={(event) => updateEditor({ outlinePosition: event.target.value as "left" | "right" })}>
+                      <option value="left">Left</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </label>
+                )}
                 <label>
                   <span>Breadcrumbs</span>
                   <input type="checkbox" checked={settings.editor.breadcrumbsEnabled} onChange={(event) => updateEditor({ breadcrumbsEnabled: event.target.checked })} />
@@ -416,6 +486,10 @@ export function SettingsModal({
                 <label>
                   <span>Code Folding</span>
                   <input type="checkbox" checked={settings.editor.codeFoldingEnabled} onChange={(event) => updateEditor({ codeFoldingEnabled: event.target.checked })} />
+                </label>
+                <label>
+                  <span>Floating Toolbar</span>
+                  <input type="checkbox" checked={settings.editor.floatingToolbarEnabled} onChange={(event) => updateEditor({ floatingToolbarEnabled: event.target.checked })} />
                 </label>
                 <label>
                   <span>Document Header</span>
@@ -520,6 +594,84 @@ export function SettingsModal({
                     {taxonomySaving ? "Guardando..." : "Guardar Ecosistema"}
                   </button>
                 </div>
+              </div>
+            ) : null}
+
+            {activeSection === "normalize" && universe ? (
+              <div className="settings-panel">
+                <h3>Normalize Notes</h3>
+                <p className="settings-description">
+                  Find Markdown files without usable frontmatter, preview the generated metadata, and apply only the changes you approve.
+                </p>
+
+                <div className="settings-action-list normalization-actions">
+                  <button type="button" onClick={() => void scanFrontmatterNormalization()} disabled={normalizationScanning}>
+                    <Sparkles size={15} />
+                    {normalizationScanning ? "Scanning..." : "Scan notes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const selected = normalizationItems.filter((item) => selectedNormalizationPaths.has(item.path));
+                      void applyFrontmatterNormalization(selected);
+                    }}
+                    disabled={normalizationApplying || selectedNormalizationPaths.size === 0}
+                  >
+                    Apply selected
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void applyFrontmatterNormalization(normalizationItems)}
+                    disabled={normalizationApplying || normalizationItems.length === 0}
+                  >
+                    Apply all
+                  </button>
+                </div>
+
+                {normalizationResult ? <p className="settings-description">{normalizationResult}</p> : null}
+                {normalizationErrors.length ? (
+                  <div className="error-banner settings-error">
+                    {normalizationErrors.slice(0, 4).map((error) => (
+                      <p key={error}>{error}</p>
+                    ))}
+                    {normalizationErrors.length > 4 ? <p>And {normalizationErrors.length - 4} more.</p> : null}
+                  </div>
+                ) : null}
+
+                {normalizationItems.length ? (
+                  <div className="normalization-preview" role="list">
+                    {normalizationItems.map((item) => (
+                      <label key={item.path} className="normalization-row">
+                        <input
+                          type="checkbox"
+                          checked={selectedNormalizationPaths.has(item.path)}
+                          onChange={(event) => {
+                            setSelectedNormalizationPaths((current) => {
+                              const next = new Set(current);
+                              if (event.target.checked) {
+                                next.add(item.path);
+                              } else {
+                                next.delete(item.path);
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="normalization-row-main">
+                          <strong>{item.path}</strong>
+                          <small>{item.reason === "invalid_frontmatter" ? "Invalid frontmatter" : "Missing frontmatter"}</small>
+                        </span>
+                        <span className={`normalization-kind ${item.kind}`}>
+                          {item.kind === "folder-description" ? "Folder note" : "Concept note"}
+                        </span>
+                        <span className="normalization-meta">
+                          <code>{item.id}</code>
+                          <code>{item.type}</code>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

@@ -10,13 +10,15 @@ export type EditorCommandAction =
   | { type: "list"; kind: "bullet" | "ordered" | "task" }
   | { type: "markdownLink" }
   | { type: "wikilink" }
+  | { type: "footnote" }
   | { type: "insert"; markdown: string }
   | { type: "foldBlock" }
   | { type: "openPanel"; panel: "commandPalette" | "quickSwitcher" }
   | { type: "toggleOutline" }
   | { type: "switchMode" }
   | { type: "closeTab" }
-  | { type: "activateAdjacentTab"; direction: 1 | -1 };
+  | { type: "activateAdjacentTab"; direction: 1 | -1 }
+  | { type: "paragraphSpacing"; position: "before" | "after" };
 
 export function editorCommandAction(commandId: EditorCommandId): EditorCommandAction {
   switch (commandId) {
@@ -61,6 +63,8 @@ export function editorCommandAction(commandId: EditorCommandId): EditorCommandAc
       return { type: "markdownLink" };
     case "wikilink":
       return { type: "wikilink" };
+    case "footnote":
+      return { type: "footnote" };
     case "horizontalRule":
       return { type: "insert", markdown: "\n\n---\n\n" };
     case "foldBlock":
@@ -79,6 +83,10 @@ export function editorCommandAction(commandId: EditorCommandId): EditorCommandAc
       return { type: "activateAdjacentTab", direction: 1 };
     case "previousTab":
       return { type: "activateAdjacentTab", direction: -1 };
+    case "spaceBefore":
+      return { type: "paragraphSpacing", position: "before" };
+    case "spaceAfter":
+      return { type: "paragraphSpacing", position: "after" };
   }
 }
 

@@ -8,6 +8,7 @@ import {
   FileText,
   FolderInput,
   FolderPlus,
+  Palette,
   Star,
   Trash2,
 } from "lucide-react";
@@ -27,7 +28,8 @@ export type ContextMenuAction =
   | "trash"
   | "editFolderDescription"
   | "refresh"
-  | "collapseAll";
+  | "collapseAll"
+  | "changeIcon";
 
 export type ContextMenuTargetKind = "file" | "folder" | "empty";
 
@@ -210,6 +212,10 @@ export function ContextMenu({
           <button type="button" onClick={() => run("toggleFavorite")} className="context-menu-item">
             <Star size={16} />
             <span>{isFavorite ? "Remove Favorite" : "Add Favorite"}</span>
+          </button>
+          <button type="button" onClick={() => run("changeIcon")} className="context-menu-item">
+            <Palette size={16} />
+            <span>Change Icon</span>
           </button>
           <button type="button" onClick={() => run("reveal")} className="context-menu-item" disabled={!canReveal}>
             <ExternalLink size={16} />

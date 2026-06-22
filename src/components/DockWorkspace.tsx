@@ -9,8 +9,8 @@ import {
   type RefObject,
   type ReactNode,
 } from "react";
-import { Plus, X } from "lucide-react";
-import type { DockGroupNode, DockNode, DockSplitNode, DockTabRef, WorkspaceLayoutV1 } from "../editorTypes";
+import { ChevronRight, Plus, X } from "lucide-react";
+import type { DockGroupNode, DockNode, DockSplitNode, DockTabRef, DocumentTabGroup, WorkspaceLayoutV1 } from "../editorTypes";
 import { isDockMoveAllowedAroundDocumentAnchor, type DockDropPosition } from "../utils/workspaceLayout";
 
 export type DockMoveRequest = {
@@ -24,11 +24,15 @@ export type DockMoveRequest = {
 export type DockWorkspaceProps = {
   layout: WorkspaceLayoutV1;
   renderTab: (tab: DockTabRef) => ReactNode;
+  dirtyDocumentPaths?: Set<string>;
+  documentTabGroups?: DocumentTabGroup[];
   onSelectTab: (tab: DockTabRef, groupId: string) => void;
   onCloseTab: (tab: DockTabRef) => void;
   onTabContextMenu?: (tab: DockTabRef, x: number, y: number) => void;
   onGroupContextMenu?: (groupId: string, x: number, y: number) => void;
   onMoveTab: (request: DockMoveRequest) => void;
+  onDocumentGroupToggle?: (group: DocumentTabGroup) => void;
+  onDocumentGroupContextMenu?: (group: DocumentTabGroup, x: number, y: number) => void;
   onResizeSplit: (splitId: string, ratio: number) => void;
   onOpenDocument: () => void;
 };
@@ -76,11 +80,15 @@ const INTERACTIVE_DOCK_SELECTOR = "button, input, textarea, select, a, [data-doc
 export function DockWorkspace({
   layout,
   renderTab,
+  dirtyDocumentPaths,
+  documentTabGroups,
   onSelectTab,
   onCloseTab,
   onTabContextMenu,
   onGroupContextMenu,
   onMoveTab,
+  onDocumentGroupToggle,
+  onDocumentGroupContextMenu,
   onResizeSplit,
   onOpenDocument,
 }: DockWorkspaceProps) {
@@ -105,8 +113,12 @@ export function DockWorkspace({
         onTabContextMenu={onTabContextMenu}
         onGroupContextMenu={onGroupContextMenu}
         onMoveTab={onMoveTab}
+        onDocumentGroupToggle={onDocumentGroupToggle}
+        onDocumentGroupContextMenu={onDocumentGroupContextMenu}
         onResizeSplit={onResizeSplit}
         onOpenDocument={onOpenDocument}
+        dirtyDocumentPaths={dirtyDocumentPaths}
+        documentTabGroups={documentTabGroups}
         onPointerDragStart={dragController.startDrag}
       />
       {dragController.dragState?.active ? <DockDragGhost dragState={dragController.dragState} /> : null}
@@ -219,10 +231,14 @@ function DockGroup({
   activeGroupId,
   dragState,
   renderTab,
+  dirtyDocumentPaths,
+  documentTabGroups,
   onSelectTab,
   onCloseTab,
   onTabContextMenu,
   onGroupContextMenu,
+  onDocumentGroupToggle,
+  onDocumentGroupContextMenu,
   onOpenDocument,
   onPointerDragStart,
 }: DockGroupProps) {
@@ -242,8 +258,12 @@ function DockGroup({
         onCloseTab={onCloseTab}
         onTabContextMenu={onTabContextMenu}
         onGroupContextMenu={onGroupContextMenu}
+        onDocumentGroupToggle={onDocumentGroupToggle}
+        onDocumentGroupContextMenu={onDocumentGroupContextMenu}
         onOpenDocument={onOpenDocument}
         onPointerDragStart={onPointerDragStart}
+        dirtyDocumentPaths={dirtyDocumentPaths}
+        documentTabGroups={documentTabGroups}
       />
       <div className="dock-group-content">{activeTab ? renderTab(activeTab) : <EmptyDockGroup groupId={group.id} />}</div>
       {isDragOver ? <DockDropOverlay target={dragState.target} /> : null}
@@ -254,10 +274,14 @@ function DockGroup({
 type DockTabBarProps = {
   group: DockGroupNode;
   activeTab?: DockTabRef;
+  dirtyDocumentPaths?: Set<string>;
+  documentTabGroups?: DocumentTabGroup[];
   onSelectTab: DockWorkspaceProps["onSelectTab"];
   onCloseTab: DockWorkspaceProps["onCloseTab"];
   onTabContextMenu?: DockWorkspaceProps["onTabContextMenu"];
   onGroupContextMenu?: DockWorkspaceProps["onGroupContextMenu"];
+  onDocumentGroupToggle?: DockWorkspaceProps["onDocumentGroupToggle"];
+  onDocumentGroupContextMenu?: DockWorkspaceProps["onDocumentGroupContextMenu"];
   onOpenDocument: () => void;
   onPointerDragStart: (input: DockPointerDragInput) => void;
 };
@@ -265,10 +289,14 @@ type DockTabBarProps = {
 function DockTabBar({
   group,
   activeTab,
+  dirtyDocumentPaths,
+  documentTabGroups = [],
   onSelectTab,
   onCloseTab,
   onTabContextMenu,
   onGroupContextMenu,
+  onDocumentGroupToggle,
+  onDocumentGroupContextMenu,
   onOpenDocument,
   onPointerDragStart,
 }: DockTabBarProps) {
@@ -288,6 +316,10 @@ function DockTabBar({
       startX: event.clientX,
       startY: event.clientY,
     });
+  }
+
+  function tabIsDirty(tab: DockTabRef) {
+    return Boolean(tab.kind === "document" && tab.path && dirtyDocumentPaths?.has(tab.path));
   }
 
   function renderTabButton(tab: DockTabRef) {
@@ -324,6 +356,11 @@ function DockTabBar({
         title={tab.path ?? tab.title}
       >
         <span>{tab.title}</span>
+        {tabIsDirty(tab) ? (
+          <strong className="dock-tab-dirty" aria-label="Unsaved changes" title="Unsaved changes">
+            *
+          </strong>
+        ) : null}
         <button
           type="button"
           className="dock-tab-close"
@@ -338,6 +375,57 @@ function DockTabBar({
         </button>
       </div>
     );
+  }
+
+  function renderDocumentTabs() {
+    const tabByPath = new Map(documentTabs.filter((tab) => tab.path).map((tab) => [tab.path as string, tab]));
+    const groupByPath = new Map<string, DocumentTabGroup>();
+    for (const group of documentTabGroups) {
+      for (const path of group.tabPaths) {
+        groupByPath.set(path, group);
+      }
+    }
+    const renderedGroups = new Set<string>();
+
+    return documentTabs.map((tab) => {
+      const path = tab.path;
+      const tabGroup = path ? groupByPath.get(path) : undefined;
+      if (!tabGroup) return renderTabButton(tab);
+      if (renderedGroups.has(tabGroup.id)) return null;
+      renderedGroups.add(tabGroup.id);
+      const groupTabs = tabGroup.tabPaths.map((groupPath) => tabByPath.get(groupPath)).filter((candidate): candidate is DockTabRef => Boolean(candidate));
+      const groupDirty = groupTabs.some(tabIsDirty);
+      return (
+        <div
+          key={tabGroup.id}
+          className={`dock-document-tab-group ${tabGroup.collapsed ? "collapsed" : ""}`}
+          style={{ "--document-tab-group-color": tabGroup.color } as CSSProperties}
+        >
+          <button
+            type="button"
+            className="dock-document-tab-group-label"
+            data-dock-no-drag="true"
+            onClick={() => onDocumentGroupToggle?.(tabGroup)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDocumentGroupContextMenu?.(tabGroup, event.clientX, event.clientY);
+            }}
+            title={tabGroup.name}
+          >
+            <ChevronRight size={10} />
+            <span>{tabGroup.name}</span>
+            <small>{groupTabs.length}</small>
+            {groupDirty ? <strong>*</strong> : null}
+          </button>
+          {!tabGroup.collapsed ? (
+            <div className="dock-document-tab-group-tabs">
+              {groupTabs.map((groupTab) => renderTabButton(groupTab))}
+            </div>
+          ) : null}
+        </div>
+      );
+    });
   }
 
   return (
@@ -358,7 +446,11 @@ function DockTabBar({
       title={activeTab ? `Drag ${activeTab.title}` : undefined}
     >
       <div className="dock-tab-strip">
-        <div className="dock-document-tabs">{documentTabs.map(renderTabButton)}</div>
+        <div
+          className="dock-document-tabs"
+        >
+          {isWritingGroup ? renderDocumentTabs() : documentTabs.map((tab) => renderTabButton(tab))}
+        </div>
         {isWritingGroup ? (
           <button
             type="button"
@@ -370,7 +462,7 @@ function DockTabBar({
             <Plus size={10} />
           </button>
         ) : null}
-        <div className="dock-panel-tabs">{panelTabs.map(renderTabButton)}</div>
+        <div className="dock-panel-tabs">{panelTabs.map((tab) => renderTabButton(tab))}</div>
       </div>
     </div>
   );

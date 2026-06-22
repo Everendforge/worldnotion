@@ -1,6 +1,11 @@
 import { Range } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 
+// List configuration - matches Obsidian standard
+const LIST_INDENT_WIDTH = 2; // 2 spaces per indent level
+const LIST_MARKER_REGEX = /^(\s*)([-*]|\d+\.)\s/; // Bullet, asterisk, or numbered list
+const TASK_CHECKBOX_REGEX = /^(\s*)- \[[ xX]\]\s/; // Task list
+
 class ListMarkerWidget extends WidgetType {
   constructor(private readonly label: string, private readonly kind: "bullet" | "ordered" | "task") {
     super();
@@ -8,8 +13,9 @@ class ListMarkerWidget extends WidgetType {
 
   toDOM() {
     const element = document.createElement("span");
-    element.className = `cm-rendered-list-marker cm-rendered-list-marker-${this.kind}`;
+    element.className = `cm-list-marker cm-list-marker-${this.kind}`;
     element.textContent = this.label;
+    element.setAttribute("aria-hidden", "true");
     return element;
   }
 
@@ -18,6 +24,23 @@ class ListMarkerWidget extends WidgetType {
   }
 }
 
+class HeaderSpacerWidget extends WidgetType {
+  constructor() {
+    super();
+  }
+
+  toDOM() {
+    const element = document.createElement("div");
+    element.className = "cm-header-spacer";
+    return element;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+// Utility functions
 function marker(from: number, to: number, className = "cm-markdown-syntax-muted"): Range<Decoration> | null {
   if (from >= to) return null;
   return Decoration.mark({ class: className }).range(from, to);
@@ -37,6 +60,73 @@ function selectionTouches(selectionFrom: number, selectionTo: number, from: numb
     return selectionFrom >= from && selectionFrom <= to;
   }
   return selectionFrom <= to && selectionTo >= from;
+}
+
+// Calculate indentation level - handles both spaces and tabs
+function calculateIndentLevel(indentStr: string): number {
+  let level = 0;
+  for (const char of indentStr) {
+    if (char === "\t") {
+      level += 1; // Each tab = 1 level
+    } else if (char === " ") {
+      level += 1 / LIST_INDENT_WIDTH; // Spaces: 2 spaces = 1 level
+    }
+  }
+  return Math.floor(level);
+}
+
+// List-specific functions
+interface ListItemInfo {
+  indentLevel: number;
+  markerStart: number;
+  markerEnd: number;
+  kind: "bullet" | "ordered" | "task";
+  marker: string;
+}
+
+function parseListItem(text: string, lineStart: number): ListItemInfo | null {
+  const taskMatch = TASK_CHECKBOX_REGEX.exec(text);
+  if (taskMatch) {
+    return {
+      indentLevel: calculateIndentLevel(taskMatch[1]),
+      markerStart: lineStart + taskMatch[1].length,
+      markerEnd: lineStart + taskMatch[0].length,
+      kind: "task",
+      marker: /[xX]/.test(text) ? "☑" : "☐",
+    };
+  }
+
+  const listMatch = LIST_MARKER_REGEX.exec(text);
+  if (listMatch) {
+    const indent = listMatch[1];
+    const markerText = listMatch[2];
+    const isOrdered = /^\d+\./.test(markerText);
+    
+    return {
+      indentLevel: calculateIndentLevel(indent),
+      markerStart: lineStart + indent.length,
+      markerEnd: lineStart + listMatch[0].length,
+      kind: isOrdered ? "ordered" : "bullet",
+      marker: isOrdered ? markerText : "•",
+    };
+  }
+
+  return null;
+}
+
+function isListContinuation(text: string, prevListLevel: number): boolean {
+  // A line is a continuation if it's indented more than list marker indentation
+  // but doesn't start with a list marker
+  if (LIST_MARKER_REGEX.test(text)) return false;
+  
+  const indentMatch = /^\s*/.exec(text);
+  if (!indentMatch) return false;
+  
+  const indentStr = indentMatch[0];
+  const currentLevel = calculateIndentLevel(indentStr);
+  const expectedMinLevel = prevListLevel + 1;
+  
+  return currentLevel >= expectedMinLevel && text.trim().length > 0;
 }
 
 function addInlineMatches(
@@ -105,31 +195,6 @@ function addInlineMatches(
     const m3 = syntaxMarker(labelEnd, linkTo, active);
     if (m3) decorations.push(m3);
   }
-
-  let wikilinkMatch: RegExpExecArray | null;
-  const wikilinkPattern = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]/g;
-  while ((wikilinkMatch = wikilinkPattern.exec(text)) !== null) {
-    const start = from + wikilinkMatch.index;
-    const targetFrom = start + 2;
-    const targetTo = targetFrom + wikilinkMatch[1].length;
-    const end = start + wikilinkMatch[0].length;
-    const active = selectionTouches(selectionFrom, selectionTo, start, end);
-    const m1 = syntaxMarker(start, targetFrom, active);
-    if (m1) decorations.push(m1);
-    if (wikilinkMatch[2]) {
-      const aliasFrom = start + wikilinkMatch[0].lastIndexOf("|") + 1;
-      const aliasTo = end - 2;
-      const m2 = marker(targetFrom, aliasFrom, active ? "cm-md-wikilink-target" : "cm-markdown-syntax-hidden");
-      if (m2) decorations.push(m2);
-      const m3 = marker(aliasFrom, aliasTo, "cm-md-wikilink-alias");
-      if (m3) decorations.push(m3);
-    } else {
-      const m2 = marker(targetFrom, targetTo, "cm-md-wikilink-alias");
-      if (m2) decorations.push(m2);
-    }
-    const m4 = syntaxMarker(end - 2, end, active);
-    if (m4) decorations.push(m4);
-  }
 }
 
 function getDecorations(view: EditorView): DecorationSet {
@@ -139,43 +204,75 @@ function getDecorations(view: EditorView): DecorationSet {
 
   for (const { from, to } of view.visibleRanges) {
     let position = from;
+    let lastListLevel = -1;
+
     while (position <= to) {
       const line = view.state.doc.lineAt(position);
       const text = line.text;
+
+      // Handle headings
       const heading = /^(#{1,6})\s/.exec(text);
       if (heading) {
+        lastListLevel = -1;
         const level = Math.min(heading[1].length, 6);
         const markerFrom = line.from;
         const markerTo = line.from + heading[0].length;
         const markerActive = selectionTouches(selectionFrom, selectionTo, markerFrom, markerTo);
+
+        if (line.number > 1) {
+          decorations.push(
+            Decoration.widget({
+              widget: new HeaderSpacerWidget(),
+              side: -1,
+            }).range(line.from),
+          );
+        }
+
         decorations.push(lineClass(`cm-md-heading-line cm-md-heading-${level}`, line.from));
         const m1 = syntaxMarker(markerFrom, markerTo, markerActive);
         if (m1) decorations.push(m1);
         const m2 = marker(markerTo, line.to, `cm-md-heading-text cm-md-heading-text-${level}`);
         if (m2) decorations.push(m2);
-      }
-      const list = /^(\s*)(- \[[ xX]\]|\d+\.|[-*])\s/.exec(text);
-      if (list) {
-        decorations.push(lineClass("cm-md-list-line", line.from));
-        const markerFrom = line.from + list[1].length;
-        const markerTo = line.from + list[0].length;
-        const markerActive = selectionTouches(selectionFrom, selectionTo, markerFrom, markerTo);
-        if (!markerActive) {
-          const kind = /^\d+\./.test(list[2]) ? "ordered" : list[2].startsWith("- [") ? "task" : "bullet";
-          const label = kind === "bullet" ? "•" : kind === "task" ? (/[xX]/.test(list[2]) ? "☑" : "☐") : list[2];
-          decorations.push(
-            Decoration.widget({
-              widget: new ListMarkerWidget(label, kind),
-              side: 1,
-            }).range(markerFrom),
-          );
+      } else {
+        // Handle list items
+        const listItem = parseListItem(text, line.from);
+        if (listItem) {
+          lastListLevel = listItem.indentLevel;
+          const lineClasses = ["cm-list-line"];
+          if (listItem.indentLevel > 0) {
+            lineClasses.push(`cm-list-indent-${listItem.indentLevel}`);
+          }
+
+          decorations.push(lineClass(lineClasses.join(" "), line.from));
+
+          // Only show syntax when cursor is in the marker itself
+          const cursorInMarker = selectionFrom > listItem.markerStart && selectionFrom <= listItem.markerEnd;
+
+          if (!cursorInMarker) {
+            decorations.push(
+              Decoration.widget({
+                widget: new ListMarkerWidget(listItem.marker, listItem.kind),
+                side: 1,
+              }).range(listItem.markerStart),
+            );
+          }
+
+          const m1 = marker(listItem.markerStart, listItem.markerEnd, cursorInMarker ? "cm-list-marker" : "cm-markdown-syntax-hidden");
+          if (m1) decorations.push(m1);
+        } else if (lastListLevel >= 0 && isListContinuation(text, lastListLevel)) {
+          // This is a continuation of a list item
+          decorations.push(lineClass("cm-list-line cm-list-continuation", line.from));
+        } else {
+          lastListLevel = -1;
         }
-        const m1 = marker(markerFrom, markerTo, markerActive ? "cm-list-marker" : "cm-markdown-syntax-hidden");
-        if (m1) decorations.push(m1);
       }
+
+      // Handle block quotes
       const quote = /^>\s/.exec(text);
       if (quote) {
-        const markerActive = selectionTouches(selectionFrom, selectionTo, line.from, line.from + quote[0].length);
+        lastListLevel = -1;
+        // Show syntax while cursor is in the marker (>) only, hide when writing content
+        const markerActive = selectionFrom >= line.from && selectionFrom <= line.from + 1;
         decorations.push(lineClass("cm-md-quote-line", line.from));
         const m1 = syntaxMarker(line.from, line.from + quote[0].length, markerActive);
         if (m1) decorations.push(m1);

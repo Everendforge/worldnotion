@@ -7,7 +7,8 @@ export function contentFromTemplate(index: VaultIndex, entityType: string, name:
   const slug = slugify(name);
   const template = index.templates.find((candidate) => candidate.type === entityType);
   if (!template) {
-    return `---\nid: ${slug}\ntype: ${entityType}\nname: ${name}\nstatus: draft\n---\n\n# ${name}\n`;
+    // Return frontmatter only, no header for blank notes
+    return `---\nid: ${slug}\ntype: ${entityType}\nname: ${name}\nstatus: draft\n---\n`;
   }
   return template.content
     .replace(/\{\{id\}\}/g, slug)
@@ -17,7 +18,7 @@ export function contentFromTemplate(index: VaultIndex, entityType: string, name:
 }
 
 export function folderDescriptionContent(name: string) {
-  return `---\nid: ${slugify(name)}-folder\ntype: folder-description\nname: ${name}\nstatus: draft\nfolder: ${name}\n---\n\n# ${name}\n\nDescription of this folder's contents.\n`;
+  return `---\nid: ${slugify(name)}-folder\ntype: folder-description\nname: ${name}\nstatus: draft\nfolder: ${name}\n---\n`;
 }
 
 export function folderDescriptionPath(folderPath: string) {

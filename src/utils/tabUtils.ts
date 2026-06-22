@@ -1,5 +1,5 @@
 import type { VaultFile } from "../domain";
-import type { OpenTab, WorkspaceLayoutV1, WorkspaceSession } from "../editorTypes";
+import type { DocumentTabGroup, OpenTab, WorkspaceLayoutV1, WorkspaceSession } from "../editorTypes";
 import { fileTitle, pathAfterChanges, pathIsAffectedByChanges, type PathChangeSet } from "./pathUtils";
 
 export function createOpenTabFromFile(file: VaultFile, mode: OpenTab["mode"]): OpenTab {
@@ -21,6 +21,7 @@ export function serializeWorkspaceSession(
   activePath: string | undefined,
   tabs: OpenTab[],
   layout?: WorkspaceLayoutV1,
+  documentTabGroups?: DocumentTabGroup[],
 ): WorkspaceSession {
   return {
     rootPath,
@@ -33,6 +34,7 @@ export function serializeWorkspaceSession(
       isTemplate: tab.isTemplate,
     })),
     layout,
+    documentTabGroups,
   };
 }
 

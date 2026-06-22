@@ -75,3 +75,37 @@ export function toggledThemeMode(themeId: ThemeId): ThemeId {
   const current = themeById(themeId);
   return themeForFamilyAndMode(current.family, current.mode === "dark" ? "light" : "dark");
 }
+
+export function selectionColorForTheme(themeId: ThemeId): { backgroundColor: string; opacity: string } {
+  const theme = themeById(themeId);
+  
+  // Define theme-specific selection colors
+  const colorMap: Record<ThemeFamily, Record<ThemeMode, { backgroundColor: string; opacity: string }>> = {
+    worldnotion: {
+      light: { backgroundColor: "#3f7f64", opacity: "0.25" },    // Green accent at 25% opacity
+      dark: { backgroundColor: "#7cc7a2", opacity: "0.35" },     // Lighter green at 35% opacity
+    },
+    github: {
+      light: { backgroundColor: "#0969da", opacity: "0.2" },     // GitHub blue
+      dark: { backgroundColor: "#58a6ff", opacity: "0.3" },      // GitHub light blue
+    },
+    one: {
+      light: { backgroundColor: "#4078f2", opacity: "0.2" },     // One light blue
+      dark: { backgroundColor: "#61afef", opacity: "0.3" },      // One dark blue
+    },
+    dracula: {
+      light: { backgroundColor: "#bd93f9", opacity: "0.2" },     // Dracula purple
+      dark: { backgroundColor: "#bd93f9", opacity: "0.3" },      // Dracula purple
+    },
+    owl: {
+      light: { backgroundColor: "#c41e3a", opacity: "0.15" },    // Owl red
+      dark: { backgroundColor: "#7aa6da", opacity: "0.25" },     // Owl blue
+    },
+    material: {
+      light: { backgroundColor: "#39adb5", opacity: "0.2" },     // Material teal
+      dark: { backgroundColor: "#89ddff", opacity: "0.25" },     // Material light cyan
+    },
+  };
+  
+  return colorMap[theme.family][theme.mode];
+}

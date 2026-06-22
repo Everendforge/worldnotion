@@ -8,6 +8,7 @@ import { selectSubwordBackward, selectSubwordForward, indentMore, indentLess } f
 import { foldGutter, foldKeymap } from "@codemirror/language";
 import { markdownSyntaxPlugin } from "./markdownSyntaxPlugin";
 import { wikilinkPlugin } from "./wikilinkPlugin";
+import { footnotePlugin } from "./footnotePlugin";
 import { fontFamilyPlugin } from "./fontFamilyPlugin";
 import { createDocumentHeaderPlugin } from "./documentHeaderPlugin";
 import {
@@ -18,7 +19,7 @@ import {
   SlashCommandDefinition,
   ThemeId,
 } from "../editorTypes";
-import { isDarkTheme } from "../themes";
+import { isDarkTheme, selectionColorForTheme } from "../themes";
 
 export interface CodeMirrorEditorProps {
   value: string;
@@ -83,6 +84,7 @@ const SLASH_COMMANDS: SlashCommandDefinition[] = [
   { id: "divider", label: "Divider", keywords: ["rule", "hr"], group: "insert" },
   { id: "wikilink", label: "Wikilink", keywords: ["page", "note"], group: "insert" },
   { id: "link", label: "Link", keywords: ["url"], group: "insert" },
+  { id: "footnote", label: "Footnote", keywords: ["reference", "note"], group: "insert" },
 ];
 
 export function CodeMirrorEditor({
@@ -161,6 +163,21 @@ export function CodeMirrorEditor({
       setSlashMenu(undefined);
       return;
     }
+    
+    // Calculate next footnote number
+    let footnoteRef = "[^1]";
+    if (commandId === "footnote") {
+      const fullText = editorView.state.doc.toString();
+      const footnoteRegex = /\[\^(\d+)\]/g;
+      let maxNum = 0;
+      let match: RegExpExecArray | null;
+      while ((match = footnoteRegex.exec(fullText)) !== null) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+      footnoteRef = `[^${maxNum + 1}]`;
+    }
+    
     const replacements: Record<string, string> = {
       text: plain || "",
       heading1: `# ${plain || "Heading 1"}`,
@@ -176,6 +193,7 @@ export function CodeMirrorEditor({
       code: "```\ncode\n```",
       divider: "---",
       wikilink: `[[${plain || "Page Name"}|${plain || "Alias"}]]`,
+      footnote: footnoteRef,
       link: `[${plain || "link text"}](${linkUrl?.trim()})`,
     };
     const insert = replacements[commandId] ?? plain;
@@ -580,6 +598,7 @@ export function CodeMirrorEditor({
             keymap.of(foldKeymap),
           ] : []),
           ...(mode === "write" ? [wikilinkPlugin({ resolveWikilink, onOpenWikilink, onMissingWikilink })] : []),
+          ...(mode === "write" ? [footnotePlugin()] : []),
           ...(mode === "write" && settings.hideMarkdownSyntaxInWrite ? [markdownSyntaxPlugin] : []),
           ...(mode === "write" ? [fontFamilyPlugin] : []),
           ...(settings.lineWrap ? [EditorView.lineWrapping] : []),
@@ -782,12 +801,12 @@ export function CodeMirrorEditor({
               borderLeftColor: "var(--wn-accent)",
             },
             ".cm-selectionBackground": {
-              backgroundColor: "var(--wn-accent)",
-              opacity: "0.5",
+              backgroundColor: selectionColorForTheme(theme).backgroundColor,
+              opacity: selectionColorForTheme(theme).opacity,
             },
             ".cm-selection": {
-              backgroundColor: "var(--wn-accent)",
-              opacity: "0.5",
+              backgroundColor: selectionColorForTheme(theme).backgroundColor,
+              opacity: selectionColorForTheme(theme).opacity,
             },
             ".cm-content": {
               fontFamily: mode === "source" ? settings.sourceFontFamily : settings.writeFontFamily,

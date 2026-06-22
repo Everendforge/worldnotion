@@ -36,6 +36,7 @@ export type EditorCommandId =
   | "taskList"
   | "link"
   | "wikilink"
+  | "footnote"
   | "horizontalRule"
   | "foldBlock"
   | "commandPalette"
@@ -44,7 +45,9 @@ export type EditorCommandId =
   | "switchMode"
   | "closeTab"
   | "nextTab"
-  | "previousTab";
+  | "previousTab"
+  | "spaceBefore"
+  | "spaceAfter";
 
 export type EditorCommand = {
   id: EditorCommandId;
@@ -80,8 +83,10 @@ export type EditorSettings = {
   quickSwitcherEnabled: boolean;
   searchPanelEnabled: boolean;
   outlineGuideEnabled: boolean;
+  outlinePosition: "left" | "right";
   breadcrumbsEnabled: boolean;
   codeFoldingEnabled: boolean;
+  floatingToolbarEnabled: boolean;
   // Document header in editor
   documentHeaderEnabled: boolean;
   showProjectNameInHeader: boolean;
@@ -130,6 +135,14 @@ export type OpenTab = {
 };
 
 export type PersistedOpenTab = Pick<OpenTab, "path" | "title" | "mode" | "modifiedMs" | "isTemplate">;
+
+export type DocumentTabGroup = {
+  id: string;
+  name: string;
+  color: string;
+  collapsed: boolean;
+  tabPaths: string[];
+};
 
 export type DockPanelKind = "document" | "explorer" | "graph" | "outline" | "backlinks" | "inspector";
 
@@ -183,6 +196,7 @@ export type WorkspaceSession = {
   activePath?: string;
   tabs: PersistedOpenTab[];
   layout?: WorkspaceLayoutV1;
+  documentTabGroups?: DocumentTabGroup[];
   editorState?: Record<string, FileEditorState>;
   fileAccessStats?: FileAccessStats[];
 };
@@ -209,6 +223,7 @@ export type ExplorerSettings = {
   activeSection: ExplorerSection;
   confirmDragMove: boolean;
   showHiddenEverend: boolean;
+  customIcons?: Record<string, string>;
 };
 
 export type AppSettingsV4 = {
@@ -374,8 +389,10 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   quickSwitcherEnabled: true,
   searchPanelEnabled: true,
   outlineGuideEnabled: true,
+  outlinePosition: "right",
   breadcrumbsEnabled: true,
   codeFoldingEnabled: true,
+  floatingToolbarEnabled: true,
   // Document header in editor
   documentHeaderEnabled: true,
   showProjectNameInHeader: false,
@@ -387,6 +404,7 @@ export const DEFAULT_EXPLORER_SETTINGS: ExplorerSettings = {
   activeSection: "allFiles",
   confirmDragMove: true,
   showHiddenEverend: false,
+  customIcons: {},
 };
 
 export const EDITOR_COMMANDS: EditorCommand[] = [
@@ -411,6 +429,7 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
   { id: "taskList", label: "Task List", group: "format", defaultShortcut: "Mod+Shift+9" },
   { id: "link", label: "Link", group: "insert", defaultShortcut: "Mod+K" },
   { id: "wikilink", label: "Wikilink", group: "insert", defaultShortcut: "Mod+Shift+K" },
+  { id: "footnote", label: "Footnote", group: "insert", defaultShortcut: "Mod+Alt+F" },
   { id: "horizontalRule", label: "Horizontal Rule", group: "insert", defaultShortcut: "Mod+Shift+H" },
   { id: "foldBlock", label: "Fold Current Block", group: "navigation", defaultShortcut: "Mod+Alt+[" },
   { id: "commandPalette", label: "Command Palette", group: "workspace", defaultShortcut: "Mod+P" },

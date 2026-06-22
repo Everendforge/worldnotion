@@ -111,16 +111,40 @@ export async function getBrowserDirectory(root: BrowserDirectoryHandle, relative
 }
 
 export async function ensureBrowserWritePermission(root: BrowserDirectoryHandle) {
-  if (!root.queryPermission || !root.requestPermission) return;
+  if (!root.queryPermission || !root.requestPermission) {
+    console.log("[ensureBrowserWritePermission] No permission methods available (read-only mode?)");
+    return;
+  }
   try {
     const descriptor = { mode: "readwrite" as const };
+    console.log("[ensureBrowserWritePermission] Querying permission...");
     const current = await root.queryPermission(descriptor);
-    if (current === "granted") return;
+    console.log("[ensureBrowserWritePermission] Current permission state:", current);
+    
+    if (current === "granted") {
+      console.log("[ensureBrowserWritePermission] Permission already granted");
+      return;
+    }
+    
+    console.log("[ensureBrowserWritePermission] Requesting write permission...");
     const requested = await root.requestPermission(descriptor);
+    console.log("[ensureBrowserWritePermission] Permission request result:", requested);
+    
     if (requested !== "granted") {
       console.warn("Write permission was not granted for this universe folder. Some operations may fail.");
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorName = (error as any)?.name;
+    console.error("[ensureBrowserWritePermission] Error:", { errorName, error });
+    
+    // If it's an AbortError, it's usually from user cancellation or restricted environment
+    // We'll continue anyway in read-only mode
+    if (errorName === "AbortError") {
+      console.warn("[ensureBrowserWritePermission] Permission request aborted. Continuing in read-only mode.");
+      return;
+    }
+    
+    // For other errors, just warn
     console.warn("Could not request write permission for this universe folder.", error);
   }
 }

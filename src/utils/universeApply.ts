@@ -1,4 +1,4 @@
-import type { OpenTab, WorkspaceLayoutV1, WorkspaceSession } from "../editorTypes";
+import type { DocumentTabGroup, OpenTab, WorkspaceLayoutV1, WorkspaceSession } from "../editorTypes";
 import type { VaultIndex } from "../domain";
 import {
   type PathChangeSet,
@@ -7,6 +7,7 @@ import {
   pathIsAffectedByChanges,
 } from "./pathUtils";
 import { createOpenTabFromFile } from "./tabUtils";
+import { normalizeDocumentTabGroups, updateGroupsForPathChange } from "./documentTabGroups";
 import {
   createDefaultWorkspaceLayout,
   syncLayoutWithOpenTabs,
@@ -21,6 +22,7 @@ export type UniverseWorkspacePlanInput = {
   activeTabPath?: string;
   selectedPath?: string;
   workspaceLayout?: WorkspaceLayoutV1;
+  documentTabGroups?: DocumentTabGroup[];
   sessions: Record<string, WorkspaceSession>;
   persistTabs: boolean;
   preferredPath?: string;
@@ -31,6 +33,7 @@ export type UniverseWorkspacePlan = {
   tabs: OpenTab[];
   nextPath?: string;
   layout: WorkspaceLayoutV1;
+  documentTabGroups: DocumentTabGroup[];
 };
 
 function pathAfterOptionalChange(path: string | undefined, change: PathChangeSet | undefined): string | undefined {
@@ -53,6 +56,7 @@ export function planUniverseWorkspaceState(input: UniverseWorkspacePlanInput): U
     activeTabPath,
     selectedPath,
     workspaceLayout,
+    documentTabGroups,
     sessions,
     persistTabs,
     preferredPath,
@@ -111,9 +115,17 @@ export function planUniverseWorkspaceState(input: UniverseWorkspacePlanInput): U
         : workspaceLayout
       : restoredSession?.layout ?? createDefaultWorkspaceLayout(restoredTabs, { activePath: nextPath });
 
+  const baseGroups =
+    currentRootPath === readRootPath && documentTabGroups
+      ? pathChange
+        ? updateGroupsForPathChange(documentTabGroups, pathChange)
+        : documentTabGroups
+      : restoredSession?.documentTabGroups;
+
   return {
     tabs: restoredTabs,
     nextPath,
     layout: syncLayoutWithOpenTabs(baseLayout, restoredTabs, nextPath),
+    documentTabGroups: normalizeDocumentTabGroups(baseGroups, restoredTabs),
   };
 }

@@ -56,6 +56,25 @@ export function wikilinkInsertion(selectedText: string): TextInsertion {
   };
 }
 
+export function footnoteInsertion(documentText: string): TextInsertion {
+  // Find the next available footnote number
+  const footnoteRegex = /\[\^(\d+)\]/g;
+  let maxNum = 0;
+  let match: RegExpExecArray | null;
+  
+  while ((match = footnoteRegex.exec(documentText)) !== null) {
+    const num = parseInt(match[1], 10);
+    if (num > maxNum) maxNum = num;
+  }
+  
+  const nextNum = maxNum + 1;
+  return {
+    text: `[^${nextNum}]`,
+    anchorOffset: 0,
+    headOffset: 4 + nextNum.toString().length,
+  };
+}
+
 export function markdownLinkInsertion(selectedText: string, url: string): TextInsertion {
   const selected = selectedText || "link text";
   return {

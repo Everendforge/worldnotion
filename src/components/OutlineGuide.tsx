@@ -5,12 +5,14 @@ interface OutlineGuideProps {
   outline: OutlineHeader[];
   currentHeader: OutlineHeader | null;
   onNavigate: (line: number) => void;
+  position?: "left" | "right";
 }
 
 export function OutlineGuide({
   outline,
   currentHeader,
   onNavigate,
+  position = "right",
 }: OutlineGuideProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -38,7 +40,7 @@ export function OutlineGuide({
 
   return (
     <div 
-      className={`outline-guide-notion ${isHovered ? "hovered" : ""}`}
+      className={`outline-guide-notion position-${position} ${isHovered ? "hovered" : ""}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
