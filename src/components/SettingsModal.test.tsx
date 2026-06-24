@@ -1,6 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_EDITOR_SETTINGS, DEFAULT_EXPLORER_SETTINGS, DEFAULT_KEYBINDINGS, type AppSettingsV4 } from "../editorTypes";
+import {
+  DEFAULT_EDITOR_SETTINGS,
+  DEFAULT_EXPLORER_SETTINGS,
+  DEFAULT_GRAPH_SETTINGS,
+  DEFAULT_KEYBINDINGS,
+  type AppSettingsV4,
+} from "../editorTypes";
 import { SettingsModal } from "./SettingsModal";
 
 function appSettings(overrides: Partial<AppSettingsV4> = {}): AppSettingsV4 {
@@ -10,6 +16,7 @@ function appSettings(overrides: Partial<AppSettingsV4> = {}): AppSettingsV4 {
     recentUniverseProfiles: {},
     editor: DEFAULT_EDITOR_SETTINGS,
     explorer: DEFAULT_EXPLORER_SETTINGS,
+    graph: DEFAULT_GRAPH_SETTINGS,
     keybindings: DEFAULT_KEYBINDINGS,
     sessions: {},
     ...overrides,

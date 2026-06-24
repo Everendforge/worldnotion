@@ -15,6 +15,7 @@ export type EditorCommandAction =
   | { type: "foldBlock" }
   | { type: "openPanel"; panel: "commandPalette" | "quickSwitcher" }
   | { type: "toggleOutline" }
+  | { type: "collapseExplorerFolders" }
   | { type: "switchMode" }
   | { type: "closeTab" }
   | { type: "activateAdjacentTab"; direction: 1 | -1 }
@@ -75,6 +76,8 @@ export function editorCommandAction(commandId: EditorCommandId): EditorCommandAc
       return { type: "openPanel", panel: "quickSwitcher" };
     case "toggleOutline":
       return { type: "toggleOutline" };
+    case "collapseExplorerFolders":
+      return { type: "collapseExplorerFolders" };
     case "switchMode":
       return { type: "switchMode" };
     case "closeTab":

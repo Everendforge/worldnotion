@@ -20,6 +20,7 @@ import {
   Settings,
   Star,
   Sun,
+  Target,
   FileEdit,
   AlertTriangle,
   X,
@@ -41,7 +42,7 @@ import { InspectorPanel } from "./components/InspectorPanel";
 import { LazyPanelFallback } from "./components/LazyPanelFallback";
 import { UniverseIconFrame } from "./components/UniverseIconFrame";
 import { DockWorkspace, type DockMoveRequest } from "./components/DockWorkspace";
-import { buildGraphData, getUniqueTypes, getUniqueTags, type GraphOptions } from "./utils/graphData";
+import { buildGraphData, getUniqueTagsFromGraph, getUniqueTypesFromGraph } from "./utils/graphData";
 import { useFonts } from "./utils/useFonts";
 import {
   AppSettingsV4,
@@ -53,6 +54,7 @@ import {
   NoteSuggestion,
   OpenTab,
   ThemeId,
+  GraphSettings,
 } from "./editorTypes";
 import {
   Entity,
@@ -97,12 +99,14 @@ import {
   duplicatePathFor,
   fileTitle,
   pathAfterChanges,
+  pathExists,
   pathIsAffectedByChanges,
   pathName,
   relativeFromAbsolute,
   selectedAbsolutePath as getSelectedAbsolutePath,
 } from "./utils/pathUtils";
 import {
+  closeOpenTab,
   closeOtherOpenTabs,
   closeSavedOpenTabs,
   closeTabsToRightOf,
@@ -270,14 +274,7 @@ function App() {
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const [showTaxonomyMigration, setShowTaxonomyMigration] = useState(false);
   const [generatedTaxonomy, setGeneratedTaxonomy] = useState<import("./editorTypes.js").TaxonomyConfig | null>(null);
-  const [graphViewMode, setGraphViewMode] = useState<"global" | "local">("global");
-  const [graphDepth, setGraphDepth] = useState(1);
-  const [graphFilterTypes, setGraphFilterTypes] = useState<string[]>([]);
-  const [graphFilterTags, setGraphFilterTags] = useState<string[]>([]);
-  const [graphShowWikilinks, setGraphShowWikilinks] = useState(true);
-  const [graphShowHierarchy, setGraphShowHierarchy] = useState(true);
-  const [graphShowTagRelations, setGraphShowTagRelations] = useState(false);
-  const [graphHighlightedNodes, setGraphHighlightedNodes] = useState<Set<string>>(new Set());
+  const [graphResetSignal, setGraphResetSignal] = useState(0);
   const [appZoom, setAppZoom] = useState(1);
   const [floatingToolbarRect, setFloatingToolbarRect] = useState<DOMRect>();
   const [templatesExpanded, setTemplatesExpanded] = useState(false);
@@ -553,47 +550,56 @@ function App() {
   const selectedTemplate = index?.templates.find((template) => template.path === selectedPath);
   const canWrite = Boolean(index);
 
-  // Graph view data (computed after selectedEntity is available)
-  const graphOptions = useMemo<GraphOptions>(() => ({
-    mode: graphViewMode,
-    centerNodeId: graphViewMode === "local" ? selectedEntity?.id : undefined,
-    depth: graphDepth,
-    filterTypes: graphFilterTypes.length > 0 ? graphFilterTypes : undefined,
-    filterTags: graphFilterTags.length > 0 ? graphFilterTags : undefined,
-    showWikilinks: graphShowWikilinks,
-    showHierarchy: graphShowHierarchy,
-    showTagRelations: graphShowTagRelations,
-  }), [
-    graphViewMode,
-    selectedEntity?.id,
-    graphDepth,
-    graphFilterTypes,
-    graphFilterTags,
-    graphShowWikilinks,
-    graphShowHierarchy,
-    graphShowTagRelations,
-  ]);
+  const graphSettings = settings.graph;
+  const activeGraphPath = activeTabPath ?? (selectedPath?.endsWith(".md") ? selectedPath : undefined);
 
   const graphData = useMemo(() => {
     if (!index) return { nodes: [], links: [] };
-    return buildGraphData(index.entities, graphOptions);
-  }, [index, graphOptions]);
+    return buildGraphData(index, graphSettings, activeGraphPath);
+  }, [activeGraphPath, graphSettings, index]);
 
   const availableTypes = useMemo(() => {
-    if (!index) return [];
-    return getUniqueTypes(index.entities);
-  }, [index]);
+    return getUniqueTypesFromGraph(graphData.nodes);
+  }, [graphData.nodes]);
 
   const availableTags = useMemo(() => {
-    if (!index) return [];
-    return getUniqueTags(index.entities);
-  }, [index]);
-
-  const visibleTree = useMemo(() => {
-    return selectVisibleTree(index, query, settings.explorer.showHiddenEverend);
-  }, [index, query, settings.explorer.showHiddenEverend]);
+    return getUniqueTagsFromGraph(graphData.nodes);
+  }, [graphData.nodes]);
 
   const activeExplorerSection = settings.explorer.activeSection;
+  const focusedFolderPath = index ? settings.explorer.focusedFoldersByUniverse?.[index.rootPath] : undefined;
+  const visibleTree = useMemo(() => {
+    return selectVisibleTree(index, query, settings.explorer.showHiddenEverend, focusedFolderPath);
+  }, [focusedFolderPath, index, query, settings.explorer.showHiddenEverend]);
+  const folderDescriptionPaths = useMemo(() => {
+    const paths = new Set<string>();
+    function collect(nodes: VaultIndex["tree"]) {
+      nodes.forEach((node) => {
+        if (node.descriptionPath) paths.add(node.descriptionPath);
+        if (node.children.length) collect(node.children);
+      });
+    }
+    if (index) collect(index.tree);
+    return paths;
+  }, [index]);
+  const explorerFocusBreadcrumb = useMemo(() => {
+    if (!index || !focusedFolderPath) return [];
+    const parts = focusedFolderPath.split("/").filter(Boolean);
+    const crumbs = [{ label: pathName(index.rootPath), path: undefined as string | undefined }];
+    parts.forEach((part, partIndex) => {
+      crumbs.push({
+        label: part,
+        path: parts.slice(0, partIndex + 1).join("/"),
+      });
+    });
+    return crumbs;
+  }, [focusedFolderPath, index]);
+
+  useEffect(() => {
+    if (!index || !focusedFolderPath) return;
+    if (pathExists(index, focusedFolderPath, "folder")) return;
+    setFocusedFolder(undefined);
+  }, [focusedFolderPath, index]);
   const universeSettings = useMemo(() => {
     if (!index) return undefined;
     return {
@@ -731,6 +737,21 @@ function App() {
     });
   }
 
+  function setFocusedFolder(path: string | undefined) {
+    if (!index) return;
+    const focusedFoldersByUniverse = { ...(settings.explorer.focusedFoldersByUniverse ?? {}) };
+    if (path) {
+      focusedFoldersByUniverse[index.rootPath] = path;
+    } else {
+      delete focusedFoldersByUniverse[index.rootPath];
+    }
+    updateExplorer({ focusedFoldersByUniverse });
+  }
+
+  function toggleFolderFocus(path: string) {
+    setFocusedFolder(focusedFolderPath === path ? undefined : path);
+  }
+
   function toggleFavorite(path: string, kind: "file" | "folder") {
     const exists = settings.explorer.favorites.some((favorite) => favorite.path === path);
     const favorites = exists
@@ -755,6 +776,22 @@ function App() {
     setTabs((current) => updateOpenTabsForPathChange(current, change, index?.rootPath));
     setWorkspaceLayout((current) => updateLayoutForPathChange(current, change));
     setDocumentTabGroups((current) => updateGroupsForPathChange(current, change));
+    if (index) {
+      setSettings((current) => {
+        const focusedPath = current.explorer.focusedFoldersByUniverse?.[index.rootPath];
+        if (!focusedPath || !pathIsAffectedByChanges(focusedPath, change)) return current;
+        return {
+          ...current,
+          explorer: {
+            ...current.explorer,
+            focusedFoldersByUniverse: {
+              ...(current.explorer.focusedFoldersByUniverse ?? {}),
+              [index.rootPath]: pathAfterChanges(focusedPath, change),
+            },
+          },
+        };
+      });
+    }
     if (pathIsAffectedByChanges(activeTabPath, change) && activeTabPath) {
       setActiveTabPath(pathAfterChanges(activeTabPath, change));
     }
@@ -1101,6 +1138,10 @@ function App() {
     }
     updateExplorer({
       favorites: favoritesOutsideTree(settings.explorer.favorites, path),
+      focusedFoldersByUniverse:
+        index && focusedFolderPath && (focusedFolderPath === path || focusedFolderPath.startsWith(`${path}/`))
+          ? Object.fromEntries(Object.entries(settings.explorer.focusedFoldersByUniverse ?? {}).filter(([rootPath]) => rootPath !== index.rootPath))
+          : settings.explorer.focusedFoldersByUniverse,
     });
     await refreshUniverse();
     showToast(`${kind === "folder" ? "Folder" : "File"} ${labels.trashDone.toLowerCase()}`);
@@ -1715,6 +1756,7 @@ function App() {
   async function saveTab(path: string) {
     const tabToSave = tabs.find((tab) => tab.path === path);
     if (!tabToSave) return;
+    if (!tabToSave.dirty) return;
     setErrorMessage("");
     try {
       if (browserRoot) {
@@ -1899,22 +1941,17 @@ function App() {
   // Helper to actually close a tab without confirmation
   function doCloseTab(path: string) {
     setActiveWorkspacePreset("custom");
-    
-    // Determine the next active tab before closing
-    const currentIndex = tabs.findIndex((tab) => tab.path === path);
-    if (activeTabPath === path && currentIndex >= 0) {
-      // If closing the active tab, select the previous tab first
-      const previousTabIndex = Math.max(0, currentIndex - 1);
-      const nextActiveTab = tabs[previousTabIndex];
-      if (nextActiveTab?.path !== activeTabPath) {
-        setActiveTabPath(nextActiveTab?.path);
-        setSelectedPath(nextActiveTab?.path);
-      }
-    }
-    
     setWorkspaceLayout((current) => closeDockLayoutTab(current, documentDockTabId(path)));
     setDocumentTabGroups((current) => removeTabFromGroups(current, path));
-    setTabs((current) => current.filter((tab) => tab.path !== path));
+    setTabs((current) => {
+      const result = closeOpenTab(current, activeTabPath, path);
+      if (result.activePath !== activeTabPath) {
+        setActiveTabPath(result.activePath);
+        setSelectedPath(result.activePath);
+        setFloatingToolbarRect(undefined);
+      }
+      return result.tabs;
+    });
   }
 
   async function closeTab(path = activeTabPath) {
@@ -2236,6 +2273,9 @@ function App() {
             outlineGuideEnabled: !current.editor.outlineGuideEnabled,
           },
         }));
+        break;
+      case "collapseExplorerFolders":
+        setExpandedPaths(new Set());
         break;
       case "switchMode":
         if (activeTabPath) {
@@ -2584,6 +2624,28 @@ function App() {
         </button>
       </nav>
 
+      {focusedFolderPath && explorerFocusBreadcrumb.length ? (
+        <nav className="explorer-focus-breadcrumb" aria-label="Focused folder path">
+          <Target className="explorer-focus-breadcrumb-icon" size={14} />
+          {explorerFocusBreadcrumb.map((crumb, crumbIndex) => {
+            const isLast = crumbIndex === explorerFocusBreadcrumb.length - 1;
+            return (
+              <span key={crumb.path ?? "root"} className="explorer-focus-crumb">
+                <button
+                  type="button"
+                  className={isLast ? "active" : ""}
+                  onClick={() => setFocusedFolder(crumb.path)}
+                  title={crumb.path ? `Focus ${crumb.path}` : "Exit folder focus"}
+                >
+                  {crumb.label}
+                </button>
+                {!isLast ? <ChevronRight size={12} /> : null}
+              </span>
+            );
+          })}
+        </nav>
+      ) : null}
+
       <div className="sidebar-main" onContextMenu={(event) => handleContextMenu(event, "", "empty")}>
         {activeExplorerSection === "favorites" && (
           <section className="sidebar-section">
@@ -2662,7 +2724,6 @@ function App() {
 
         {activeExplorerSection === "allFiles" && (
           <section className="sidebar-section">
-            <h2>All Files</h2>
             <div
               className={`tree-list ${pointerDragItem?.active ? "is-pointer-dragging" : ""}`}
               data-tree-root-drop="true"
@@ -2689,12 +2750,21 @@ function App() {
                     openTabPaths={openTabPaths}
                     dirtyTabPaths={dirtyTabPaths}
                     favoritePaths={favoritePaths}
+                    focusedFolderPath={focusedFolderPath}
                     onSelectPath={selectPath}
                     onSelectFolder={selectFolder}
                     expandedPaths={expandedPaths}
                     onToggleExpand={toggleExpand}
                     onContextMenu={handleContextMenu}
                     onToggleFavorite={toggleFavorite}
+                    onToggleFolderFocus={toggleFolderFocus}
+                    onOpenFolderDescription={(folderPath, descriptionPath) => {
+                      if (descriptionPath) {
+                        selectPath(descriptionPath);
+                      } else {
+                        void createFolderDescription(folderPath);
+                      }
+                    }}
                     onDragMove={moveExplorerPath}
                     onPointerDragStart={(path, kind, startX, startY) =>
                       setPointerDragItem({ path, kind, startX, startY, active: false })
@@ -2909,7 +2979,7 @@ function App() {
               }}
               onRequestUrl={() => promptUser("Insert link", "https://example.com", "https://")}
               onCursorMove={() => {
-                activateTab(documentTab.path);
+                if (documentTab.path !== activeTabPath) return;
                 if (editorViewRef.current) {
                   const pos = editorViewRef.current.state.selection.main.head;
                   const line = editorViewRef.current.state.doc.lineAt(pos);
@@ -3027,19 +3097,37 @@ function App() {
     window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
+  function setGraphSettings(nextGraphSettings: GraphSettings) {
+    setSettings((current) => ({
+      ...current,
+      graph: nextGraphSettings,
+    }));
+  }
+
   const graphPanel = (
     <aside className="inspector graph-panel dock-panel-body">
       <Suspense fallback={<LazyPanelFallback label="Loading graph..." />}>
         <div className="graph-panel-view">
           <GraphView
             graphData={graphData}
-            mode={graphViewMode}
-            centerNodeId={selectedEntity?.id}
+            settings={graphSettings}
+            activeNodeId={activeGraphPath}
+            resetSignal={graphResetSignal}
             onNodeClick={(path) => {
               openOrCreateTab(path);
               setSelectedPath(path);
             }}
-            highlightedNodes={graphHighlightedNodes}
+            onOpenLocalGraph={(path) => {
+              openOrCreateTab(path);
+              setSelectedPath(path);
+              setGraphSettings({ ...graphSettings, mode: "local" });
+            }}
+            onRevealNode={(path) => {
+              setSelectedExplorerTarget({ path, kind: "file" });
+              void revealExplorerPath(path).catch((error) => {
+                showToast(error instanceof Error ? error.message : String(error));
+              });
+            }}
           />
         </div>
         <div
@@ -3050,24 +3138,14 @@ function App() {
             <span>Graph Controls</span>
           </div>
           <GraphControls
-            nodes={graphData.nodes}
+            settings={graphSettings}
             availableTypes={availableTypes}
             availableTags={availableTags}
-            mode={graphViewMode}
-            depth={graphDepth}
-            filterTypes={graphFilterTypes}
-            filterTags={graphFilterTags}
-            showWikilinks={graphShowWikilinks}
-            showHierarchy={graphShowHierarchy}
-            showTagRelations={graphShowTagRelations}
-            onModeChange={setGraphViewMode}
-            onDepthChange={setGraphDepth}
-            onFilterTypesChange={setGraphFilterTypes}
-            onFilterTagsChange={setGraphFilterTags}
-            onShowWikilinksChange={setGraphShowWikilinks}
-            onShowHierarchyChange={setGraphShowHierarchy}
-            onShowTagRelationsChange={setGraphShowTagRelations}
-            onSearchResultsChange={setGraphHighlightedNodes}
+            nodeCount={graphData.nodes.length}
+            linkCount={graphData.links.length}
+            hasActiveNote={Boolean(activeGraphPath)}
+            onSettingsChange={setGraphSettings}
+            onResetView={() => setGraphResetSignal((current) => current + 1)}
           />
         </div>
       </Suspense>
@@ -3273,6 +3351,7 @@ function App() {
         layout={workspaceLayout}
         renderTab={renderDockTab}
         dirtyDocumentPaths={dirtyTabPaths}
+        folderDescriptionPaths={folderDescriptionPaths}
         documentTabGroups={documentTabGroups}
         onSelectTab={handleDockSelect}
         onCloseTab={handleDockClose}
@@ -3287,6 +3366,16 @@ function App() {
         onDocumentGroupContextMenu={(group, x, y) => setDocumentGroupContextMenu({ groupId: group.id, x, y })}
         onResizeSplit={handleDockResize}
         onOpenDocument={() => setShowCommandPalette(true)}
+        renderEmptyDocuments={() => (
+          <div className="writing-empty-widget">
+            <FileText size={28} />
+            <strong>Explore {universeDisplayName(index)}</strong>
+            <button type="button" onClick={() => setShowCommandPalette(true)} title="Open Command Palette">
+              <Search size={14} />
+              Search
+            </button>
+          </div>
+        )}
       />
       {dockPanelContextMenu ? (
         <div

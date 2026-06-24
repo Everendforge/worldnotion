@@ -65,15 +65,22 @@ const taxonomyConfig: TaxonomyConfig = {
 };
 
 function index(overrides: Partial<VaultIndex> = {}): VaultIndex {
-  const tree = [node("World", "folder", [node("World/Ada.md", "file"), node("World/Notes.md", "file")])];
+  const tree = [
+    node("World", "folder", [
+      node("World/Ada.md", "file"),
+      node("World/Notes.md", "file"),
+      node("World/Scenes", "folder", [node("World/Scenes/Arrival.md", "file")]),
+    ]),
+  ];
   return {
     rootPath: "Demo",
     files: [
       { relativePath: "World/Ada.md", content: "" },
       { relativePath: "World/Notes.md", content: "" },
+      { relativePath: "World/Scenes/Arrival.md", content: "" },
       { relativePath: ".everend/universe.json", content: "{}" },
     ],
-    directories: ["World", ".everend"],
+    directories: ["World", "World/Scenes", ".everend"],
     markdownFiles: [],
     templates: [],
     universes: [],
@@ -93,8 +100,34 @@ describe("explorer selectors", () => {
 
     const matches = selectVisibleTree(index(), "world", false);
 
-    expect(matches.map((item) => item.path)).toEqual(["World/Ada.md", "World/Notes.md", "World"]);
+    expect(matches.map((item) => item.path)).toEqual([
+      "World/Ada.md",
+      "World/Notes.md",
+      "World/Scenes/Arrival.md",
+      "World",
+      "World/Scenes",
+    ]);
     expect(matches.every((item) => item.children.length === 0)).toBe(true);
+  });
+
+  it("uses a focused folder as the visible root", () => {
+    const focused = selectVisibleTree(index(), "", false, "World/Scenes");
+
+    expect(focused.map((item) => item.path)).toEqual(["World/Scenes"]);
+    expect(focused[0]?.children.map((item) => item.path)).toEqual(["World/Scenes/Arrival.md"]);
+  });
+
+  it("limits search results to the focused folder", () => {
+    const matches = selectVisibleTree(index(), "ada", false, "World/Scenes");
+
+    expect(matches).toEqual([]);
+    expect(selectVisibleTree(index(), "arrival", false, "World/Scenes").map((item) => item.path)).toEqual([
+      "World/Scenes/Arrival.md",
+    ]);
+  });
+
+  it("falls back to the full tree if the focused folder does not exist", () => {
+    expect(selectVisibleTree(index(), "", false, "Missing").map((item) => item.path)).toEqual(["World"]);
   });
 
   it("includes hidden metadata only when requested", () => {

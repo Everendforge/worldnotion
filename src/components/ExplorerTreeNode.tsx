@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import { ChevronDown, ChevronRight, FileEdit, FileText, Folder, FolderOpen, Star, StarOff } from "lucide-react";
+import { ChevronDown, ChevronRight, FileEdit, FileText, Folder, FolderOpen, Star, Target } from "lucide-react";
 import type { VaultTreeNode } from "../domain";
 import { getIconComponent } from "./IconPicker";
 
@@ -9,12 +9,15 @@ export type ExplorerTreeNodeProps = {
   openTabPaths: Set<string>;
   dirtyTabPaths: Set<string>;
   favoritePaths: Set<string>;
+  focusedFolderPath?: string;
   onSelectPath: (path: string) => void;
   onSelectFolder: (path: string) => void;
   expandedPaths: Set<string>;
   onToggleExpand: (path: string) => void;
   onContextMenu: (event: MouseEvent, path: string, kind: "file" | "folder" | "empty") => void;
   onToggleFavorite: (path: string, kind: "file" | "folder") => void;
+  onToggleFolderFocus: (path: string) => void;
+  onOpenFolderDescription: (folderPath: string, descriptionPath?: string) => void;
   onDragMove: (fromPath: string, toFolderPath: string, kind?: "file" | "folder") => void;
   onPointerDragStart: (path: string, kind: "file" | "folder", x: number, y: number) => void;
   isPointerClickSuppressed: () => boolean;
@@ -28,23 +31,28 @@ export function ExplorerTreeNode({
   openTabPaths,
   dirtyTabPaths,
   favoritePaths,
+  focusedFolderPath,
   onSelectPath,
   onSelectFolder,
   expandedPaths,
   onToggleExpand,
   onContextMenu,
   onToggleFavorite,
+  onToggleFolderFocus,
+  onOpenFolderDescription,
   onDragMove,
   onPointerDragStart,
   isPointerClickSuppressed,
   entityTagColors,
   customIcons,
 }: ExplorerTreeNodeProps) {
-  const isExpanded = expandedPaths.has(node.path);
+  const isExpanded = expandedPaths.has(node.path) || focusedFolderPath === node.path;
   const hasChildren = node.children.length > 0;
   const isFavorite = favoritePaths.has(node.path);
+  const isFocused = focusedFolderPath === node.path;
   const isOpen = openTabPaths.has(node.path);
   const isDirty = dirtyTabPaths.has(node.path);
+  const descriptionIsOpen = Boolean(node.descriptionPath && openTabPaths.has(node.descriptionPath));
   const tagColor = entityTagColors?.get(node.path);
   const customIcon = customIcons?.[node.path];
   const IconComponent = customIcon ? getIconComponent(customIcon) : undefined;
@@ -109,11 +117,9 @@ export function ExplorerTreeNode({
         }}
         title={node.path}
       >
-        {node.kind === "folder" && hasChildren && (
-          <span className="tree-chevron">
-            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </span>
-        )}
+        <span className={`tree-chevron ${node.kind === "folder" && hasChildren ? "" : "tree-chevron-placeholder"}`} aria-hidden="true">
+          {node.kind === "folder" && hasChildren ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
+        </span>
         {tagColor && node.kind === "file" && (
           <span className="tree-tag-indicator" style={{ backgroundColor: tagColor }} title="Tag color" />
         )}
@@ -128,31 +134,42 @@ export function ExplorerTreeNode({
         {isDirty ? <strong className="tree-dirty">*</strong> : null}
         {isFavorite ? <Star size={12} className="tree-favorite" /> : null}
         <div className="tree-node-buttons">
-          {node.kind === "folder" && node.hasDescription && (
+          {node.kind === "folder" ? (
             <button
               type="button"
-              className="folder-description-button"
+              className={`tree-inline-button tree-focus-button ${isFocused ? "active" : "inactive"}`}
               onClick={(event) => {
                 event.stopPropagation();
-                if (node.descriptionPath) {
-                  onSelectPath(node.descriptionPath);
-                }
+                onToggleFolderFocus(node.path);
               }}
-              title={`Edit ${node.name} description`}
+              title={isFocused ? "Exit folder focus" : "Focus folder"}
+            >
+              <Target size={12} />
+            </button>
+          ) : null}
+          {node.kind === "folder" ? (
+            <button
+              type="button"
+              className={`tree-inline-button folder-description-button ${descriptionIsOpen ? "active" : node.hasDescription ? "available" : "inactive"}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenFolderDescription(node.path, node.descriptionPath);
+              }}
+              title={node.hasDescription ? `Open ${node.name} folder note` : `Create ${node.name} folder note`}
             >
               <FileEdit size={12} />
             </button>
-          )}
+          ) : null}
           <button
             type="button"
-            className="folder-favorite-button"
+            className={`tree-inline-button folder-favorite-button ${isFavorite ? "active" : "inactive"}`}
             onClick={(event) => {
               event.stopPropagation();
               onToggleFavorite(node.path, node.kind);
             }}
             title={isFavorite ? "Remove favorite" : "Add favorite"}
           >
-            {isFavorite ? <StarOff size={12} /> : <Star size={12} />}
+            <Star size={12} />
           </button>
         </div>
       </div>
@@ -166,12 +183,15 @@ export function ExplorerTreeNode({
               openTabPaths={openTabPaths}
               dirtyTabPaths={dirtyTabPaths}
               favoritePaths={favoritePaths}
+              focusedFolderPath={focusedFolderPath}
               onSelectPath={onSelectPath}
               onSelectFolder={onSelectFolder}
               expandedPaths={expandedPaths}
               onToggleExpand={onToggleExpand}
               onContextMenu={onContextMenu}
               onToggleFavorite={onToggleFavorite}
+              onToggleFolderFocus={onToggleFolderFocus}
+              onOpenFolderDescription={onOpenFolderDescription}
               onDragMove={onDragMove}
               onPointerDragStart={onPointerDragStart}
               isPointerClickSuppressed={isPointerClickSuppressed}

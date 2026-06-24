@@ -42,6 +42,7 @@ export type EditorCommandId =
   | "commandPalette"
   | "quickSwitcher"
   | "toggleOutline"
+  | "collapseExplorerFolders"
   | "switchMode"
   | "closeTab"
   | "nextTab"
@@ -224,6 +225,35 @@ export type ExplorerSettings = {
   confirmDragMove: boolean;
   showHiddenEverend: boolean;
   customIcons?: Record<string, string>;
+  focusedFoldersByUniverse?: Record<string, string>;
+};
+
+export type GraphGroupRule = {
+  id: string;
+  query: string;
+  color: string;
+  label: string;
+};
+
+export type GraphSettings = {
+  mode: "global" | "local";
+  depth: number;
+  searchQuery: string;
+  showTags: boolean;
+  existingFilesOnly: boolean;
+  showOrphans: boolean;
+  showWikilinks: boolean;
+  showHierarchy: boolean;
+  showTagRelations: boolean;
+  showArrows: boolean;
+  textFadeThreshold: number;
+  nodeSize: number;
+  linkThickness: number;
+  centerForce: number;
+  repelForce: number;
+  linkForce: number;
+  linkDistance: number;
+  groups: GraphGroupRule[];
 };
 
 export type AppSettingsV4 = {
@@ -233,6 +263,7 @@ export type AppSettingsV4 = {
   recentUniverseProfiles: Record<string, RecentUniverseProfile>;
   editor: EditorSettings;
   explorer: ExplorerSettings;
+  graph: GraphSettings;
   keybindings: Keybinding[];
   sessions: Record<string, WorkspaceSession>;
 };
@@ -405,6 +436,28 @@ export const DEFAULT_EXPLORER_SETTINGS: ExplorerSettings = {
   confirmDragMove: true,
   showHiddenEverend: false,
   customIcons: {},
+  focusedFoldersByUniverse: {},
+};
+
+export const DEFAULT_GRAPH_SETTINGS: GraphSettings = {
+  mode: "global",
+  depth: 1,
+  searchQuery: "",
+  showTags: false,
+  existingFilesOnly: true,
+  showOrphans: true,
+  showWikilinks: true,
+  showHierarchy: false,
+  showTagRelations: false,
+  showArrows: false,
+  textFadeThreshold: 0.75,
+  nodeSize: 1,
+  linkThickness: 1,
+  centerForce: 0.08,
+  repelForce: 240,
+  linkForce: 0.45,
+  linkDistance: 110,
+  groups: [],
 };
 
 export const EDITOR_COMMANDS: EditorCommand[] = [
@@ -435,6 +488,7 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
   { id: "commandPalette", label: "Command Palette", group: "workspace", defaultShortcut: "Mod+P" },
   { id: "quickSwitcher", label: "Quick Switcher", group: "workspace", defaultShortcut: "Mod+Alt+O" },
   { id: "toggleOutline", label: "Toggle Outline", group: "workspace", defaultShortcut: "Mod+Shift+O" },
+  { id: "collapseExplorerFolders", label: "Collapse Explorer Folders", group: "workspace", defaultShortcut: "Mod+Shift+E" },
   { id: "switchMode", label: "Switch Write/Source Mode", group: "workspace", defaultShortcut: "Mod+/" },
   { id: "closeTab", label: "Close Tab", group: "workspace", defaultShortcut: "Mod+W" },
   { id: "nextTab", label: "Next Tab", group: "workspace", defaultShortcut: "Mod+Shift+]" },

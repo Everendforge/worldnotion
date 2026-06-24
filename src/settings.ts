@@ -2,6 +2,7 @@ import {
   AppSettingsV4,
   DEFAULT_EDITOR_SETTINGS,
   DEFAULT_EXPLORER_SETTINGS,
+  DEFAULT_GRAPH_SETTINGS,
   DEFAULT_KEYBINDINGS,
 } from "./editorTypes";
 import { normalizeThemeId } from "./themes";
@@ -19,7 +20,10 @@ export function loadSettings(): AppSettingsV4 {
         ? [parsed.recentUniverse]
         : [];
     const parsedExplorer: Partial<AppSettingsV4["explorer"]> = parsed.explorer ?? {};
-    const activeSection = parsedExplorer.activeSection === "favorites" ? "favorites" : "allFiles";
+    const activeSection =
+      parsedExplorer.activeSection === "favorites" || parsedExplorer.activeSection === "ecosystem"
+        ? parsedExplorer.activeSection
+        : "allFiles";
 
     const mergedKeybindings = (() => {
       if (!parsed.keybindings?.length) return DEFAULT_KEYBINDINGS;
@@ -38,6 +42,7 @@ export function loadSettings(): AppSettingsV4 {
       recentUniverseProfiles: parsed.recentUniverseProfiles ?? {},
       editor: { ...DEFAULT_EDITOR_SETTINGS, ...(parsed.editor ?? {}) },
       explorer: { ...DEFAULT_EXPLORER_SETTINGS, ...parsedExplorer, activeSection },
+      graph: { ...DEFAULT_GRAPH_SETTINGS, ...(parsed.graph ?? {}) },
       keybindings: mergedKeybindings,
       sessions: parsed.sessions ?? {},
     };
@@ -48,6 +53,7 @@ export function loadSettings(): AppSettingsV4 {
       recentUniverseProfiles: {},
       editor: DEFAULT_EDITOR_SETTINGS,
       explorer: DEFAULT_EXPLORER_SETTINGS,
+      graph: DEFAULT_GRAPH_SETTINGS,
       keybindings: DEFAULT_KEYBINDINGS,
       sessions: {},
     };

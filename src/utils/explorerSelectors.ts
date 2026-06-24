@@ -22,17 +22,33 @@ function collectSearchMatches(
   });
 }
 
-export function selectVisibleTree(index: VaultIndex | undefined, query: string, showHiddenEverend: boolean): VaultTreeNode[] {
+function findTreeNode(nodes: VaultTreeNode[], path: string): VaultTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    const child = findTreeNode(node.children, path);
+    if (child) return child;
+  }
+  return undefined;
+}
+
+export function selectVisibleTree(
+  index: VaultIndex | undefined,
+  query: string,
+  showHiddenEverend: boolean,
+  focusedFolderPath?: string,
+): VaultTreeNode[] {
   if (!index) return [];
   const tree = showHiddenEverend
     ? buildTree(index.files, index.directories, true, `${pathName(index.rootPath)}.md`)
     : index.tree;
-  if (!query.trim()) return tree;
+  const focusedRoot = focusedFolderPath ? findTreeNode(tree, focusedFolderPath) : undefined;
+  const scopedTree = focusedFolderPath ? (focusedRoot ? [focusedRoot] : tree) : tree;
+  if (!query.trim()) return scopedTree;
 
   const normalized = query.toLowerCase();
   const files: VaultTreeNode[] = [];
   const folders: VaultTreeNode[] = [];
-  collectSearchMatches(tree, normalized, files, folders);
+  collectSearchMatches(scopedTree, normalized, files, folders);
   return [...files, ...folders];
 }
 

@@ -1,354 +1,578 @@
-import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force';
-import type { Simulation, SimulationLinkDatum } from 'd3-force';
-import type { GraphData, GraphNode, GraphLink } from '../utils/graphData';
-import { getNodeColor, getLinkColor } from '../utils/graphData';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  forceX,
+  forceY,
+} from "d3-force";
+import type { Simulation, SimulationLinkDatum } from "d3-force";
+import type { GraphSettings } from "../editorTypes";
+import type { GraphData, GraphLink, GraphNode } from "../utils/graphData";
+import { getLinkColor } from "../utils/graphData";
 
 export interface GraphViewProps {
   graphData: GraphData;
-  mode: 'global' | 'local';
-  centerNodeId?: string;
-  onNodeClick: (nodePath: string) => void;
-  onNodeHover?: (node: GraphNode | null) => void;
+  settings: GraphSettings;
+  activeNodeId?: string;
   highlightedNodes?: Set<string>;
+  resetSignal?: number;
   width?: number;
   height?: number;
+  onNodeClick: (nodePath: string) => void;
+  onOpenLocalGraph: (nodePath: string) => void;
+  onRevealNode: (nodePath: string) => void;
+  onNodeHover?: (node: GraphNode | null) => void;
 }
 
 interface D3Node extends GraphNode {
-  x?: number;
-  y?: number;
+  x: number;
+  y: number;
   vx?: number;
   vy?: number;
-  fx?: number;
-  fy?: number;
+  fx?: number | null;
+  fy?: number | null;
 }
 
 interface D3Link extends SimulationLinkDatum<D3Node> {
   source: string | D3Node;
   target: string | D3Node;
+  type: GraphLink["type"];
+  strength: number;
+  label?: string;
+  directed?: boolean;
 }
 
-/**
- * Graph visualization component using Canvas 2D + d3-force
- * No THREE.js, no conflicting dependencies - clean and performant
- */
+type ViewTransform = { x: number; y: number; k: number };
+
+type DragState =
+  | { kind: "pan"; startX: number; startY: number; origin: ViewTransform }
+  | { kind: "node"; node: D3Node; startX: number; startY: number; moved: boolean };
+
 export function GraphView({
   graphData,
-  mode,
-  centerNodeId,
-  onNodeClick,
-  onNodeHover,
+  settings,
+  activeNodeId,
   highlightedNodes,
+  resetSignal,
   width,
   height,
+  onNodeClick,
+  onOpenLocalGraph,
+  onRevealNode,
+  onNodeHover,
 }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const simulationRef = useRef<Simulation<D3Node, D3Link> | null>(null);
   const nodesRef = useRef<D3Node[]>([]);
-  const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragNode, setDragNode] = useState<D3Node | null>(null);
+  const linksRef = useRef<D3Link[]>([]);
+  const positionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const transformRef = useRef<ViewTransform>({ x: 0, y: 0, k: 1 });
+  const dragStateRef = useRef<DragState | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | undefined>();
+  const hoveredNodeIdRef = useRef<string | undefined>(undefined);
   const [measuredSize, setMeasuredSize] = useState({ width: width ?? 800, height: height ?? 600 });
-  const animationFrameRef = useRef<number | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: GraphNode } | null>(null);
   const canvasWidth = width ?? measuredSize.width;
   const canvasHeight = height ?? measuredSize.height;
+
+  const connectedNodeIds = useMemo(() => {
+    const connected = new Set<string>();
+    const targetIds = new Set<string>();
+    if (hoveredNodeId) targetIds.add(hoveredNodeId);
+    highlightedNodes?.forEach((id) => targetIds.add(id));
+    if (activeNodeId) targetIds.add(activeNodeId);
+    if (!targetIds.size) return connected;
+
+    graphData.links.forEach((link) => {
+      if (targetIds.has(link.source) || targetIds.has(link.target)) {
+        connected.add(link.source);
+        connected.add(link.target);
+      }
+    });
+    targetIds.forEach((id) => connected.add(id));
+    return connected;
+  }, [activeNodeId, graphData.links, highlightedNodes, hoveredNodeId]);
+
+  useEffect(() => {
+    hoveredNodeIdRef.current = hoveredNodeId;
+    renderGraph();
+  }, [connectedNodeIds, hoveredNodeId]);
 
   useEffect(() => {
     if (width && height) return;
     const container = containerRef.current;
     if (!container) return;
-    const observedContainer = container;
 
     function updateSize() {
       setMeasuredSize({
-        width: Math.max(320, Math.floor(observedContainer.clientWidth || 800)),
-        height: Math.max(260, Math.floor(observedContainer.clientHeight || 600)),
+        width: Math.max(320, Math.floor(container?.clientWidth || 800)),
+        height: Math.max(260, Math.floor(container?.clientHeight || 600)),
       });
     }
 
     updateSize();
     const observer = new ResizeObserver(updateSize);
-    observer.observe(observedContainer);
+    observer.observe(container);
     return () => observer.disconnect();
   }, [width, height]);
 
-  // Calculate highlighted links
-  const highlightedLinks = useMemo(() => {
-    const links = new Set<GraphLink>();
-
-    if (hoveredNode) {
-      graphData.links.forEach((link) => {
-        const sourceId = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id;
-        const targetId = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id;
-        
-        if (sourceId === hoveredNode.id || targetId === hoveredNode.id) {
-          links.add(link);
-        }
-      });
-    }
-
-    if (highlightedNodes && highlightedNodes.size > 0) {
-      graphData.links.forEach((link) => {
-        const sourceId = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id;
-        const targetId = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id;
-
-        if (highlightedNodes.has(sourceId) || highlightedNodes.has(targetId)) {
-          links.add(link);
-        }
-      });
-    }
-
-    return links;
-  }, [hoveredNode, highlightedNodes, graphData.links]);
-
-  // Initialize simulation
   useEffect(() => {
-    if (!graphData.nodes.length) return;
+    if (!graphData.nodes.length) {
+      nodesRef.current = [];
+      linksRef.current = [];
+      renderGraph();
+      return;
+    }
 
-    const d3Nodes: D3Node[] = graphData.nodes.map((n) => ({
-      ...n,
-      x: Math.random() * canvasWidth - canvasWidth / 2,
-      y: Math.random() * canvasHeight - canvasHeight / 2,
-      vx: 0,
-      vy: 0,
+    const d3Nodes: D3Node[] = graphData.nodes.map((node, index) => {
+      const savedPosition = positionsRef.current.get(node.id);
+      const seededPosition = savedPosition ?? seedPosition(index, graphData.nodes.length, canvasWidth, canvasHeight);
+      return {
+        ...node,
+        x: seededPosition.x,
+        y: seededPosition.y,
+      };
+    });
+
+    const d3Links: D3Link[] = graphData.links.map((link) => ({
+      ...link,
+      source: link.source,
+      target: link.target,
     }));
 
     nodesRef.current = d3Nodes;
+    linksRef.current = d3Links;
+    if (transformRef.current.x === 0 && transformRef.current.y === 0 && transformRef.current.k === 1) {
+      transformRef.current = { x: canvasWidth / 2, y: canvasHeight / 2, k: 1 };
+    }
 
-    const d3Links: D3Link[] = graphData.links.map((l) => ({
-      source: typeof l.source === 'string' ? l.source : (l.source as GraphNode).id,
-      target: typeof l.target === 'string' ? l.target : (l.target as GraphNode).id,
-    }));
-
-    // Create force simulation
-    const simulation = forceSimulation(d3Nodes)
+    const simulation = forceSimulation<D3Node>(d3Nodes)
       .force(
-        'link',
+        "link",
         forceLink<D3Node, D3Link>(d3Links)
-          .id((d: D3Node) => d.id)
-          .distance(100)
-          .strength(0.5)
+          .id((node) => node.id)
+          .distance(settings.linkDistance)
+          .strength(settings.linkForce),
       )
-      .force('charge', forceManyBody<D3Node>().strength(-300).distanceMax(500))
-      .force('center', forceCenter(0, 0))
-      .force('collide', forceCollide<D3Node>().radius(25).iterations(2));
+      .force("charge", forceManyBody<D3Node>().strength(-settings.repelForce).distanceMax(700))
+      .force("x", forceX<D3Node>(0).strength(settings.centerForce))
+      .force("y", forceY<D3Node>(0).strength(settings.centerForce))
+      .force("collide", forceCollide<D3Node>().radius((node) => nodeRadius(node) + 8).iterations(2))
+      .alpha(0.85)
+      .alphaDecay(0.05)
+      .on("tick", () => {
+        nodesRef.current.forEach((node) => {
+          positionsRef.current.set(node.id, { x: node.x, y: node.y });
+        });
+        renderGraph();
+      });
 
     simulationRef.current = simulation;
-
-    // Animation loop
-    const animate = () => {
-      // Timestamp available for frame rate calculations in future
-      render();
-      animationFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    const render = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      // Clear canvas
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-      const offsetX = canvasWidth / 2;
-      const offsetY = canvasHeight / 2;
-
-      // Draw links
-      graphData.links.forEach((link) => {
-        const sourceId = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id;
-        const targetId = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id;
-        
-        const sourceNode = nodesRef.current.find((n) => n.id === sourceId);
-        const targetNode = nodesRef.current.find((n) => n.id === targetId);
-
-        if (
-          sourceNode?.x === undefined ||
-          sourceNode.y === undefined ||
-          targetNode?.x === undefined ||
-          targetNode.y === undefined
-        ) {
-          return;
-        }
-
-        const isHighlighted = highlightedLinks.has(link);
-        const linkColor = getLinkColor(link.type);
-
-        ctx.strokeStyle = isHighlighted ? linkColor : `${linkColor}40`;
-        ctx.lineWidth = isHighlighted ? 2 : 1;
-
-        if (link.type === 'hierarchy') {
-          ctx.setLineDash([5, 5]);
-        } else {
-          ctx.setLineDash([]);
-        }
-
-        ctx.beginPath();
-        ctx.moveTo(sourceNode.x + offsetX, sourceNode.y + offsetY);
-        ctx.lineTo(targetNode.x + offsetX, targetNode.y + offsetY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      });
-
-      // Draw nodes
-      nodesRef.current.forEach((node) => {
-        if (node.x === undefined || node.y === undefined) return;
-
-        const isCenterNode = mode === 'local' && node.id === centerNodeId;
-        const isHighlighted = highlightedNodes?.has(node.id);
-        const isHovered = hoveredNode?.id === node.id;
-
-        let nodeSize = 6 + (node.degree || 0) * 0.8;
-        if (isCenterNode) nodeSize *= 1.8;
-        if (isHighlighted || isHovered) nodeSize *= 1.3;
-
-        // Draw node circle
-        const nodeColor = getNodeColor(node.type);
-        ctx.fillStyle = isCenterNode ? '#3f7f64' : nodeColor;
-        ctx.beginPath();
-        ctx.arc(node.x + offsetX, node.y + offsetY, nodeSize, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Draw border
-        if (isCenterNode || isHighlighted || isHovered) {
-          ctx.strokeStyle = isCenterNode ? '#ffffff' : 'rgba(255, 255, 255, 0.8)';
-          ctx.lineWidth = isCenterNode ? 3 : 2;
-          ctx.stroke();
-        }
-
-        // Draw label
-        if (isHovered || isHighlighted || isCenterNode) {
-          const fontSize = isCenterNode ? 13 : isHovered ? 11 : 10;
-          ctx.font = `${fontSize}px Inter, sans-serif`;
-          ctx.fillStyle = '#000000';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-          const label = node.label.substring(0, 20);
-          ctx.fillText(label, node.x + offsetX, node.y + offsetY + nodeSize + 4);
-        }
-      });
-    };
-
-    animationFrameRef.current = requestAnimationFrame(animate);
-
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
       simulation.stop();
     };
-  }, [graphData.nodes, graphData.links, canvasWidth, canvasHeight, mode, centerNodeId, highlightedNodes, hoveredNode]);
+  }, [
+    canvasHeight,
+    canvasWidth,
+    graphData.links,
+    graphData.nodes,
+    settings.centerForce,
+    settings.linkDistance,
+    settings.linkForce,
+    settings.nodeSize,
+    settings.repelForce,
+  ]);
 
-  // Handle mouse move for hover and dragging
+  useEffect(() => {
+    fitToGraph();
+  }, [resetSignal]);
+
+  useEffect(() => {
+    renderGraph();
+  }, [
+    activeNodeId,
+    canvasHeight,
+    canvasWidth,
+    graphData.nodes.length,
+    settings.linkThickness,
+    settings.nodeSize,
+    settings.showArrows,
+    settings.textFadeThreshold,
+  ]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    function closeMenu() {
+      setContextMenu(null);
+    }
+    document.addEventListener("mousedown", closeMenu);
+    document.addEventListener("keydown", closeMenu);
+    return () => {
+      document.removeEventListener("mousedown", closeMenu);
+      document.removeEventListener("keydown", closeMenu);
+    };
+  }, [contextMenu]);
+
   const handleMouseMove = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left - canvasWidth / 2;
-      const y = event.clientY - rect.top - canvasHeight / 2;
-
-      // Find hovered node
-      let found: D3Node | null = null;
-      for (const node of nodesRef.current) {
-        if (node.x !== undefined && node.y !== undefined) {
-          const dx = node.x - x;
-          const dy = node.y - y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          if (distance < 20) {
-            found = node;
-            break;
-          }
-        }
+      const dragState = dragStateRef.current;
+      if (dragState?.kind === "pan") {
+        transformRef.current = {
+          ...dragState.origin,
+          x: dragState.origin.x + event.clientX - dragState.startX,
+          y: dragState.origin.y + event.clientY - dragState.startY,
+        };
+        renderGraph();
+        return;
       }
 
-      setHoveredNode(found || null);
-      onNodeHover?.(found || null);
-      canvas.style.cursor = found ? 'pointer' : 'default';
-
-      // Handle dragging
-      if (isDragging && dragNode) {
-        dragNode.fx = x;
-        dragNode.fy = y;
+      const worldPoint = screenToWorld(event.clientX, event.clientY);
+      if (dragState?.kind === "node") {
+        const moved = Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) > 3;
+        dragState.moved = dragState.moved || moved;
+        dragState.node.fx = worldPoint.x;
+        dragState.node.fy = worldPoint.y;
+        simulationRef.current?.alphaTarget(0.18).restart();
+        renderGraph();
+        return;
       }
+
+      const hitNode = findNodeAt(worldPoint.x, worldPoint.y);
+      const nextHoveredId = hitNode?.id;
+      if (nextHoveredId !== hoveredNodeIdRef.current) {
+        hoveredNodeIdRef.current = nextHoveredId;
+        setHoveredNodeId(nextHoveredId);
+        onNodeHover?.(hitNode ?? null);
+      }
+      canvas.style.cursor = hitNode ? "pointer" : "grab";
     },
-    [canvasWidth, canvasHeight, isDragging, dragNode, onNodeHover]
+    [onNodeHover],
   );
 
-  // Handle mouse down for dragging
-  const handleMouseDown = useCallback(
-    (event: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left - canvasWidth / 2;
-      const y = event.clientY - rect.top - canvasHeight / 2;
-
-      for (const node of nodesRef.current) {
-        if (node.x !== undefined && node.y !== undefined) {
-          const dx = node.x - x;
-          const dy = node.y - y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          if (distance < 20) {
-            setIsDragging(true);
-            setDragNode(node);
-            node.fx = x;
-            node.fy = y;
-            if (simulationRef.current) {
-              simulationRef.current.alpha(0.5).restart();
-            }
-            onNodeClick(node.path);
-            break;
-          }
-        }
-      }
-    },
-    [canvasWidth, canvasHeight, onNodeClick]
-  );
-
-  // Handle mouse up
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    if (dragNode) {
-      dragNode.fx = undefined;
-      dragNode.fy = undefined;
-      setDragNode(null);
+  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (event.button !== 0) return;
+    const hitPoint = screenToWorld(event.clientX, event.clientY);
+    const hitNode = findNodeAt(hitPoint.x, hitPoint.y);
+    if (hitNode) {
+      dragStateRef.current = { kind: "node", node: hitNode, startX: event.clientX, startY: event.clientY, moved: false };
+      hitNode.fx = hitNode.x;
+      hitNode.fy = hitNode.y;
+      simulationRef.current?.alphaTarget(0.18).restart();
+    } else {
+      dragStateRef.current = {
+        kind: "pan",
+        startX: event.clientX,
+        startY: event.clientY,
+        origin: { ...transformRef.current },
+      };
     }
-  };
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    const dragState = dragStateRef.current;
+    dragStateRef.current = null;
+    simulationRef.current?.alphaTarget(0);
+    if (dragState?.kind === "node" && !dragState.moved && dragState.node.path) {
+      onNodeClick(dragState.node.path);
+    }
+  }, [onNodeClick]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (!dragStateRef.current) {
+      hoveredNodeIdRef.current = undefined;
+      setHoveredNodeId(undefined);
+      onNodeHover?.(null);
+    }
+  }, [onNodeHover]);
+
+  const handleWheel = useCallback((event: React.WheelEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const scaleFactor = event.deltaY > 0 ? 0.9 : 1.1;
+    const current = transformRef.current;
+    const nextScale = clamp(current.k * scaleFactor, 0.18, 4);
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    const worldX = (mouseX - current.x) / current.k;
+    const worldY = (mouseY - current.y) / current.k;
+    transformRef.current = {
+      k: nextScale,
+      x: mouseX - worldX * nextScale,
+      y: mouseY - worldY * nextScale,
+    };
+    renderGraph();
+  }, []);
+
+  const handleContextMenu = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+    const hitPoint = screenToWorld(event.clientX, event.clientY);
+    const hitNode = findNodeAt(hitPoint.x, hitPoint.y);
+    if (!hitNode) return;
+    event.preventDefault();
+    setContextMenu({ x: event.clientX, y: event.clientY, node: hitNode });
+  }, []);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const current = transformRef.current;
+    const panStep = event.shiftKey ? 120 : 36;
+    if (event.key === "+" || event.key === "=") {
+      transformRef.current = zoomFromCenter(1.12);
+    } else if (event.key === "-" || event.key === "_") {
+      transformRef.current = zoomFromCenter(0.88);
+    } else if (event.key === "ArrowLeft") {
+      transformRef.current = { ...current, x: current.x + panStep };
+    } else if (event.key === "ArrowRight") {
+      transformRef.current = { ...current, x: current.x - panStep };
+    } else if (event.key === "ArrowUp") {
+      transformRef.current = { ...current, y: current.y + panStep };
+    } else if (event.key === "ArrowDown") {
+      transformRef.current = { ...current, y: current.y - panStep };
+    } else {
+      return;
+    }
+    event.preventDefault();
+    renderGraph();
+  }, []);
+
+  function renderGraph() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    context.clearRect(0, 0, canvasWidth, canvasHeight);
+    context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--wn-editor-bg").trim() || "#ffffff";
+    context.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    const transform = transformRef.current;
+    context.save();
+    context.translate(transform.x, transform.y);
+    context.scale(transform.k, transform.k);
+
+    const focusIds = connectedNodeIds;
+    const hasFocus = focusIds.size > 0;
+
+    linksRef.current.forEach((link) => {
+      const sourceNode = linkEndpoint(link.source);
+      const targetNode = linkEndpoint(link.target);
+      if (!sourceNode || !targetNode) return;
+      const isFocused = !hasFocus || focusIds.has(sourceNode.id) || focusIds.has(targetNode.id);
+      const linkColor = getLinkColor(link.type);
+      context.strokeStyle = isFocused ? linkColor : `${linkColor}35`;
+      context.globalAlpha = isFocused ? 0.9 : 0.22;
+      context.lineWidth = settings.linkThickness / transform.k;
+      if (link.type === "hierarchy") context.setLineDash([6 / transform.k, 6 / transform.k]);
+      else context.setLineDash([]);
+      context.beginPath();
+      context.moveTo(sourceNode.x, sourceNode.y);
+      context.lineTo(targetNode.x, targetNode.y);
+      context.stroke();
+      context.setLineDash([]);
+      if (settings.showArrows && link.directed) drawArrow(context, sourceNode, targetNode, linkColor, transform.k);
+      context.globalAlpha = 1;
+    });
+
+    nodesRef.current.forEach((node) => {
+      const isHovered = node.id === hoveredNodeIdRef.current;
+      const isActive = node.id === activeNodeId;
+      const isHighlighted = highlightedNodes?.has(node.id);
+      const isConnected = connectedNodeIds.has(node.id);
+      const isDimmed = hasFocus && !isConnected;
+      const radius = nodeRadius(node);
+      context.globalAlpha = isDimmed ? 0.25 : 1;
+      context.fillStyle = node.color ?? "#7c8a96";
+      context.beginPath();
+      context.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      context.fill();
+
+      if (isHovered || isActive || isHighlighted) {
+        context.strokeStyle = isActive
+          ? getComputedStyle(document.documentElement).getPropertyValue("--wn-accent").trim() || "#3f7f64"
+          : "#ffffff";
+        context.lineWidth = (isActive ? 3 : 2) / transform.k;
+        context.stroke();
+      }
+
+      const shouldShowLabel =
+        isHovered || isActive || isHighlighted || transform.k >= settings.textFadeThreshold || node.degree >= 3;
+      if (shouldShowLabel) {
+        drawNodeLabel(context, node, radius, transform.k, isDimmed);
+      }
+      context.globalAlpha = 1;
+    });
+    context.restore();
+  }
+
+  function nodeRadius(node: GraphNode): number {
+    const degreeBoost = Math.min(10, node.degree * 1.2);
+    const kindBoost = node.kind === "tag" ? 1.2 : node.kind === "unresolved" ? 0.9 : 1;
+    return Math.max(3.5, (5.5 + degreeBoost) * settings.nodeSize * kindBoost);
+  }
+
+  function drawNodeLabel(context: CanvasRenderingContext2D, node: D3Node, radius: number, scale: number, dimmed: boolean) {
+    const fontSize = Math.max(10 / scale, 11);
+    context.font = `${fontSize}px Inter, system-ui, sans-serif`;
+    context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--wn-text").trim() || "#111827";
+    context.globalAlpha = dimmed ? 0.35 : 0.88;
+    context.textAlign = "center";
+    context.textBaseline = "top";
+    context.fillText(node.label.slice(0, 36), node.x, node.y + radius + 5 / scale);
+    context.globalAlpha = 1;
+  }
+
+  function screenToWorld(clientX: number, clientY: number) {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const transform = transformRef.current;
+    return {
+      x: ((clientX - (rect?.left ?? 0)) - transform.x) / transform.k,
+      y: ((clientY - (rect?.top ?? 0)) - transform.y) / transform.k,
+    };
+  }
+
+  function findNodeAt(x: number, y: number): D3Node | undefined {
+    for (let index = nodesRef.current.length - 1; index >= 0; index -= 1) {
+      const node = nodesRef.current[index];
+      const distance = Math.hypot(node.x - x, node.y - y);
+      if (distance <= nodeRadius(node) + 5 / transformRef.current.k) return node;
+    }
+    return undefined;
+  }
+
+  function fitToGraph() {
+    if (!nodesRef.current.length) {
+      transformRef.current = { x: canvasWidth / 2, y: canvasHeight / 2, k: 1 };
+      renderGraph();
+      return;
+    }
+    const bounds = nodesRef.current.reduce(
+      (acc, node) => ({
+        minX: Math.min(acc.minX, node.x),
+        maxX: Math.max(acc.maxX, node.x),
+        minY: Math.min(acc.minY, node.y),
+        maxY: Math.max(acc.maxY, node.y),
+      }),
+      { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
+    );
+    const graphWidth = Math.max(1, bounds.maxX - bounds.minX);
+    const graphHeight = Math.max(1, bounds.maxY - bounds.minY);
+    const nextScale = clamp(Math.min((canvasWidth * 0.72) / graphWidth, (canvasHeight * 0.72) / graphHeight), 0.25, 1.8);
+    transformRef.current = {
+      k: nextScale,
+      x: canvasWidth / 2 - ((bounds.minX + bounds.maxX) / 2) * nextScale,
+      y: canvasHeight / 2 - ((bounds.minY + bounds.maxY) / 2) * nextScale,
+    };
+    renderGraph();
+  }
+
+  function zoomFromCenter(factor: number): ViewTransform {
+    const current = transformRef.current;
+    const nextScale = clamp(current.k * factor, 0.18, 4);
+    const centerX = canvasWidth / 2;
+    const centerY = canvasHeight / 2;
+    const worldX = (centerX - current.x) / current.k;
+    const worldY = (centerY - current.y) / current.k;
+    return {
+      k: nextScale,
+      x: centerX - worldX * nextScale,
+      y: centerY - worldY * nextScale,
+    };
+  }
+
+  function linkEndpoint(endpoint: string | D3Node): D3Node | undefined {
+    return typeof endpoint === "string" ? nodesRef.current.find((node) => node.id === endpoint) : endpoint;
+  }
+
+  const isEmpty = graphData.nodes.length === 0;
 
   return (
-    <div ref={containerRef} className="graph-view-container" style={{ width: width ?? "100%", height: height ?? "100%", position: 'relative' }}>
+    <div
+      ref={containerRef}
+      className="graph-view-container"
+      style={{ width: width ?? "100%", height: height ?? "100%", position: "relative" }}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
       <canvas
         ref={canvasRef}
         width={canvasWidth}
         height={canvasHeight}
-        style={{
-          width: '100%',
-          height: '100%',
-          border: '0',
-          borderRadius: '0',
-          backgroundColor: 'var(--wn-editor-bg)',
-          display: 'block',
-        }}
+        className="graph-canvas"
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        onWheel={handleWheel}
+        onContextMenu={handleContextMenu}
       />
+      {isEmpty ? (
+        <div className="graph-empty-state">
+          <strong>No graph nodes visible</strong>
+          <span>Adjust filters or add links between notes.</span>
+        </div>
+      ) : null}
+      {contextMenu ? (
+        <div className="graph-node-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+          <strong>{contextMenu.node.label}</strong>
+          <button type="button" disabled={!contextMenu.node.path} onClick={() => contextMenu.node.path && onNodeClick(contextMenu.node.path)}>
+            Open
+          </button>
+          <button
+            type="button"
+            disabled={!contextMenu.node.path}
+            onClick={() => contextMenu.node.path && onOpenLocalGraph(contextMenu.node.path)}
+          >
+            Open local graph
+          </button>
+          <button
+            type="button"
+            disabled={!contextMenu.node.path}
+            onClick={() => contextMenu.node.path && onRevealNode(contextMenu.node.path)}
+          >
+            Reveal in explorer
+          </button>
+        </div>
+      ) : null}
     </div>
   );
+}
 
-  function handleMouseLeave() {
-    setHoveredNode(null);
-    onNodeHover?.(null);
-    if (canvasRef.current) {
-      canvasRef.current.style.cursor = 'default';
-    }
-  }
+function seedPosition(index: number, total: number, width: number, height: number) {
+  const angle = (index / Math.max(total, 1)) * Math.PI * 2;
+  const radius = Math.min(width, height) * 0.24 + (index % 7) * 8;
+  return {
+    x: Math.cos(angle) * radius,
+    y: Math.sin(angle) * radius,
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function drawArrow(
+  context: CanvasRenderingContext2D,
+  source: D3Node,
+  target: D3Node,
+  color: string,
+  scale: number,
+) {
+  const angle = Math.atan2(target.y - source.y, target.x - source.x);
+  const targetRadius = 8;
+  const arrowLength = 8 / scale;
+  const arrowWidth = 5 / scale;
+  const x = target.x - Math.cos(angle) * targetRadius;
+  const y = target.y - Math.sin(angle) * targetRadius;
+  context.fillStyle = color;
+  context.beginPath();
+  context.moveTo(x, y);
+  context.lineTo(x - Math.cos(angle - Math.PI / 6) * arrowLength, y - Math.sin(angle - Math.PI / 6) * arrowLength);
+  context.lineTo(x - Math.cos(angle + Math.PI / 6) * arrowLength, y - Math.sin(angle + Math.PI / 6) * arrowLength);
+  context.closePath();
+  context.fill();
+  context.lineWidth = arrowWidth;
 }

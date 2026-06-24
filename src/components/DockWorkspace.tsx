@@ -9,7 +9,7 @@ import {
   type RefObject,
   type ReactNode,
 } from "react";
-import { ChevronRight, Plus, X } from "lucide-react";
+import { ChevronRight, FileEdit, Plus, X } from "lucide-react";
 import type { DockGroupNode, DockNode, DockSplitNode, DockTabRef, DocumentTabGroup, WorkspaceLayoutV1 } from "../editorTypes";
 import { isDockMoveAllowedAroundDocumentAnchor, type DockDropPosition } from "../utils/workspaceLayout";
 
@@ -25,6 +25,7 @@ export type DockWorkspaceProps = {
   layout: WorkspaceLayoutV1;
   renderTab: (tab: DockTabRef) => ReactNode;
   dirtyDocumentPaths?: Set<string>;
+  folderDescriptionPaths?: Set<string>;
   documentTabGroups?: DocumentTabGroup[];
   onSelectTab: (tab: DockTabRef, groupId: string) => void;
   onCloseTab: (tab: DockTabRef) => void;
@@ -35,6 +36,7 @@ export type DockWorkspaceProps = {
   onDocumentGroupContextMenu?: (group: DocumentTabGroup, x: number, y: number) => void;
   onResizeSplit: (splitId: string, ratio: number) => void;
   onOpenDocument: () => void;
+  renderEmptyDocuments?: () => ReactNode;
 };
 
 type DockDragHandleKind = "tab" | "group-header";
@@ -81,6 +83,7 @@ export function DockWorkspace({
   layout,
   renderTab,
   dirtyDocumentPaths,
+  folderDescriptionPaths,
   documentTabGroups,
   onSelectTab,
   onCloseTab,
@@ -91,6 +94,7 @@ export function DockWorkspace({
   onDocumentGroupContextMenu,
   onResizeSplit,
   onOpenDocument,
+  renderEmptyDocuments,
 }: DockWorkspaceProps) {
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const dragController = useDockDragController({
@@ -117,7 +121,9 @@ export function DockWorkspace({
         onDocumentGroupContextMenu={onDocumentGroupContextMenu}
         onResizeSplit={onResizeSplit}
         onOpenDocument={onOpenDocument}
+        renderEmptyDocuments={renderEmptyDocuments}
         dirtyDocumentPaths={dirtyDocumentPaths}
+        folderDescriptionPaths={folderDescriptionPaths}
         documentTabGroups={documentTabGroups}
         onPointerDragStart={dragController.startDrag}
       />
@@ -232,6 +238,7 @@ function DockGroup({
   dragState,
   renderTab,
   dirtyDocumentPaths,
+  folderDescriptionPaths,
   documentTabGroups,
   onSelectTab,
   onCloseTab,
@@ -240,6 +247,7 @@ function DockGroup({
   onDocumentGroupToggle,
   onDocumentGroupContextMenu,
   onOpenDocument,
+  renderEmptyDocuments,
   onPointerDragStart,
 }: DockGroupProps) {
   const activeTab = group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0];
@@ -263,9 +271,12 @@ function DockGroup({
         onOpenDocument={onOpenDocument}
         onPointerDragStart={onPointerDragStart}
         dirtyDocumentPaths={dirtyDocumentPaths}
+        folderDescriptionPaths={folderDescriptionPaths}
         documentTabGroups={documentTabGroups}
       />
-      <div className="dock-group-content">{activeTab ? renderTab(activeTab) : <EmptyDockGroup groupId={group.id} />}</div>
+      <div className="dock-group-content">
+        {activeTab ? renderTab(activeTab) : <EmptyDockGroup groupId={group.id} renderEmptyDocuments={renderEmptyDocuments} />}
+      </div>
       {isDragOver ? <DockDropOverlay target={dragState.target} /> : null}
     </section>
   );
@@ -275,6 +286,7 @@ type DockTabBarProps = {
   group: DockGroupNode;
   activeTab?: DockTabRef;
   dirtyDocumentPaths?: Set<string>;
+  folderDescriptionPaths?: Set<string>;
   documentTabGroups?: DocumentTabGroup[];
   onSelectTab: DockWorkspaceProps["onSelectTab"];
   onCloseTab: DockWorkspaceProps["onCloseTab"];
@@ -290,6 +302,7 @@ function DockTabBar({
   group,
   activeTab,
   dirtyDocumentPaths,
+  folderDescriptionPaths,
   documentTabGroups = [],
   onSelectTab,
   onCloseTab,
@@ -322,13 +335,18 @@ function DockTabBar({
     return Boolean(tab.kind === "document" && tab.path && dirtyDocumentPaths?.has(tab.path));
   }
 
+  function tabIsFolderDescription(tab: DockTabRef) {
+    return Boolean(tab.kind === "document" && tab.path && folderDescriptionPaths?.has(tab.path));
+  }
+
   function renderTabButton(tab: DockTabRef) {
+    const isFolderDescription = tabIsFolderDescription(tab);
     return (
       <div
         key={tab.id}
         role="button"
         tabIndex={0}
-        className={`dock-tab dock-tab-${tab.kind === "document" ? "document" : "panel"} ${tab.id === group.activeTabId ? "active" : ""}`}
+        className={`dock-tab dock-tab-${tab.kind === "document" ? "document" : "panel"} ${isFolderDescription ? "dock-tab-folder-note" : ""} ${tab.id === group.activeTabId ? "active" : ""}`}
         data-dock-tab-id={tab.id}
         data-dock-tab-kind={tab.kind}
         data-dragging="false"
@@ -355,6 +373,9 @@ function DockTabBar({
         }}
         title={tab.path ?? tab.title}
       >
+        {isFolderDescription ? (
+          <FileEdit className="dock-tab-kind-icon" size={10} aria-label="Folder note" />
+        ) : null}
         <span>{tab.title}</span>
         {tabIsDirty(tab) ? (
           <strong className="dock-tab-dirty" aria-label="Unsaved changes" title="Unsaved changes">
@@ -498,8 +519,11 @@ function DockDragGhost({ dragState }: { dragState: DockDragState }) {
   );
 }
 
-function EmptyDockGroup({ groupId }: { groupId: string }) {
+function EmptyDockGroup({ groupId, renderEmptyDocuments }: { groupId: string; renderEmptyDocuments?: () => ReactNode }) {
   if (groupId === "dock-documents") {
+    if (renderEmptyDocuments) {
+      return <div className="dock-empty-group">{renderEmptyDocuments()}</div>;
+    }
     return (
       <div className="dock-empty-group">
         <span>Writing sheet</span>

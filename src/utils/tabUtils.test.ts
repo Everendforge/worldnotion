@@ -81,6 +81,13 @@ describe("tab utilities", () => {
     expect(result.activePath).toBe("A.md");
   });
 
+  it("clears the active path when closing the only open tab", () => {
+    const result = closeOpenTab([tab("Only.md")], "Only.md", "Only.md");
+
+    expect(result.tabs).toEqual([]);
+    expect(result.activePath).toBeUndefined();
+  });
+
   it("keeps only dirty tabs when closing saved tabs", () => {
     const result = closeSavedOpenTabs([tab("A.md"), tab("B.md", true), tab("C.md")], "A.md");
 
