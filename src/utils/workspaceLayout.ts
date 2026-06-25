@@ -35,6 +35,7 @@ const PANEL_TITLES: Record<Exclude<DockPanelKind, "document">, string> = {
   explorer: "Explorer",
   graph: "Flow Map",
   outline: "Outline",
+  links: "Links",
   backlinks: "Backlinks",
   inspector: "Inspector",
 };

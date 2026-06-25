@@ -55,6 +55,7 @@ import {
   OpenTab,
   ThemeId,
   GraphSettings,
+  CustomFieldDefinition,
 } from "./editorTypes";
 import {
   Entity,
@@ -66,9 +67,12 @@ import {
   joinMarkdown,
   dirname,
   slugify,
-  generateTaxonomyFromEntities,
+  createDefaultTaxonomyConfig,
 } from "./domain";
 import { isDarkTheme, themeById, themeForStyleCommand, toggledThemeMode } from "./themes";
+import { addPropertyToConfig } from "./utils/propertiesConfig";
+import { applyPropertyTemplate, WORLDBUILDING_TEMPLATE } from "./utils/propertyTemplates";
+import { normalizeCoreBaseProperties } from "./utils/taxonomyConfig";
 import { recordFileAccessInSettings } from "./utils/fileAccessStats";
 import { loadSettings, saveSettings } from "./settings";
 import {
@@ -197,14 +201,17 @@ const CodeMirrorEditor = lazy(() =>
 const SettingsModal = lazy(() =>
   import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })),
 );
-const TaxonomyMigrationDialog = lazy(() =>
-  import("./components/TaxonomyMigrationDialog").then((module) => ({ default: module.TaxonomyMigrationDialog })),
-);
 const GraphView = lazy(() =>
   import("./components/GraphView").then((module) => ({ default: module.GraphView })),
 );
 const GraphControls = lazy(() =>
   import("./components/GraphControls").then((module) => ({ default: module.GraphControls })),
+);
+const LinksPanel = lazy(() =>
+  import("./components/LinksPanel").then((module) => ({ default: module.LinksPanel })),
+);
+const BacklinksPanel = lazy(() =>
+  import("./components/BacklinksPanel").then((module) => ({ default: module.BacklinksPanel })),
 );
 
 type LoadState = "idle" | "loading" | "ready" | "error";
@@ -268,12 +275,11 @@ function App() {
   const [workspaceLayout, setWorkspaceLayout] = useState(() => createDefaultWorkspaceLayout());
   const [activeWorkspacePreset, setActiveWorkspacePreset] = useState<ActiveWorkspacePreset>("default");
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsInitialSection, setSettingsInitialSection] = useState<"overview" | "editor">("overview");
+  const [settingsInitialSection, setSettingsInitialSection] = useState<"overview" | "properties" | "editor">("overview");
   const [forgeMenuOpen, setForgeMenuOpen] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
-  const [showTaxonomyMigration, setShowTaxonomyMigration] = useState(false);
-  const [generatedTaxonomy, setGeneratedTaxonomy] = useState<import("./editorTypes.js").TaxonomyConfig | null>(null);
+
   const [graphResetSignal, setGraphResetSignal] = useState(0);
   const [appZoom, setAppZoom] = useState(1);
   const [floatingToolbarRect, setFloatingToolbarRect] = useState<DOMRect>();
@@ -284,6 +290,7 @@ function App() {
   const [, setPendingClosePaths] = useState<string[]>([]);
   const editorViewRef = useRef<EditorView | null>(null);
   const editorShellRef = useRef<HTMLDivElement | null>(null);
+  const propertiesOnboardingPromptedRef = useRef<Set<string>>(new Set());
   
   // Font detection hook
   const { fonts } = useFonts();
@@ -370,6 +377,8 @@ function App() {
   const labels = useMemo(() => platformLabels(), []);
   const isExplorerPanelOpen = layoutHasPanel(workspaceLayout, "explorer");
   const isInspectorPanelOpen = layoutHasPanel(workspaceLayout, "inspector");
+  const isLinksPanelOpen = layoutHasPanel(workspaceLayout, "links");
+  const isBacklinksPanelOpen = layoutHasPanel(workspaceLayout, "backlinks");
   const isGraphPanelOpen = layoutHasPanel(workspaceLayout, "graph");
 
   useEffect(() => {
@@ -609,8 +618,8 @@ function App() {
       fileCount: index.markdownFiles.length,
       entityCount: index.entities.length,
       templateCount: index.templates.length,
-      findingCount: index.findings.length,
-      taxonomyConfig: index.taxonomyConfig,
+      hasEverendWorkspace: index.directories.includes(".everend") || index.files.some((file) => file.relativePath.startsWith(".everend/")),
+      propertiesConfig: index.propertiesConfig,
     };
   }, [index]);
   const favoriteItems = useMemo(() => {
@@ -1239,28 +1248,56 @@ function App() {
     showToast(`Style: ${themeById(theme).label}`);
   }
 
-  async function saveTaxonomyConfig(taxonomy: import("./editorTypes.js").TaxonomyConfig) {
+  async function savePropertiesConfig(properties: import("./editorTypes.js").PropertiesConfig) {
     if (!index) return;
-    const content = `${JSON.stringify(taxonomy, null, 2)}\n`;
+    const normalizedProperties = normalizeCoreBaseProperties(properties);
+    const content = `${JSON.stringify(normalizedProperties, null, 2)}\n`;
     try {
       if (browserRoot) {
-        await writeBrowserFile(browserRoot, ".everend/taxonomy.json", content);
+        await writeBrowserFile(browserRoot, ".everend/properties.json", content);
       } else {
         const result = await invoke<WriteResult>("save_file", {
-          path: `${index.rootPath}/.everend/taxonomy.json`,
+          path: `${index.rootPath}/.everend/properties.json`,
           content,
           expectedModifiedMs: null,
         });
-        if (!result.ok) throw new Error(result.message ?? "Could not save taxonomy configuration.");
+        if (!result.ok) throw new Error(result.message ?? "Could not save properties configuration.");
       }
-      setIndex((current) => (current ? { ...current, taxonomyConfig: taxonomy } : current));
+      setIndex((current) =>
+        current ? { ...current, propertiesConfig: normalizedProperties, taxonomyConfig: normalizedProperties } : current,
+      );
       await reindexUniverseMetadata();
-      showToast("Taxonomy configuration saved.");
+      showToast("Properties configuration saved.");
     } catch (error) {
       setLoadState("error");
       setErrorMessage(error instanceof Error ? error.message : String(error));
       throw error;
     }
+  }
+
+  async function initializeUniverseProperties(properties: import("./editorTypes.js").PropertiesConfig) {
+    if (!index) return;
+    try {
+      const profile = index.universeProfile ?? { name: universeDisplayName(index), icon: { type: "preset" as const, value: "book" } };
+      if (!index.universeProfile) {
+        await saveUniverseProfile(profile);
+      }
+      await savePropertiesConfig(properties);
+      await refreshUniverse();
+      showToast("Universe properties initialized.");
+    } catch (error) {
+      setLoadState("error");
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  }
+
+  async function addPropertyToUniverse(property: CustomFieldDefinition) {
+    const currentConfig =
+      index?.propertiesConfig ?? applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE);
+    const nextConfig = addPropertyToConfig(currentConfig, property);
+    await savePropertiesConfig(nextConfig);
+    showToast(`Added property ${property.label || property.id}.`);
   }
 
   function scanFrontmatterNormalization() {
@@ -1333,22 +1370,7 @@ function App() {
     return { applied, skipped, errors };
   }
 
-  async function handleAcceptTaxonomy(taxonomy: import("./editorTypes.js").TaxonomyConfig) {
-    await saveTaxonomyConfig(taxonomy);
-    setShowTaxonomyMigration(false);
-    setGeneratedTaxonomy(null);
-  }
 
-  function handleDeclineTaxonomy() {
-    setShowTaxonomyMigration(false);
-    setGeneratedTaxonomy(null);
-  }
-
-  function handleCustomizeTaxonomy() {
-    setShowTaxonomyMigration(false);
-    setShowSettings(true);
-    // SettingsModal will automatically show taxonomy section
-  }
 
   function toggleBuiltinTheme() {
     setThemeById(toggledThemeMode(settings.theme));
@@ -1361,6 +1383,14 @@ function App() {
     setLoadState("ready");
     setErrorMessage("");
     setSettings((current) => rememberUniverse(current, readResult.rootPath, profileForRecent(nextIndex)));
+    const hasEverendWorkspace =
+      nextIndex.directories.includes(".everend") || nextIndex.files.some((file) => file.relativePath.startsWith(".everend/"));
+    const needsPropertiesOnboarding = !nextIndex.propertiesConfig && !hasEverendWorkspace;
+    if (needsPropertiesOnboarding && !propertiesOnboardingPromptedRef.current.has(readResult.rootPath)) {
+      propertiesOnboardingPromptedRef.current.add(readResult.rootPath);
+      setSettingsInitialSection("overview");
+      setShowSettings(true);
+    }
 
     const workspacePlan = planUniverseWorkspaceState({
       nextIndex,
@@ -1414,19 +1444,6 @@ function App() {
     setView("workspace");
     setLoadState("ready");
     setSettings((current) => rememberUniverse(current, readResult.rootPath, profileForRecent(nextIndex)));
-    
-    // Check if we should prompt for taxonomy migration
-    if (!nextIndex.taxonomyConfig && nextIndex.entities.length > 0) {
-      const generated = generateTaxonomyFromEntities(nextIndex.entities);
-      setGeneratedTaxonomy(generated);
-      // Only show dialog if there's meaningful data to migrate
-      const hasData = generated.tags.rootNodes.length > 0 || 
-                     generated.entityTypes.definitions.some(t => t.id !== "concept") ||
-                     generated.customFields.definitions.length > 0;
-      if (hasData) {
-        setShowTaxonomyMigration(true);
-      }
-    }
   }
 
   function openDocument(nextIndex: VaultIndex, path: string) {
@@ -2683,7 +2700,7 @@ function App() {
                     return a.localeCompare(b);
                   })
                   .map(([tagPath, entities]) => {
-                    const tagInfo = index?.taxonomyConfig?.tags.rootNodes.find(
+                    const tagInfo = (index?.propertiesConfig ?? index?.taxonomyConfig)?.tags.rootNodes.find(
                       (node) => node.label === tagPath || node.fullPath === tagPath,
                     );
                     const displayName = tagPath === "_untagged" ? "Sin etiquetas" : tagPath;
@@ -3058,11 +3075,47 @@ function App() {
       onChangeFrontmatter={updateActiveFrontmatter}
       onUpdateEntity={updateEntityMetadata}
       onAddFrontmatter={addFrontmatterToActiveTab}
+      onAddPropertyToUniverse={addPropertyToUniverse}
+      onUpdatePropertiesConfig={savePropertiesConfig}
+      onOpenPropertiesSettings={() => {
+        setSettingsInitialSection("properties");
+        setShowSettings(true);
+      }}
       onOpenEntity={(path) => {
         openOrCreateTab(path);
         setSelectedPath(path);
       }}
     />
+  );
+
+  const linksPanel = (
+    <aside className="inspector dock-panel-body">
+      <Suspense fallback={<LazyPanelFallback label="Loading links..." />}>
+        <LinksPanel
+          entity={selectedEntity}
+          index={index}
+          onOpenEntity={(path) => {
+            openOrCreateTab(path);
+            setSelectedPath(path);
+          }}
+        />
+      </Suspense>
+    </aside>
+  );
+
+  const backlinksPanel = (
+    <aside className="inspector dock-panel-body">
+      <Suspense fallback={<LazyPanelFallback label="Loading backlinks..." />}>
+        <BacklinksPanel
+          entity={selectedEntity}
+          allEntities={index?.entities ?? []}
+          onOpenEntity={(path) => {
+            openOrCreateTab(path);
+            setSelectedPath(path);
+          }}
+        />
+      </Suspense>
+    </aside>
   );
 
   function handleGraphControlsPointerDown(event: React.PointerEvent<HTMLDivElement>) {
@@ -3155,7 +3208,9 @@ function App() {
   function renderDockTab(tab: DockTabRef) {
     if (tab.kind === "document") return tab.path ? renderDocumentPanel(tab) : emptyDocumentPanel;
     if (tab.kind === "explorer") return explorerPanel;
-    if (tab.kind === "inspector" || tab.kind === "backlinks") return inspectorPanel;
+    if (tab.kind === "inspector") return inspectorPanel;
+    if (tab.kind === "links") return linksPanel;
+    if (tab.kind === "backlinks") return backlinksPanel;
     if (tab.kind === "graph") return graphPanel;
     return emptyDocumentPanel;
   }
@@ -3217,12 +3272,12 @@ function App() {
     return "Custom";
   }
 
-  function toggleDockPanel(kind: "explorer" | "inspector" | "graph" | "outline") {
+  function toggleDockPanel(kind: "explorer" | "inspector" | "links" | "backlinks" | "graph" | "outline") {
     setActiveWorkspacePreset("custom");
     setWorkspaceLayout((current) => togglePanelInLayout(current, kind));
   }
 
-  function setDockPanelInContextGroup(kind: Exclude<DockPanelKind, "document" | "outline" | "backlinks">) {
+  function setDockPanelInContextGroup(kind: Exclude<DockPanelKind, "document" | "outline">) {
     if (!dockPanelContextMenu) return;
     const enabled = !layoutHasPanel(workspaceLayout, kind);
     setActiveWorkspacePreset("custom");
@@ -3334,6 +3389,22 @@ function App() {
             </button>
             <button
               type="button"
+              className={isLinksPanelOpen ? "active" : ""}
+              onClick={() => toggleDockPanel("links")}
+              title="Toggle Links"
+            >
+              Links
+            </button>
+            <button
+              type="button"
+              className={isBacklinksPanelOpen ? "active" : ""}
+              onClick={() => toggleDockPanel("backlinks")}
+              title="Toggle Backlinks"
+            >
+              Backlinks
+            </button>
+            <button
+              type="button"
               className={isGraphPanelOpen ? "active" : ""}
               onClick={() => toggleDockPanel("graph")}
               title="Toggle Flow Map"
@@ -3387,12 +3458,14 @@ function App() {
             ["explorer", "Explorer", isExplorerPanelOpen],
             ["graph", "Flow Map", isGraphPanelOpen],
             ["inspector", "Inspector", isInspectorPanelOpen],
+            ["links", "Links", isLinksPanelOpen],
+            ["backlinks", "Backlinks", isBacklinksPanelOpen],
           ].map(([kind, label, checked]) => (
             <button
               key={kind as string}
               type="button"
               className="context-menu-item"
-              onClick={() => setDockPanelInContextGroup(kind as Exclude<DockPanelKind, "document" | "outline" | "backlinks">)}
+              onClick={() => setDockPanelInContextGroup(kind as Exclude<DockPanelKind, "document" | "outline">)}
             >
               <span className="dock-panel-check">{checked ? <Check size={12} /> : null}</span>
               <span>{label}</span>
@@ -3436,7 +3509,8 @@ function App() {
             initialSection={settingsInitialSection}
             onChange={setSettings}
             onSaveUniverseProfile={saveUniverseProfile}
-            onSaveTaxonomyConfig={saveTaxonomyConfig}
+            onSavePropertiesConfig={savePropertiesConfig}
+            onInitializePropertiesWorkspace={initializeUniverseProperties}
             onScanFrontmatterNormalization={scanFrontmatterNormalization}
             onApplyFrontmatterNormalization={applyFrontmatterNormalization}
             onClose={() => setShowSettings(false)}
@@ -3445,19 +3519,6 @@ function App() {
             }}
             onOpenUniverseNote={openUniverseNote}
             revealUniverseLabel={labels.revealUniverse}
-          />
-        </Suspense>
-      ) : null}
-
-      {showTaxonomyMigration && generatedTaxonomy && index ? (
-        <Suspense fallback={<LazyPanelFallback />}>
-          <TaxonomyMigrationDialog
-            isOpen={showTaxonomyMigration}
-            generatedTaxonomy={generatedTaxonomy}
-            entityCount={index.entities.length}
-            onAccept={handleAcceptTaxonomy}
-            onDecline={handleDeclineTaxonomy}
-            onCustomize={handleCustomizeTaxonomy}
           />
         </Suspense>
       ) : null}
@@ -3474,7 +3535,7 @@ function App() {
             recentFiles={settings.explorer.recentFiles}
             favorites={settings.explorer.favorites.map((f) => f.path)}
             fileAccessStats={currentSession?.fileAccessStats}
-            taxonomyConfig={index?.taxonomyConfig}
+            taxonomyConfig={index?.propertiesConfig ?? index?.taxonomyConfig}
             onSelectFile={(path) => {
               openOrCreateTab(path);
               setShowCommandPalette(false);
@@ -3510,7 +3571,7 @@ function App() {
             tagResults={[]}
             fileAccessStats={currentSession?.fileAccessStats}
             quickSwitcherMode={true}
-            taxonomyConfig={index?.taxonomyConfig}
+            taxonomyConfig={index?.propertiesConfig ?? index?.taxonomyConfig}
             onSelectFile={(path) => {
               openOrCreateTab(path);
               setShowQuickSwitcher(false);

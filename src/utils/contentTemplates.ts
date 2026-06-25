@@ -18,7 +18,7 @@ export function contentFromTemplate(index: VaultIndex, entityType: string, name:
 }
 
 export function folderDescriptionContent(name: string) {
-  return `---\nid: ${slugify(name)}-folder\ntype: folder-description\nname: ${name}\nstatus: draft\nfolder: ${name}\n---\n`;
+  return `---\n# WorldNotion system property: indicates whether this note corresponds to a folder.\nfolder: ${name}\nid: ${slugify(name)}-folder\nname: ${name}\ntype: folder-description\nstatus: draft\n---\n`;
 }
 
 export function folderDescriptionPath(folderPath: string) {

@@ -51,6 +51,10 @@ function normalizationReason(content: string): FrontmatterNormalizationReason {
 }
 
 function yamlFrontmatter(data: Record<string, unknown>) {
+  if (typeof data.folder === "string" && data.folder.trim()) {
+    const { folder, ...rest } = data;
+    return `---\n# WorldNotion system property: indicates whether this note corresponds to a folder.\nfolder: ${YAML.stringify(folder).trim()}\n${YAML.stringify(rest).trimEnd()}\n---`;
+  }
   return `---\n${YAML.stringify(data).trimEnd()}\n---`;
 }
 

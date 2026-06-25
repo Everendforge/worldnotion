@@ -13,7 +13,7 @@ import {
 } from "./utils/taxonomyConfig";
 import { validateAgainstTaxonomy } from "./utils/taxonomyValidation";
 import { buildTree } from "./utils/treeBuilder";
-import { parseTaxonomyConfig, parseTemplates, parseUniverseProfile } from "./utils/vaultMetadata";
+import { parsePropertiesConfig, parseTaxonomyConfig, parseTemplates, parseUniverseProfile } from "./utils/vaultMetadata";
 import { indexMarkdownEntities } from "./utils/entityIndex";
 import { detectUniverses } from "./utils/universeDetection";
 import {
@@ -114,6 +114,7 @@ export type Entity = {
   aliases: string[];
   parentId?: string;
   childrenIds: string[];
+  folder?: string; // Folder name if this is a folder description note
   customProperties: Record<string, unknown>;
   body: string;
   path: string;
@@ -128,7 +129,8 @@ export type VaultIndex = {
   directories: string[];
   markdownFiles: VaultFile[];
   taxonomy?: Taxonomy;
-  taxonomyConfig?: import("./editorTypes.js").TaxonomyConfig; // New hierarchical taxonomy
+  propertiesConfig?: import("./editorTypes.js").PropertiesConfig;
+  taxonomyConfig?: import("./editorTypes.js").TaxonomyConfig; // Compatibility alias for older components
   templates: EntityTemplate[];
   universeProfile?: UniverseProfile;
   universes: Universe[];
@@ -225,8 +227,9 @@ export function indexVault(readResult: VaultReadResult): VaultIndex {
   const taxonomy = mergeWithStarterTaxonomy(parseLegacyTaxonomy(readResult.files, findings));
   const templates = parseTemplates(readResult.files);
   const universeProfile = parseUniverseProfile(readResult.files, findings);
-  const taxonomyConfig = parseTaxonomyConfig(readResult.files, findings);
-  const entityIndex = indexMarkdownEntities(markdownFiles, taxonomyConfig);
+  const propertiesConfig = parsePropertiesConfig(readResult.files, findings);
+  const taxonomyConfig = propertiesConfig ?? parseTaxonomyConfig(readResult.files, findings);
+  const entityIndex = indexMarkdownEntities(markdownFiles, propertiesConfig ?? taxonomyConfig);
   findings.push(...entityIndex.findings);
 
   readResult.errors.forEach((error) =>
@@ -245,6 +248,7 @@ export function indexVault(readResult: VaultReadResult): VaultIndex {
     directories,
     markdownFiles,
     taxonomy,
+    propertiesConfig,
     taxonomyConfig,
     templates,
     universeProfile,

@@ -1,17 +1,11 @@
 import { Range } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
+import { isStructuralChange, selectionTouches, createSyntaxHiddenDecoration, createStyledDecoration } from "./pluginUtils";
 
-// Matches [^1], [^abc], etc. (inline footnote references)
-const footnoteRefRegex = /\[\^([^\]]+)\]/g;
+// Compiled once at module load - matches [^1], [^abc], etc. (inline footnote references)
+const FOOTNOTE_REF_REGEX = /\[\^([^\]]+)\]/g;
 
 export function footnotePlugin() {
-  function selectionTouches(selectionFrom: number, selectionTo: number, from: number, to: number) {
-    if (selectionFrom === selectionTo) {
-      return selectionFrom >= from && selectionFrom <= to;
-    }
-    return selectionFrom <= to && selectionTo >= from;
-  }
-
   function getDecorations(view: EditorView): DecorationSet {
     const decorations: Range<Decoration>[] = [];
     const selectionFrom = view.state.selection.main.from;
@@ -22,8 +16,8 @@ export function footnotePlugin() {
       const text = view.state.doc.sliceString(from, to);
       let match: RegExpExecArray | null;
 
-      footnoteRefRegex.lastIndex = 0;
-      while ((match = footnoteRefRegex.exec(text)) !== null) {
+      FOOTNOTE_REF_REGEX.lastIndex = 0;
+      while ((match = FOOTNOTE_REF_REGEX.exec(text)) !== null) {
         const refId = match[1];
         const start = from + match.index;
         const end = start + match[0].length;
@@ -32,47 +26,34 @@ export function footnotePlugin() {
         if (!isSelected) {
           // Show as superscript, hide the brackets
           // Hide opening bracket [
-          decorations.push(
-            Decoration.mark({
-              class: "cm-footnote-syntax-hidden",
-            }).range(start, start + 1),
-          );
+          const openHidden = createSyntaxHiddenDecoration(start, start + 1);
+          if (openHidden) decorations.push(openHidden);
 
           // Hide caret ^
-          decorations.push(
-            Decoration.mark({
-              class: "cm-footnote-syntax-hidden",
-            }).range(start + 1, start + 2),
-          );
+          const caretHidden = createSyntaxHiddenDecoration(start + 1, start + 2);
+          if (caretHidden) decorations.push(caretHidden);
 
           // Style the reference ID as superscript
-          decorations.push(
-            Decoration.mark({
-              class: "cm-footnote-ref",
-              attributes: {
-                "data-footnote": refId,
-              },
-              inclusive: false,
-            }).range(start + 2, end - 1),
+          const refDecoration = createStyledDecoration(
+            start + 2,
+            end - 1,
+            "cm-footnote-ref",
+            { "data-footnote": refId }
           );
+          if (refDecoration) decorations.push(refDecoration);
 
           // Hide closing bracket ]
-          decorations.push(
-            Decoration.mark({
-              class: "cm-footnote-syntax-hidden",
-            }).range(end - 1, end),
-          );
+          const closeHidden = createSyntaxHiddenDecoration(end - 1, end);
+          if (closeHidden) decorations.push(closeHidden);
         } else {
           // When editing, show everything normally
-          decorations.push(
-            Decoration.mark({
-              class: "cm-footnote-editing",
-              attributes: {
-                "data-footnote": refId,
-              },
-              inclusive: false,
-            }).range(start, end),
+          const editDecoration = createStyledDecoration(
+            start,
+            end,
+            "cm-footnote-editing",
+            { "data-footnote": refId }
           );
+          if (editDecoration) decorations.push(editDecoration);
         }
       }
     }
@@ -89,7 +70,10 @@ export function footnotePlugin() {
       }
 
       update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        // Recalculate on structural changes OR selection changes
+        // Selection changes affect syntax visibility (show/hide based on cursor position)
+        // This enables instant syntax response when cursor moves (like Obsidian)
+        if (isStructuralChange(update) || update.selectionSet) {
           this.decorations = getDecorations(update.view);
         }
       }

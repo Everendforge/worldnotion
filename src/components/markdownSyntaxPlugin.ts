@@ -1,10 +1,20 @@
 import { Range } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
+import { isStructuralChange, selectionTouches as sharedSelectionTouches, marker as sharedMarker, syntaxMarker as sharedSyntaxMarker } from "./pluginUtils";
 
 // List configuration - matches Obsidian standard
 const LIST_INDENT_WIDTH = 2; // 2 spaces per indent level
 const LIST_MARKER_REGEX = /^(\s*)([-*]|\d+\.)\s/; // Bullet, asterisk, or numbered list
 const TASK_CHECKBOX_REGEX = /^(\s*)- \[[ xX]\]\s/; // Task list
+
+// Inline style patterns - compiled once at module load
+const BOLD_PATTERN = /(\*\*|__)([^*_`\n]+?)\1/g;
+const ITALIC_PATTERN = /(^|[^\*_\w])(\*|_)([^*_`\n]+?)\2(?![\*_\w])/g;
+const CODE_PATTERN = /`([^`\n]+?)`/g;
+const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\(([^)]+)\)/g;
+
+// Limit matches per visible range to prevent performance issues on huge documents
+const MAX_INLINE_MATCHES_PER_RANGE = 50;
 
 class ListMarkerWidget extends WidgetType {
   constructor(private readonly label: string, private readonly kind: "bullet" | "ordered" | "task") {
@@ -40,27 +50,15 @@ class HeaderSpacerWidget extends WidgetType {
   }
 }
 
-// Utility functions
-function marker(from: number, to: number, className = "cm-markdown-syntax-muted"): Range<Decoration> | null {
-  if (from >= to) return null;
-  return Decoration.mark({ class: className }).range(from, to);
-}
-
-function syntaxMarker(from: number, to: number, active: boolean): Range<Decoration> | null {
-  if (from >= to) return null;
-  return marker(from, to, active ? "cm-markdown-syntax-muted" : "cm-markdown-syntax-hidden");
-}
-
+// Local utility functions
 function lineClass(className: string, from: number) {
   return Decoration.line({ class: className }).range(from);
 }
 
-function selectionTouches(selectionFrom: number, selectionTo: number, from: number, to: number) {
-  if (selectionFrom === selectionTo) {
-    return selectionFrom >= from && selectionFrom <= to;
-  }
-  return selectionFrom <= to && selectionTo >= from;
-}
+// Use shared utilities from pluginUtils
+const marker = sharedMarker;
+const syntaxMarker = sharedSyntaxMarker;
+const selectionTouches = sharedSelectionTouches;
 
 // Calculate indentation level - handles both spaces and tabs
 function calculateIndentLevel(indentStr: string): number {
@@ -136,9 +134,12 @@ function addInlineMatches(
   selectionTo: number,
   decorations: Range<Decoration>[],
 ) {
+  let matchCount = 0;
+  
   let boldMatch: RegExpExecArray | null;
-  const boldPattern = /(\*\*|__)([^*_`\n]+?)\1/g;
-  while ((boldMatch = boldPattern.exec(text)) !== null) {
+  BOLD_PATTERN.lastIndex = 0;
+  while ((boldMatch = BOLD_PATTERN.exec(text)) !== null && matchCount < MAX_INLINE_MATCHES_PER_RANGE) {
+    matchCount++;
     const openFrom = from + boldMatch.index;
     const contentFrom = openFrom + boldMatch[1].length;
     const contentTo = contentFrom + boldMatch[2].length;
@@ -152,8 +153,9 @@ function addInlineMatches(
   }
 
   let italicMatch: RegExpExecArray | null;
-  const italicPattern = /(^|[^\*_\w])(\*|_)([^*_`\n]+?)\2(?![\*_\w])/g;
-  while ((italicMatch = italicPattern.exec(text)) !== null) {
+  ITALIC_PATTERN.lastIndex = 0;
+  while ((italicMatch = ITALIC_PATTERN.exec(text)) !== null && matchCount < MAX_INLINE_MATCHES_PER_RANGE) {
+    matchCount++;
     const openFrom = from + italicMatch.index + italicMatch[1].length;
     const contentFrom = openFrom + italicMatch[2].length;
     const contentTo = contentFrom + italicMatch[3].length;
@@ -167,8 +169,9 @@ function addInlineMatches(
   }
 
   let codeMatch: RegExpExecArray | null;
-  const codePattern = /`([^`\n]+?)`/g;
-  while ((codeMatch = codePattern.exec(text)) !== null) {
+  CODE_PATTERN.lastIndex = 0;
+  while ((codeMatch = CODE_PATTERN.exec(text)) !== null && matchCount < MAX_INLINE_MATCHES_PER_RANGE) {
+    matchCount++;
     const openFrom = from + codeMatch.index;
     const contentFrom = openFrom + 1;
     const contentTo = contentFrom + codeMatch[1].length;
@@ -182,8 +185,9 @@ function addInlineMatches(
   }
 
   let linkMatch: RegExpExecArray | null;
-  const markdownLinkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
-  while ((linkMatch = markdownLinkPattern.exec(text)) !== null) {
+  MARKDOWN_LINK_PATTERN.lastIndex = 0;
+  while ((linkMatch = MARKDOWN_LINK_PATTERN.exec(text)) !== null && matchCount < MAX_INLINE_MATCHES_PER_RANGE) {
+    matchCount++;
     const linkFrom = from + linkMatch.index;
     const linkTo = linkFrom + linkMatch[0].length;
     const active = selectionTouches(selectionFrom, selectionTo, linkFrom, linkTo);
@@ -296,7 +300,10 @@ export const markdownSyntaxPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged || update.selectionSet) {
+      // Recalculate on structural changes OR selection changes
+      // Selection changes affect syntax visibility (show/hide based on cursor position)
+      // This enables instant syntax response when cursor moves (like Obsidian)
+      if (isStructuralChange(update) || update.selectionSet) {
         this.decorations = getDecorations(update.view);
       }
     }

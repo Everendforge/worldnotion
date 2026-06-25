@@ -8,16 +8,11 @@ import {
   type ParsedMarkdown,
 } from "./markdownFrontmatter";
 
-const REQUIRED_FIELDS = ["id", "type", "name", "status"] as const;
+const REQUIRED_FIELDS = ["id", "type", "name"] as const;
 const BASE_ENTITY_FIELDS = new Set([
   "id",
   "type",
   "name",
-  "status",
-  "tags",
-  "aliases",
-  "parentId",
-  "childrenIds",
 ]);
 
 export type EntityIndexResult = {
@@ -75,6 +70,7 @@ function entityFromMarkdown(file: VaultFile, parsed: ParsedMarkdown): Entity {
     aliases: toStringArray(parsed.data.aliases),
     parentId: asString(parsed.data.parentId) || undefined,
     childrenIds: toStringArray(parsed.data.childrenIds),
+    folder: asString(parsed.data.folder) || undefined,
     customProperties,
     body: parsed.content.trim(),
     path: file.relativePath,

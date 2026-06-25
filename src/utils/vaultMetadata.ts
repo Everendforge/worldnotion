@@ -1,5 +1,6 @@
-import type { TaxonomyConfig } from "../editorTypes";
+import type { PropertiesConfig, TaxonomyConfig } from "../editorTypes";
 import type { EntityTemplate, UniverseIcon, UniverseProfile, ValidationFinding, VaultFile } from "../domain";
+import { normalizeCoreBaseProperties } from "./taxonomyConfig";
 
 function basenameWithoutExtension(path: string): string {
   const filename = path.split("/").pop() ?? path;
@@ -81,7 +82,7 @@ export function parseTaxonomyConfig(files: VaultFile[], findings: ValidationFind
       return undefined;
     }
 
-    return config;
+    return normalizeCoreBaseProperties(config);
   } catch (error) {
     findings.push(
       createFinding(
@@ -89,6 +90,43 @@ export function parseTaxonomyConfig(files: VaultFile[], findings: ValidationFind
         "warning",
         `Taxonomy config must be valid JSON: ${error instanceof Error ? error.message : String(error)}`,
         ".everend/taxonomy.json",
+      ),
+    );
+    return undefined;
+  }
+}
+
+export function parsePropertiesConfig(files: VaultFile[], findings: ValidationFinding[]): PropertiesConfig | undefined {
+  const propertiesFile =
+    files.find((file) => file.relativePath === ".everend/properties.json") ??
+    files.find((file) => file.relativePath === ".everend/taxonomy.json");
+  if (!propertiesFile) return undefined;
+
+  try {
+    const parsed = JSON.parse(propertiesFile.content);
+    if (!parsed || typeof parsed !== "object") return undefined;
+
+    const config = parsed as PropertiesConfig;
+    if (!config.version || !config.tags || !config.entityTypes || !config.statuses || !config.customFields) {
+      findings.push(
+        createFinding(
+          "missing_runtime_asset",
+          "warning",
+          "Properties config is missing required fields.",
+          propertiesFile.relativePath,
+        ),
+      );
+      return undefined;
+    }
+
+    return normalizeCoreBaseProperties(config);
+  } catch (error) {
+    findings.push(
+      createFinding(
+        "missing_runtime_asset",
+        "warning",
+        `Properties config must be valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        propertiesFile.relativePath,
       ),
     );
     return undefined;

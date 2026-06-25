@@ -145,7 +145,7 @@ export type DocumentTabGroup = {
   tabPaths: string[];
 };
 
-export type DockPanelKind = "document" | "explorer" | "graph" | "outline" | "backlinks" | "inspector";
+export type DockPanelKind = "document" | "explorer" | "graph" | "outline" | "links" | "backlinks" | "inspector";
 
 export type DockTabRef = {
   id: string;
@@ -334,7 +334,12 @@ export type CustomFieldType =
   | "select" 
   | "multiselect" 
   | "entity-ref" 
-  | "entity-ref-list";
+  | "entity-ref-list"
+  | "url"
+  | "email"
+  | "phone"
+  | "file"
+  | "image";
 
 export type CustomFieldDefinition = {
   id: string; // Unique identifier (e.g., "hp", "alignment")
@@ -353,6 +358,15 @@ export type CustomFieldDefinition = {
   pattern?: string; // For text type (regex)
 };
 
+export type ContentTypeDefinition = {
+  id: string; // Internal identifier (e.g., "folder-description")
+  label: string; // Display name (e.g., "Folder Note")
+  description?: string;
+  icon?: string; // Icon identifier
+  color?: string; // Primary color for this type (hex)
+  immutable: true; // Content types are system-defined and cannot be deleted
+};
+
 export type EntityTypeDefinition = {
   id: string; // Internal identifier (e.g., "character", "location")
   label: string; // Display name (e.g., "Character", "Location")
@@ -361,6 +375,10 @@ export type EntityTypeDefinition = {
   color?: string; // Primary color for this type (hex)
   // Custom fields specific to this type
   customFields?: string[]; // Array of CustomFieldDefinition IDs
+  // Property visibility per entity type
+  visibleProperties?: string[]; // Which properties to show (base + custom)
+  propertyOrder?: string[]; // Override display order
+  hiddenProperties?: string[]; // Explicitly hidden properties
   // Template settings
   defaultTemplate?: string; // Path to template file
   defaultFolder?: string; // Suggested folder for new entities of this type
@@ -375,12 +393,42 @@ export type StatusDefinition = {
   order?: number; // Display order
 };
 
+export type BasePropertyDefinition = {
+  id: string; // System property ID (e.g., "id", "name", "type", "status", "tags")
+  label?: string; // Optional custom display name (overrides default)
+  description?: string;
+  icon?: string; // Optional icon identifier
+  hidden?: boolean; // Don't show in editor unless explicitly enabled
+  immutable?: boolean; // Cannot be deleted (id, name, type are always immutable)
+  readOnly?: boolean; // Cannot be edited by user
+  order?: number; // Display order in editor
+  type: CustomFieldType; // Property type (same as custom fields)
+  // Validation (same as custom fields)
+  required?: boolean;
+  defaultValue?: unknown;
+  options?: Array<{ value: string; label: string; color?: string }>; // For select/multiselect
+  targetTypes?: string[]; // For entity-ref types
+  min?: number;
+  max?: number;
+  pattern?: string;
+};
+
+export type PropertyDefinition = BasePropertyDefinition | CustomFieldDefinition;
+
 export type TaxonomyConfig = {
   version: string; // Schema version (e.g., "1.0")
+  baseProperties?: {
+    definitions: BasePropertyDefinition[]; // Configurable base properties
+    visibleByDefault?: string[]; // Which properties appear in UI by default
+    order?: string[]; // Global display order
+  };
   tags: {
     rootNodes: TagHierarchyNode[]; // Top-level tags
     allowCustomTags: boolean; // Allow users to create tags not in hierarchy
     autoDetectSlashNotation: boolean; // Automatically parse "tag/subtag" syntax
+  };
+  contentTypes?: {
+    definitions: ContentTypeDefinition[]; // System content types (immutable)
   };
   entityTypes: {
     definitions: EntityTypeDefinition[];
@@ -397,6 +445,8 @@ export type TaxonomyConfig = {
     globalFields?: string[]; // Fields available to all entity types
   };
 };
+
+export type PropertiesConfig = TaxonomyConfig;
 
 export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   lineNumbers: true,

@@ -9,5 +9,4 @@ export { FontSelector } from "./FontSelector";
 export type { FontSelectorProps } from "./FontSelector";
 export { CommandPalette } from "./CommandPalette";
 export type { CommandPaletteProps } from "./CommandPalette";
-export { TaxonomyMigrationDialog } from "./TaxonomyMigrationDialog";
-export type { TaxonomyMigrationDialogProps } from "./TaxonomyMigrationDialog";
+

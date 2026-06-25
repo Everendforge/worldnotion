@@ -6,7 +6,7 @@ export interface BacklinksPanelProps {
   /**
    * The entity whose backlinks to display
    */
-  entity: Entity;
+  entity?: Entity;
   /**
    * All entities in the vault (to resolve backlink references)
    */
@@ -24,6 +24,15 @@ export interface BacklinksPanelProps {
  */
 export function BacklinksPanel({ entity, allEntities, onOpenEntity }: BacklinksPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+
+  if (!entity) {
+    return (
+      <div className="backlinks-panel relationship-panel">
+        <h4 className="backlinks-header">Backlinks</h4>
+        <p className="muted text-sm">Open a note to see backlinks.</p>
+      </div>
+    );
+  }
 
   // Resolve backlinks to actual entities
   const backlinks = entity.backlinks

@@ -8,13 +8,14 @@ import {
   EditorCommandId,
   EditorSettings,
   Keybinding,
-  TaxonomyConfig,
+  PropertiesConfig,
 } from "../editorTypes";
 import type { UniverseProfile } from "../domain";
 import { createDefaultTaxonomyConfig } from "../domain";
+import { applyPropertyTemplate, WORLDBUILDING_TEMPLATE } from "../utils/propertyTemplates";
 import type { FrontmatterNormalizationItem } from "../utils/frontmatterNormalizer";
 import { themeById } from "../themes";
-import { TaxonomyManager } from "./TaxonomyManager";
+import { TaxonomyManager as PropertiesManager } from "./TaxonomyManager";
 import "../App.css";
 
 type SettingsModalProps = {
@@ -25,13 +26,14 @@ type SettingsModalProps = {
     fileCount: number;
     entityCount: number;
     templateCount: number;
-    findingCount: number;
+    hasEverendWorkspace: boolean;
     profile?: UniverseProfile;
-    taxonomyConfig?: TaxonomyConfig;
+    propertiesConfig?: PropertiesConfig;
   };
   onChange: (settings: AppSettingsV4) => void;
   onSaveUniverseProfile?: (profile: UniverseProfile) => Promise<void>;
-  onSaveTaxonomyConfig?: (config: TaxonomyConfig) => Promise<void>;
+  onSavePropertiesConfig?: (config: PropertiesConfig) => Promise<void>;
+  onInitializePropertiesWorkspace?: (config: PropertiesConfig) => Promise<void>;
   onScanFrontmatterNormalization?: () => FrontmatterNormalizationItem[] | Promise<FrontmatterNormalizationItem[]>;
   onApplyFrontmatterNormalization?: (
     items: FrontmatterNormalizationItem[],
@@ -98,16 +100,15 @@ function readImageFile(file: File) {
   });
 }
 
-type SettingsSection = "overview" | "taxonomy" | "normalize" | "editor" | "shortcuts" | "tabs" | "explorer";
+type SettingsSection = "overview" | "properties" | "editor" | "shortcuts" | "tabs" | "explorer";
 
 export function SettingsModal({
   settings,
   universe,
   onChange,
   onSaveUniverseProfile,
-  onSaveTaxonomyConfig,
-  onScanFrontmatterNormalization,
-  onApplyFrontmatterNormalization,
+  onSavePropertiesConfig,
+  onInitializePropertiesWorkspace,
   onClose,
   onRevealUniverse,
   onOpenUniverseNote,
@@ -121,16 +122,10 @@ export function SettingsModal({
     icon: universe?.profile?.icon ?? { type: "preset", value: "book" },
   }));
   const [profileSaving, setProfileSaving] = useState(false);
-  const [taxonomyDraft, setTaxonomyDraft] = useState<TaxonomyConfig>(() =>
-    universe?.taxonomyConfig ?? createDefaultTaxonomyConfig()
+  const [propertiesDraft, setPropertiesDraft] = useState<PropertiesConfig>(() =>
+    universe?.propertiesConfig ?? applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE)
   );
-  const [taxonomySaving, setTaxonomySaving] = useState(false);
-  const [normalizationItems, setNormalizationItems] = useState<FrontmatterNormalizationItem[]>([]);
-  const [selectedNormalizationPaths, setSelectedNormalizationPaths] = useState<Set<string>>(new Set());
-  const [normalizationScanning, setNormalizationScanning] = useState(false);
-  const [normalizationApplying, setNormalizationApplying] = useState(false);
-  const [normalizationResult, setNormalizationResult] = useState("");
-  const [normalizationErrors, setNormalizationErrors] = useState<string[]>([]);
+  const [propertiesSaving, setPropertiesSaving] = useState(false);
 
   useEffect(() => {
     if (initialSection) setActiveSection(initialSection);
@@ -142,18 +137,14 @@ export function SettingsModal({
       name: universe.profile?.name ?? universe.name,
       icon: universe.profile?.icon ?? { type: "preset", value: "book" },
     });
-    setTaxonomyDraft(universe.taxonomyConfig ?? createDefaultTaxonomyConfig());
-    setNormalizationItems([]);
-    setSelectedNormalizationPaths(new Set());
-    setNormalizationResult("");
-    setNormalizationErrors([]);
+    setPropertiesDraft(universe.propertiesConfig ?? applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE));
   }, [
     universe?.name,
     universe?.rootPath,
     universe?.profile?.name,
     universe?.profile?.icon?.type,
     universe?.profile?.icon?.value,
-    universe?.taxonomyConfig,
+    universe?.propertiesConfig,
   ]);
 
   const keybindingMap = useMemo(
@@ -182,45 +173,6 @@ export function SettingsModal({
     });
   }
 
-  async function scanFrontmatterNormalization() {
-    if (!onScanFrontmatterNormalization) return;
-    setNormalizationScanning(true);
-    setNormalizationResult("");
-    setNormalizationErrors([]);
-    try {
-      const items = await onScanFrontmatterNormalization();
-      setNormalizationItems(items);
-      setSelectedNormalizationPaths(new Set(items.map((item) => item.path)));
-      setNormalizationResult(items.length ? `Found ${items.length} note${items.length === 1 ? "" : "s"} to normalize.` : "No notes need normalization.");
-    } catch (error) {
-      setNormalizationErrors([error instanceof Error ? error.message : String(error)]);
-    } finally {
-      setNormalizationScanning(false);
-    }
-  }
-
-  async function applyFrontmatterNormalization(items: FrontmatterNormalizationItem[]) {
-    if (!onApplyFrontmatterNormalization || items.length === 0) return;
-    setNormalizationApplying(true);
-    setNormalizationErrors([]);
-    setNormalizationResult("");
-    try {
-      const result = await onApplyFrontmatterNormalization(items);
-      setNormalizationItems((current) => current.filter((item) => !items.some((applied) => applied.path === item.path)));
-      setSelectedNormalizationPaths((current) => {
-        const next = new Set(current);
-        items.forEach((item) => next.delete(item.path));
-        return next;
-      });
-      setNormalizationErrors(result.errors);
-      setNormalizationResult(`Applied ${result.applied}. Skipped ${result.skipped}.`);
-    } catch (error) {
-      setNormalizationErrors([error instanceof Error ? error.message : String(error)]);
-    } finally {
-      setNormalizationApplying(false);
-    }
-  }
-
   return (
     <div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Settings">
       <div className="settings-modal">
@@ -243,13 +195,9 @@ export function SettingsModal({
                   <Settings size={14} />
                   Overview
                 </button>
-                <button className={activeSection === "taxonomy" ? "active" : ""} onClick={() => setActiveSection("taxonomy")} type="button">
+                <button className={activeSection === "properties" ? "active" : ""} onClick={() => setActiveSection("properties")} type="button">
                   <Hash size={14} />
-                  Ecosistema
-                </button>
-                <button className={activeSection === "normalize" ? "active" : ""} onClick={() => setActiveSection("normalize")} type="button">
-                  <Sparkles size={14} />
-                  Normalize Notes
+                  Properties
                 </button>
               </div>
             ) : null}
@@ -359,10 +307,37 @@ export function SettingsModal({
                     <span>Templates</span>
                   </div>
                   <div>
-                    <strong>{universe.findingCount}</strong>
-                    <span>Findings</span>
+                    <strong>{universe.propertiesConfig ? "On" : "Off"}</strong>
+                    <span>Properties</span>
                   </div>
                 </div>
+
+                {!universe.propertiesConfig ? (
+                  <div className="universe-onboarding-card">
+                    <div>
+                      <h3>Personalize this universe</h3>
+                      <p>
+                        WorldNotion can create `.everend/universe.json` and `.everend/properties.json` to start organizing
+                        this space with editable properties. Your Markdown files stay untouched.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!onInitializePropertiesWorkspace) return;
+                        setPropertiesSaving(true);
+                        try {
+                          await onInitializePropertiesWorkspace(propertiesDraft);
+                        } finally {
+                          setPropertiesSaving(false);
+                        }
+                      }}
+                      disabled={propertiesSaving}
+                    >
+                      {propertiesSaving ? "Creating..." : "Create properties setup"}
+                    </button>
+                  </div>
+                ) : null}
 
                 <div className="settings-action-list">
                   <button type="button" onClick={onOpenUniverseNote}>
@@ -570,108 +545,52 @@ export function SettingsModal({
               </div>
             ) : null}
 
-            {activeSection === "taxonomy" && universe ? (
+            {activeSection === "properties" && universe ? (
               <div className="settings-panel">
-                <h3>Configuración del Ecosistema</h3>
+                <h3>Universe Properties</h3>
                 <p className="settings-description">
-                  Configura etiquetas, tipos de entidad, estados y campos personalizados para la arquitectura de tu mundo.
+                  Configure the properties, labels, statuses and fields used by this universe. This is saved in `.everend/properties.json`.
                 </p>
-                <TaxonomyManager config={taxonomyDraft} onChange={setTaxonomyDraft} />
+                {!universe.propertiesConfig ? (
+                  <div className="universe-onboarding-card compact">
+                    <p>
+                      This universe has no properties file yet. Apply the starter worldbuilding properties template to create one.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!onInitializePropertiesWorkspace) return;
+                        setPropertiesSaving(true);
+                        try {
+                          await onInitializePropertiesWorkspace(propertiesDraft);
+                        } finally {
+                          setPropertiesSaving(false);
+                        }
+                      }}
+                      disabled={propertiesSaving}
+                    >
+                      {propertiesSaving ? "Creating..." : "Apply properties template"}
+                    </button>
+                  </div>
+                ) : null}
+                <PropertiesManager config={propertiesDraft} onChange={setPropertiesDraft} />
                 <div className="settings-actions">
                   <button
                     type="button"
                     onClick={async () => {
-                      if (!onSaveTaxonomyConfig) return;
-                      setTaxonomySaving(true);
+                      if (!onSavePropertiesConfig) return;
+                      setPropertiesSaving(true);
                       try {
-                        await onSaveTaxonomyConfig(taxonomyDraft);
+                        await onSavePropertiesConfig(propertiesDraft);
                       } finally {
-                        setTaxonomySaving(false);
+                        setPropertiesSaving(false);
                       }
                     }}
-                    disabled={taxonomySaving}
+                    disabled={propertiesSaving}
                   >
-                    {taxonomySaving ? "Guardando..." : "Guardar Ecosistema"}
+                    {propertiesSaving ? "Saving..." : "Save Properties"}
                   </button>
                 </div>
-              </div>
-            ) : null}
-
-            {activeSection === "normalize" && universe ? (
-              <div className="settings-panel">
-                <h3>Normalize Notes</h3>
-                <p className="settings-description">
-                  Find Markdown files without usable frontmatter, preview the generated metadata, and apply only the changes you approve.
-                </p>
-
-                <div className="settings-action-list normalization-actions">
-                  <button type="button" onClick={() => void scanFrontmatterNormalization()} disabled={normalizationScanning}>
-                    <Sparkles size={15} />
-                    {normalizationScanning ? "Scanning..." : "Scan notes"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const selected = normalizationItems.filter((item) => selectedNormalizationPaths.has(item.path));
-                      void applyFrontmatterNormalization(selected);
-                    }}
-                    disabled={normalizationApplying || selectedNormalizationPaths.size === 0}
-                  >
-                    Apply selected
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void applyFrontmatterNormalization(normalizationItems)}
-                    disabled={normalizationApplying || normalizationItems.length === 0}
-                  >
-                    Apply all
-                  </button>
-                </div>
-
-                {normalizationResult ? <p className="settings-description">{normalizationResult}</p> : null}
-                {normalizationErrors.length ? (
-                  <div className="error-banner settings-error">
-                    {normalizationErrors.slice(0, 4).map((error) => (
-                      <p key={error}>{error}</p>
-                    ))}
-                    {normalizationErrors.length > 4 ? <p>And {normalizationErrors.length - 4} more.</p> : null}
-                  </div>
-                ) : null}
-
-                {normalizationItems.length ? (
-                  <div className="normalization-preview" role="list">
-                    {normalizationItems.map((item) => (
-                      <label key={item.path} className="normalization-row">
-                        <input
-                          type="checkbox"
-                          checked={selectedNormalizationPaths.has(item.path)}
-                          onChange={(event) => {
-                            setSelectedNormalizationPaths((current) => {
-                              const next = new Set(current);
-                              if (event.target.checked) {
-                                next.add(item.path);
-                              } else {
-                                next.delete(item.path);
-                              }
-                              return next;
-                            });
-                          }}
-                        />
-                        <span className="normalization-row-main">
-                          <strong>{item.path}</strong>
-                          <small>{item.reason === "invalid_frontmatter" ? "Invalid frontmatter" : "Missing frontmatter"}</small>
-                        </span>
-                        <span className={`normalization-kind ${item.kind}`}>
-                          {item.kind === "folder-description" ? "Folder note" : "Concept note"}
-                        </span>
-                        <span className="normalization-meta">
-                          <code>{item.id}</code>
-                          <code>{item.type}</code>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                ) : null}
               </div>
             ) : null}
 

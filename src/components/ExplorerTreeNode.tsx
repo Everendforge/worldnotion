@@ -1,4 +1,5 @@
 import type { MouseEvent } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronRight, FileEdit, FileText, Folder, FolderOpen, Star, Target } from "lucide-react";
 import type { VaultTreeNode } from "../domain";
 import { getIconComponent } from "./IconPicker";
@@ -46,6 +47,8 @@ export function ExplorerTreeNode({
   entityTagColors,
   customIcons,
 }: ExplorerTreeNodeProps) {
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dropPosition, setDropPosition] = useState<"before" | "after" | "into" | null>(null);
   const isExpanded = expandedPaths.has(node.path) || focusedFolderPath === node.path;
   const hasChildren = node.children.length > 0;
   const isFavorite = favoritePaths.has(node.path);
@@ -87,22 +90,67 @@ export function ExplorerTreeNode({
           onPointerDragStart(node.path, node.kind, event.clientX, event.clientY);
         }}
         onDragOver={(event) => {
-          if (node.kind === "folder") {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
+          event.preventDefault();
+          const element = event.currentTarget as HTMLElement;
+          const rect = element.getBoundingClientRect();
+          const y = event.clientY - rect.top;
+          const height = rect.height;
+          const threshold = height * 0.3; // 30% margin for before/after zones
+          
+          // Determine drop position based on mouse Y position
+          let newDropPosition: "before" | "after" | "into" | null = null;
+          
+          if (y < threshold) {
+            newDropPosition = "before";
+          } else if (y > height - threshold) {
+            newDropPosition = "after";
+          } else if (node.kind === "folder") {
+            // Only allow "into" for folders
+            newDropPosition = "into";
+          } else {
+            // For files, default to "after" if in middle zone
+            newDropPosition = "after";
+          }
+          
+          setDropPosition(newDropPosition);
+          setIsDragOver(true);
+          event.dataTransfer.dropEffect = "move";
+        }}
+        onDragLeave={(event) => {
+          // Only clear dragover if leaving the actual element, not child elements
+          if ((event.target as HTMLElement) === event.currentTarget) {
+            setIsDragOver(false);
+            setDropPosition(null);
           }
         }}
         onDrop={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (node.kind !== "folder") return;
+          setIsDragOver(false);
+          setDropPosition(null);
+          
           const fromPath = event.dataTransfer.getData("text/plain");
           const fromKind = event.dataTransfer.getData("application/worldnotion-kind") as "file" | "folder" | "";
-          if (fromPath && fromPath !== node.path && !node.path.startsWith(`${fromPath}/`)) {
+          
+          if (!fromPath || fromPath === node.path || node.path.startsWith(`${fromPath}/`)) {
+            return;
+          }
+          
+          // Handle different drop positions
+          if (dropPosition === "into" && node.kind === "folder") {
+            // Drop into folder
             onDragMove(fromPath, node.path, fromKind || undefined);
+          } else if (dropPosition === "before" || dropPosition === "after") {
+            // For before/after positions, we would need to move to the parent folder
+            // and potentially reorder siblings. For now, move to parent with position info.
+            // This requires extending the API - for now we'll just drop into parent.
+            const parentPath = node.path.substring(0, node.path.lastIndexOf("/"));
+            if (parentPath || parentPath === "") {
+              onDragMove(fromPath, parentPath || "/", fromKind || undefined);
+            }
           }
         }}
-        className={`tree-button ${selectedPath === node.path ? "active" : ""} ${node.hasDescription ? "has-description" : ""} ${isOpen ? "is-open" : ""}`}
+        className={`tree-button ${selectedPath === node.path ? "active" : ""} ${node.hasDescription ? "has-description" : ""} ${isOpen ? "is-open" : ""} ${isDragOver && dropPosition ? `tree-drop-${dropPosition}` : ""}`}
         onClick={activateNode}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {

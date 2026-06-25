@@ -79,31 +79,32 @@ export function toggledThemeMode(themeId: ThemeId): ThemeId {
 export function selectionColorForTheme(themeId: ThemeId): { backgroundColor: string; opacity: string } {
   const theme = themeById(themeId);
   
-  // Define theme-specific selection colors
+  // Define theme-specific selection colors with improved visibility
+  // Opacity increased from baseline to improve text selection visibility
   const colorMap: Record<ThemeFamily, Record<ThemeMode, { backgroundColor: string; opacity: string }>> = {
     worldnotion: {
-      light: { backgroundColor: "#3f7f64", opacity: "0.25" },    // Green accent at 25% opacity
-      dark: { backgroundColor: "#7cc7a2", opacity: "0.35" },     // Lighter green at 35% opacity
+      light: { backgroundColor: "#3f7f64", opacity: "0.35" },    // Green accent at 35% opacity (was 25%)
+      dark: { backgroundColor: "#7cc7a2", opacity: "0.45" },     // Lighter green at 45% opacity (was 35%)
     },
     github: {
-      light: { backgroundColor: "#0969da", opacity: "0.2" },     // GitHub blue
-      dark: { backgroundColor: "#58a6ff", opacity: "0.3" },      // GitHub light blue
+      light: { backgroundColor: "#0969da", opacity: "0.28" },    // GitHub blue (was 0.2%)
+      dark: { backgroundColor: "#58a6ff", opacity: "0.38" },     // GitHub light blue (was 0.3%)
     },
     one: {
-      light: { backgroundColor: "#4078f2", opacity: "0.2" },     // One light blue
-      dark: { backgroundColor: "#61afef", opacity: "0.3" },      // One dark blue
+      light: { backgroundColor: "#4078f2", opacity: "0.28" },    // One light blue (was 0.2%)
+      dark: { backgroundColor: "#61afef", opacity: "0.38" },     // One dark blue (was 0.3%)
     },
     dracula: {
-      light: { backgroundColor: "#bd93f9", opacity: "0.2" },     // Dracula purple
-      dark: { backgroundColor: "#bd93f9", opacity: "0.3" },      // Dracula purple
+      light: { backgroundColor: "#bd93f9", opacity: "0.28" },    // Dracula purple (was 0.2%)
+      dark: { backgroundColor: "#bd93f9", opacity: "0.40" },     // Dracula purple (was 0.3%)
     },
     owl: {
-      light: { backgroundColor: "#c41e3a", opacity: "0.15" },    // Owl red
-      dark: { backgroundColor: "#7aa6da", opacity: "0.25" },     // Owl blue
+      light: { backgroundColor: "#c41e3a", opacity: "0.25" },    // Owl red (was 0.15%)
+      dark: { backgroundColor: "#7aa6da", opacity: "0.35" },     // Owl blue (was 0.25%)
     },
     material: {
-      light: { backgroundColor: "#39adb5", opacity: "0.2" },     // Material teal
-      dark: { backgroundColor: "#89ddff", opacity: "0.25" },     // Material light cyan
+      light: { backgroundColor: "#39adb5", opacity: "0.28" },    // Material teal (was 0.2%)
+      dark: { backgroundColor: "#89ddff", opacity: "0.35" },     // Material light cyan (was 0.25%)
     },
   };
   

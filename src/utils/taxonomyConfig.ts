@@ -1,4 +1,5 @@
 import type {
+  BasePropertyDefinition,
   CustomFieldDefinition,
   CustomFieldType,
   EntityTypeDefinition,
@@ -14,13 +15,114 @@ export type TaxonomyEntityInput = {
   customProperties: Record<string, unknown>;
 };
 
+const PROTECTED_BASE_PROPERTY_IDS = ["folder", "id", "name", "type"] as const;
+const VISIBLE_CORE_PROPERTY_IDS = ["id", "name", "type"] as const;
+
+function createCoreBaseProperties(): BasePropertyDefinition[] {
+  return [
+    {
+      id: "folder",
+      label: "Folder",
+      description: "WorldNotion system property that marks a note as the description for a folder.",
+      type: "text",
+      immutable: true,
+      readOnly: true,
+      hidden: true,
+      order: 0,
+    },
+    {
+      id: "id",
+      label: "ID",
+      description: "Unique identifier",
+      type: "text",
+      immutable: true,
+      readOnly: true,
+      required: true,
+      order: 1,
+    },
+    {
+      id: "name",
+      label: "Name",
+      description: "Entity name",
+      type: "text",
+      immutable: true,
+      required: true,
+      order: 2,
+    },
+    {
+      id: "type",
+      label: "Type",
+      description: "Entity type",
+      type: "select",
+      immutable: true,
+      required: true,
+      order: 3,
+    },
+  ];
+}
+
+export function normalizeCoreBaseProperties(config: TaxonomyConfig): TaxonomyConfig {
+  const coreDefinitions = createCoreBaseProperties();
+  const allowedIds = new Set<string>(PROTECTED_BASE_PROPERTY_IDS);
+  const existingBaseDefinitions = config.baseProperties?.definitions ?? [];
+  const movableDefinitions: CustomFieldDefinition[] = existingBaseDefinitions
+    .filter((definition) => !allowedIds.has(definition.id))
+    .filter((definition) => definition.id !== "tags")
+    .map((definition) => {
+      const { immutable: _immutable, readOnly: _readOnly, order: _order, hidden: _hidden, ...customDefinition } = definition;
+      return {
+        ...customDefinition,
+        label: customDefinition.label ?? definition.id,
+      };
+    });
+  const existingCustomIds = new Set(config.customFields.definitions.map((definition) => definition.id));
+  const nextCustomDefinitions = [
+    ...config.customFields.definitions,
+    ...movableDefinitions.filter((definition) => !existingCustomIds.has(definition.id)),
+  ];
+  const previousVisible = config.baseProperties?.visibleByDefault ?? [...VISIBLE_CORE_PROPERTY_IDS];
+  const visibleCore = previousVisible.filter((id) => allowedIds.has(id));
+  const visibleCustom = previousVisible.filter((id) => !allowedIds.has(id) && id !== "tags");
+
+  return {
+    ...config,
+    baseProperties: {
+      definitions: coreDefinitions,
+      visibleByDefault: visibleCore.length ? visibleCore.filter((id) => id !== "folder") : [...VISIBLE_CORE_PROPERTY_IDS],
+      order: [...PROTECTED_BASE_PROPERTY_IDS],
+    },
+    customFields: {
+      ...config.customFields,
+      definitions: nextCustomDefinitions,
+      globalFields: [...new Set([...(config.customFields.globalFields ?? []), ...visibleCustom])].filter((id) => id !== "tags"),
+    },
+  };
+}
+
 export function createDefaultTaxonomyConfig(): TaxonomyConfig {
   return {
     version: "1.0",
+    baseProperties: {
+      definitions: createCoreBaseProperties(),
+      visibleByDefault: [...VISIBLE_CORE_PROPERTY_IDS],
+      order: [...PROTECTED_BASE_PROPERTY_IDS],
+    },
     tags: {
       rootNodes: [],
       allowCustomTags: true,
       autoDetectSlashNotation: true,
+    },
+    contentTypes: {
+      definitions: [
+        {
+          id: "folder-description",
+          label: "Folder Note",
+          description: "Special note that describes a folder",
+          icon: "folder",
+          color: "#64748b",
+          immutable: true,
+        },
+      ],
     },
     entityTypes: {
       definitions: [
@@ -307,4 +409,73 @@ export function mergeTagHierarchy(predefinedTags: TagHierarchyNode[], detectedTa
   });
 
   return Array.from(tagMap.values()).filter((node) => !node.parentId);
+}
+
+/**
+ * Migrate legacy taxonomy config to new property system
+ * Detects taxonomies without baseProperties and adds them with defaults
+ * Also migrates folder-description from entityTypes to contentTypes
+ * This is a one-way migration - once migrated, cannot go back to legacy format
+ */
+export function migrateTaxonomyConfig(config: TaxonomyConfig): TaxonomyConfig {
+  let needsMigration = false;
+  let migratedConfig = { ...config };
+
+  // Check if baseProperties migration is needed
+  if (!config.baseProperties) {
+    console.log("[Migration] Migrating legacy taxonomy config to property system");
+    needsMigration = true;
+
+    migratedConfig.baseProperties = {
+      definitions: createCoreBaseProperties(),
+      visibleByDefault: [...VISIBLE_CORE_PROPERTY_IDS],
+      order: [...PROTECTED_BASE_PROPERTY_IDS],
+    };
+    migratedConfig.version = "1.0";
+  }
+
+  // Check if contentTypes migration is needed
+  if (!config.contentTypes) {
+    console.log("[Migration] Creating contentTypes section");
+    needsMigration = true;
+
+    // Create contentTypes with folder-description
+    migratedConfig.contentTypes = {
+      definitions: [
+        {
+          id: "folder-description",
+          label: "Folder Note",
+          description: "Special note that describes a folder",
+          icon: "folder",
+          color: "#64748b",
+          immutable: true,
+        },
+      ],
+    };
+
+    // Check if folder-description exists in entityTypes and remove it
+    if (migratedConfig.entityTypes?.definitions) {
+      const folderDescIndex = migratedConfig.entityTypes.definitions.findIndex(
+        (def) => def.id === "folder-description"
+      );
+      if (folderDescIndex >= 0) {
+        console.log("[Migration] Moving folder-description from entityTypes to contentTypes");
+        migratedConfig.entityTypes.definitions.splice(folderDescIndex, 1);
+      }
+    }
+  }
+
+  if (needsMigration) {
+    console.log("[Migration] Migration completed successfully");
+  }
+
+  return migratedConfig;
+}
+
+/**
+ * Check if a taxonomy config needs migration
+ */
+export function needsTaxonomyMigration(config: TaxonomyConfig | undefined): boolean {
+  if (!config) return false;
+  return !config.baseProperties;
 }

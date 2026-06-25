@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ValidationFinding, VaultFile } from "../domain";
-import { parseTaxonomyConfig, parseTemplates, parseUniverseProfile } from "./vaultMetadata";
+import { parsePropertiesConfig, parseTaxonomyConfig, parseTemplates, parseUniverseProfile } from "./vaultMetadata";
 
 describe("vault metadata parsers", () => {
   it("parses Markdown templates from .everend/templates", () => {
@@ -67,5 +67,22 @@ describe("vault metadata parsers", () => {
         message: "Taxonomy config is missing required fields.",
       }),
     ]);
+  });
+
+  it("parses properties config JSON from .everend/properties.json", () => {
+    const valid: VaultFile = {
+      relativePath: ".everend/properties.json",
+      content: JSON.stringify({
+        version: "1.0",
+        tags: { rootNodes: [], allowCustomTags: true, autoDetectSlashNotation: true },
+        entityTypes: { definitions: [], defaultType: "concept", allowCustomTypes: true },
+        statuses: { definitions: [], defaultStatus: "draft", allowCustomStatuses: true },
+        customFields: { definitions: [], globalFields: [] },
+      }),
+    };
+    const findings: ValidationFinding[] = [];
+
+    expect(parsePropertiesConfig([valid], findings)?.version).toBe("1.0");
+    expect(findings).toEqual([]);
   });
 });

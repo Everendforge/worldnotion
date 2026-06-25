@@ -1,5 +1,6 @@
-import { Decoration, DecorationSet, WidgetType, ViewPlugin } from "@codemirror/view";
+import { Decoration, DecorationSet, WidgetType, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { Extension } from "@codemirror/state";
+import { isStructuralChange } from "./pluginUtils";
 
 export type DocumentHeaderConfig = {
   documentName?: string;
@@ -74,9 +75,12 @@ export function createDocumentHeaderPlugin(config: DocumentHeaderConfig): Extens
         this.decorations = createDecorations(config);
       }
 
-      update() {
-        // Update decorations if needed
-        this.decorations = createDecorations(this.config);
+      update(update: ViewUpdate) {
+        // Only recalculate on structural changes (doc/viewport)
+        // Header widget doesn't need to change on selection-only updates
+        if (isStructuralChange(update)) {
+          this.decorations = createDecorations(this.config);
+        }
       }
     },
     {

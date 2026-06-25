@@ -1,21 +1,21 @@
 import { Range } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
+import { isStructuralChange } from "./pluginUtils";
 
-function marker(from: number, to: number, className: string) {
-  return Decoration.mark({ class: className }).range(from, to);
-}
+// Match <!--font:FONTNAME-->content<!--/font-->
+// Pattern compiled once at module load for font family HTML comments
+// Allows font specifications without breaking markdown portability
+const FONT_PATTERN = /<!--font:\s*([^-]+?)\s*-->([\s\S]*?)<!--\/font-->/g;
 
 function addFontFamilyMatches(
   text: string,
   from: number,
   decorations: Range<Decoration>[],
 ) {
-  // Match <!--font:FONTNAME-->content<!--/font-->
-  // This pattern allows font specifications without breaking markdown portability
-  const fontPattern = /<!--font:\s*([^-]+?)\s*-->([\s\S]*?)<!--\/font-->/g;
   let match: RegExpExecArray | null;
   
-  while ((match = fontPattern.exec(text)) !== null) {
+  FONT_PATTERN.lastIndex = 0;
+  while ((match = FONT_PATTERN.exec(text)) !== null) {
     const fullFrom = from + match.index;
     const fullTo = fullFrom + match[0].length;
     const fontFamily = match[1];
@@ -27,33 +27,29 @@ function addFontFamilyMatches(
     const contentTo = contentFrom + content.length;
     
     // Hide opening tag
-    decorations.push(marker(fullFrom, contentFrom, "cm-markdown-syntax-hidden"));
+    const openHidden = Decoration.mark({ class: "cm-markdown-syntax-hidden" }).range(fullFrom, contentFrom);
+    decorations.push(openHidden);
     
     // Apply font family to content
-    decorations.push(
-      Decoration.mark({
-        attributes: { style: `font-family: ${fontFamily}` },
-      }).range(contentFrom, contentTo)
-    );
+    const fontDecoration = Decoration.mark({
+      attributes: { style: `font-family: ${fontFamily}` },
+    }).range(contentFrom, contentTo);
+    decorations.push(fontDecoration);
     
     // Hide closing tag
-    decorations.push(marker(contentTo, fullTo, "cm-markdown-syntax-hidden"));
+    const closeHidden = Decoration.mark({ class: "cm-markdown-syntax-hidden" }).range(contentTo, fullTo);
+    decorations.push(closeHidden);
   }
 }
 
 function getDecorations(view: EditorView): DecorationSet {
   const decorations: Range<Decoration>[] = [];
 
+  // Iterate over visible ranges directly instead of line-by-line
+  // This is much more efficient as it processes text in chunks
   for (const { from, to } of view.visibleRanges) {
-    let position = from;
-    while (position <= to) {
-      const line = view.state.doc.lineAt(position);
-      const text = line.text;
-      
-      addFontFamilyMatches(text, line.from, decorations);
-      
-      position = line.to + 1;
-    }
+    const text = view.state.doc.sliceString(from, to);
+    addFontFamilyMatches(text, from, decorations);
   }
 
   return Decoration.set(decorations, true);
@@ -68,7 +64,9 @@ export const fontFamilyPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged || update.selectionSet) {
+      // Only recalculate decorations on structural changes (doc/viewport)
+      // Skip on selection-only changes to improve performance during typing
+      if (isStructuralChange(update)) {
         this.decorations = getDecorations(update.view);
       }
     }

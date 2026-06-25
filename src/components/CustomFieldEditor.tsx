@@ -22,6 +22,11 @@ const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
   multiselect: "Multi-select",
   "entity-ref": "Entity Reference",
   "entity-ref-list": "Entity Reference List",
+  url: "URL",
+  email: "Email",
+  phone: "Phone",
+  file: "File",
+  image: "Image",
 };
 
 function FieldItem({ field, onUpdate, onDelete }: FieldItemProps) {

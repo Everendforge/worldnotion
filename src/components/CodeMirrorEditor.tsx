@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useRef } from "react";
+import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState as CodeMirrorState, Prec } from "@codemirror/state";
@@ -113,14 +113,21 @@ export function CodeMirrorEditor({
   const [wikilinkIndex, setWikilinkIndex] = useState(0);
   
   // Debounce timers for menu detection (100ms debounce)
-  const slashMenuDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const wikilinkMenuDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const slashMenuDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const wikilinkMenuDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const handleChange = useCallback(
     (newValue: string) => {
       onChange(newValue);
     },
     [onChange]
   );
+
+  // Position cursor at end of first line when note loads (only on document change)
+  useEffect(() => {
+    if (!editorView) return;
+    const firstLine = editorView.state.doc.line(1);
+    editorView.dispatch({ selection: { anchor: firstLine.to, head: firstLine.to } });
+  }, [documentName, editorView]);
 
   const filteredSlashCommands = useMemo(() => {
     if (!slashMenu) return [];
@@ -794,13 +801,14 @@ export function CodeMirrorEditor({
               borderRight: "1px solid var(--wn-border)",
               color: "var(--wn-muted)",
             },
-            ".cm-activeLine, .cm-activeLineGutter": {
-              backgroundColor: "var(--wn-panel-2)",
-            },
             ".cm-cursor": {
               borderLeftColor: "var(--wn-accent)",
+              borderLeftWidth: "2px",
+              boxShadow: "0 0 6px color-mix(in srgb, var(--wn-accent) 45%, transparent)",
             },
             ".cm-selectionBackground": {
+              // Only style when there's actual selection (not just cursor)
+              // CodeMirror only applies this class when selection.from !== selection.to
               backgroundColor: selectionColorForTheme(theme).backgroundColor,
               opacity: selectionColorForTheme(theme).opacity,
             },
@@ -816,8 +824,8 @@ export function CodeMirrorEditor({
         ]}
         basicSetup={{
           lineNumbers: mode === "source" ? true : settings.lineNumbers,
-          highlightActiveLineGutter: true,
-          highlightActiveLine: settings.activeLine,
+          highlightActiveLineGutter: false,
+          highlightActiveLine: false,
           foldGutter: mode === "source",
           dropCursor: true,
           allowMultipleSelections: true,

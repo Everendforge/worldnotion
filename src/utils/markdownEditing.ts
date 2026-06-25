@@ -10,6 +10,7 @@ export type TextInsertion = {
 export function entityToFrontmatterRaw(entity: Entity): string {
   const yamlObject: Record<string, unknown> = {
     id: entity.id,
+    name: entity.name,
     type: entity.type,
     status: entity.status,
   };
@@ -20,12 +21,23 @@ export function entityToFrontmatterRaw(entity: Entity): string {
   if (entity.aliases.length > 0) {
     yamlObject.aliases = entity.aliases;
   }
-
+  if (entity.parentId) {
+    yamlObject.parentId = entity.parentId;
+  }
+  if (entity.childrenIds.length > 0) {
+    yamlObject.childrenIds = entity.childrenIds;
+  }
   Object.entries(entity.customProperties).forEach(([key, value]) => {
+    if (key === "folder") return;
     yamlObject[key] = value;
   });
 
-  return `---\n${YAML.stringify(yamlObject)}---`;
+  const yamlBody = YAML.stringify(yamlObject);
+  if (!entity.folder) {
+    return `---\n${yamlBody}---`;
+  }
+
+  return `---\n# WorldNotion system property: indicates whether this note corresponds to a folder.\nfolder: ${YAML.stringify(entity.folder).trim()}\n${yamlBody}---`;
 }
 
 export function wrapSelectionText(
