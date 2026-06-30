@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
-  Folder,
   FolderOpen,
   Home,
   Moon,
@@ -18,15 +17,12 @@ import {
   Save,
   Search,
   Settings,
-  Star,
   Sun,
-  Target,
   FileEdit,
   AlertTriangle,
   X,
   ExternalLink,
   Files,
-  Hash,
   Crown,
 } from "lucide-react";
 import "./App.css";
@@ -37,7 +33,7 @@ import { FontSelector } from "./components/FontSelector";
 import { InputDialog } from "./components/InputDialog";
 import { Toast } from "./components/Toast";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
-import { ExplorerTreeNode } from "./components/ExplorerTreeNode";
+import { ExplorerPanel, type ExplorerTreeAction } from "./components/ExplorerPanel";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { JsonReader } from "./components/JsonReader";
 import { LazyPanelFallback } from "./components/LazyPanelFallback";
@@ -159,6 +155,9 @@ import { editorCommandAction, nativeMenuEditorCommand } from "./utils/editorComm
 import { profileForRecent, rememberUniverse, universeDisplayName } from "./utils/universeSession";
 import { canUseBrowserDirectoryPicker, isTauriRuntime, platformLabels, shortcutMatches } from "./utils/appEnvironment";
 import {
+  expandedPathsToDepth,
+  explorerAncestorsForPath,
+  flattenVisibleExplorerTree,
   selectEcosystemGroups,
   selectEntityTagColors,
   selectFavoriteItems,
@@ -301,10 +300,8 @@ function App() {
   // Font detection hook
   const { fonts } = useFonts();
   
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
-    const stored = localStorage.getItem("worldnotion.expandedPaths");
-    return stored ? new Set(JSON.parse(stored)) : new Set();
-  });
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const legacyExpandedPathsLoadedRef = useRef<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -424,12 +421,44 @@ function App() {
 
   useEffect(() => {
     if (!index || !settings.editor.persistTabs) return;
-    const session = serializeWorkspaceSession(index.rootPath, activeTabPath, tabs, workspaceLayout, documentTabGroups);
+    const session = serializeWorkspaceSession(
+      index.rootPath,
+      activeTabPath,
+      tabs,
+      workspaceLayout,
+      documentTabGroups,
+      Array.from(expandedPaths),
+    );
     setSettings((current) => ({
       ...current,
       sessions: { ...current.sessions, [index.rootPath]: session },
     }));
-  }, [activeTabPath, documentTabGroups, index?.rootPath, settings.editor.persistTabs, tabs, workspaceLayout]);
+  }, [activeTabPath, documentTabGroups, expandedPaths, index?.rootPath, settings.editor.persistTabs, tabs, workspaceLayout]);
+
+  useEffect(() => {
+    if (!index || settings.editor.persistTabs) return;
+    const nextExpandedPaths = Array.from(expandedPaths);
+    setSettings((current) => {
+      const session = current.sessions[index.rootPath] ?? { rootPath: index.rootPath, tabs: [] };
+      const previousExpandedPaths = session.explorerExpandedPaths ?? [];
+      if (
+        previousExpandedPaths.length === nextExpandedPaths.length &&
+        previousExpandedPaths.every((path, pathIndex) => path === nextExpandedPaths[pathIndex])
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        sessions: {
+          ...current.sessions,
+          [index.rootPath]: {
+            ...session,
+            explorerExpandedPaths: nextExpandedPaths,
+          },
+        },
+      };
+    });
+  }, [expandedPaths, index?.rootPath, settings.editor.persistTabs]);
 
   useEffect(() => {
     setWorkspaceLayout((current) => syncLayoutWithOpenTabs(current, tabs, activeTabPath));
@@ -621,6 +650,10 @@ function App() {
     settings.explorer.ignoreFolderNoteMetadata,
     settings.explorer.showHiddenEverend,
   ]);
+  const visibleExplorerRows = useMemo(
+    () => flattenVisibleExplorerTree(visibleTree, expandedPaths, focusedFolderPath),
+    [expandedPaths, focusedFolderPath, visibleTree],
+  );
   const folderDescriptionPaths = useMemo(() => {
     const paths = new Set<string>();
     function collect(nodes: VaultIndex["tree"]) {
@@ -678,8 +711,37 @@ function App() {
   }, [index]);
 
   useEffect(() => {
-    localStorage.setItem("worldnotion.expandedPaths", JSON.stringify(Array.from(expandedPaths)));
-  }, [expandedPaths]);
+    if (!index) return;
+    const restored = settings.sessions[index.rootPath]?.explorerExpandedPaths;
+    if (restored) {
+      setExpandedPaths(new Set(restored));
+      return;
+    }
+    if (legacyExpandedPathsLoadedRef.current.has(index.rootPath)) {
+      setExpandedPaths(new Set());
+      return;
+    }
+    legacyExpandedPathsLoadedRef.current.add(index.rootPath);
+    const stored = localStorage.getItem("worldnotion.expandedPaths");
+    try {
+      setExpandedPaths(stored ? new Set(JSON.parse(stored)) : new Set());
+    } catch {
+      setExpandedPaths(new Set());
+    }
+  }, [index?.rootPath]);
+
+  useEffect(() => {
+    const path = activeTabPath ?? (selectedPath?.endsWith(".md") ? selectedPath : undefined);
+    if (!path) return;
+    const ancestors = explorerAncestorsForPath(path);
+    if (!ancestors.length) return;
+    setExpandedPaths((current) => {
+      if (ancestors.every((ancestor) => current.has(ancestor))) return current;
+      const next = new Set(current);
+      ancestors.forEach((ancestor) => next.add(ancestor));
+      return next;
+    });
+  }, [activeTabPath, selectedPath]);
 
   useEffect(() => {
     if (!pointerDragItem) return;
@@ -732,6 +794,24 @@ function App() {
       }
       return next;
     });
+  }
+
+  function handleExplorerTreeAction(action: ExplorerTreeAction) {
+    if (action === "collapseAll") {
+      setExpandedPaths(new Set());
+      return;
+    }
+
+    if (action === "expandSelected") {
+      const targetPath = selectedExplorerTarget?.kind === "folder" ? selectedExplorerTarget.path : dirname(selectedPath ?? "");
+      const paths = explorerAncestorsForPath(`${targetPath}/placeholder.md`);
+      if (targetPath) paths.push(targetPath);
+      setExpandedPaths((current) => new Set([...current, ...paths.filter(Boolean)]));
+      return;
+    }
+
+    const depth = action === "expandDepth1" ? 1 : action === "expandDepth2" ? 2 : 3;
+    setExpandedPaths(expandedPathsToDepth(visibleTree, depth));
   }
 
   function handleContextMenu(event: React.MouseEvent, targetPath: string, targetKind: "file" | "folder" | "empty") {
@@ -826,6 +906,13 @@ function App() {
     setTabs((current) => updateOpenTabsForPathChange(current, change, index?.rootPath));
     setWorkspaceLayout((current) => updateLayoutForPathChange(current, change));
     setDocumentTabGroups((current) => updateGroupsForPathChange(current, change));
+    setExpandedPaths((current) => {
+      const next = new Set<string>();
+      current.forEach((path) => {
+        next.add(pathIsAffectedByChanges(path, change) ? pathAfterChanges(path, change) : path);
+      });
+      return next;
+    });
     if (index) {
       setSettings((current) => {
         const focusedPath = current.explorer.focusedFoldersByUniverse?.[index.rootPath];
@@ -1077,7 +1164,7 @@ function App() {
       } else if (action === "refresh") {
         await refreshUniverse();
       } else if (action === "collapseAll") {
-        setExpandedPaths(new Set());
+        handleExplorerTreeAction("collapseAll");
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -2765,240 +2852,47 @@ function App() {
   }
 
   const explorerPanel = (
-    <aside className="sidebar dock-panel-body">
-      <label className="search-box">
-        <Search size={15} />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search files" />
-      </label>
-
-      <nav className="explorer-sections">
-        <button
-          type="button"
-          className={activeExplorerSection === "allFiles" ? "active" : ""}
-          onClick={() => updateExplorer({ activeSection: "allFiles" })}
-          title="All Files"
-        >
-          <Files size={16} />
-        </button>
-        <button
-          type="button"
-          className={activeExplorerSection === "favorites" ? "active" : ""}
-          onClick={() => updateExplorer({ activeSection: "favorites" })}
-          title="Favorites"
-        >
-          <Star size={16} />
-        </button>
-        <button
-          type="button"
-          className={activeExplorerSection === "ecosystem" ? "active" : ""}
-          onClick={() => updateExplorer({ activeSection: "ecosystem" })}
-          title="Ecosystem"
-        >
-          <Hash size={16} />
-        </button>
-      </nav>
-
-      {focusedFolderPath && explorerFocusBreadcrumb.length ? (
-        <nav className="explorer-focus-breadcrumb" aria-label="Focused folder path">
-          <Target className="explorer-focus-breadcrumb-icon" size={14} />
-          {explorerFocusBreadcrumb.map((crumb, crumbIndex) => {
-            const isLast = crumbIndex === explorerFocusBreadcrumb.length - 1;
-            return (
-              <span key={crumb.path ?? "root"} className="explorer-focus-crumb">
-                <button
-                  type="button"
-                  className={isLast ? "active" : ""}
-                  onClick={() => setFocusedFolder(crumb.path)}
-                  title={crumb.path ? `Focus ${crumb.path}` : "Exit folder focus"}
-                >
-                  {crumb.label}
-                </button>
-                {!isLast ? <ChevronRight size={12} /> : null}
-              </span>
-            );
-          })}
-        </nav>
-      ) : null}
-
-      <div className="sidebar-main" onContextMenu={(event) => handleContextMenu(event, "", "empty")}>
-        {activeExplorerSection === "favorites" && (
-          <section className="sidebar-section">
-            <h2>Favorites</h2>
-            <div className="template-list">
-              {favoriteItems.length ? (
-                favoriteItems.map((favorite) => (
-                  <button
-                    key={favorite.path}
-                    type="button"
-                    className={`template-button ${selectedPath === favorite.path ? "active" : ""}`}
-                    onClick={() => favorite.kind === "file" && selectPath(favorite.path)}
-                    onContextMenu={(event) => handleContextMenu(event, favorite.path, favorite.kind)}
-                  >
-                    {favorite.kind === "folder" ? <Folder size={14} /> : <FileText size={14} />}
-                    {favorite.label}
-                  </button>
-                ))
-              ) : (
-                <p className="muted">No favorites yet.</p>
-              )}
-            </div>
-          </section>
-        )}
-
-        {activeExplorerSection === "ecosystem" && (
-          <section className="sidebar-section ecosystem-view">
-            <h2>Ecosystem</h2>
-            <div className="ecosystem-groups">
-              {ecosystemGroups.size > 0 ? (
-                Array.from(ecosystemGroups.entries())
-                  .sort(([a], [b]) => {
-                    if (a === "_untagged") return 1;
-                    if (b === "_untagged") return -1;
-                    return a.localeCompare(b);
-                  })
-                  .map(([tagPath, entities]) => {
-                    const tagInfo = index?.propertiesConfig?.tags.rootNodes.find(
-                      (node) => node.label === tagPath || node.fullPath === tagPath,
-                    );
-                    const displayName = tagPath === "_untagged" ? "Sin etiquetas" : tagPath;
-                    const tagColor = tagInfo?.color;
-
-                    return (
-                      <div key={tagPath} className="ecosystem-group">
-                        <div className="ecosystem-group-header">
-                          {tagColor ? <span className="ecosystem-group-color" style={{ backgroundColor: tagColor }} /> : null}
-                          <Hash size={14} />
-                          <span className="ecosystem-group-name">{displayName}</span>
-                          <span className="ecosystem-group-count">{entities.length}</span>
-                        </div>
-                        <div className="ecosystem-group-items">
-                          {entities.map((entity) => (
-                            <button
-                              key={entity.path}
-                              type="button"
-                              className={`ecosystem-item ${selectedPath === entity.path ? "active" : ""}`}
-                              onClick={() => selectPath(entity.path)}
-                              onContextMenu={(event) => handleContextMenu(event, entity.path, "file")}
-                            >
-                              {tagColor ? <span className="ecosystem-item-color" style={{ backgroundColor: tagColor }} /> : null}
-                              <FileText size={14} />
-                              <span className="ecosystem-item-name">{entity.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })
-              ) : (
-                <p className="muted">No entities with tags yet.</p>
-              )}
-            </div>
-          </section>
-        )}
-
-        {activeExplorerSection === "allFiles" && (
-          <section className="sidebar-section">
-            <div
-              className={`tree-list ${pointerDragItem?.active ? "is-pointer-dragging" : ""}`}
-              data-tree-root-drop="true"
-              onContextMenu={(event) => handleContextMenu(event, "", "empty")}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const fromPath = event.dataTransfer.getData("text/plain");
-                const fromKind = event.dataTransfer.getData("application/worldnotion-kind") as "file" | "folder" | "";
-                if (fromPath) {
-                  void moveExplorerPath(fromPath, "", fromKind || undefined);
-                }
-              }}
-            >
-              {visibleTree.length ? (
-                visibleTree.map((node) => (
-                  <ExplorerTreeNode
-                    key={node.path}
-                    node={node}
-                    selectedPath={selectedPath}
-                    openTabPaths={openTabPaths}
-                    dirtyTabPaths={dirtyTabPaths}
-                    favoritePaths={favoritePaths}
-                    focusedFolderPath={focusedFolderPath}
-                    folderNotesEnabled={!settings.explorer.ignoreFolderNoteMetadata}
-                    onSelectPath={selectPath}
-                    onSelectFolder={selectFolder}
-                    expandedPaths={expandedPaths}
-                    onToggleExpand={toggleExpand}
-                    onContextMenu={handleContextMenu}
-                    onToggleFavorite={toggleFavorite}
-                    onToggleFolderFocus={toggleFolderFocus}
-                    onOpenFolderDescription={(folderPath, descriptionPath) => {
-                      if (descriptionPath) {
-                        selectPath(descriptionPath);
-                      } else {
-                        void createFolderDescription(folderPath);
-                      }
-                    }}
-                    onDragMove={moveExplorerPath}
-                    onPointerDragStart={(path, kind, startX, startY) =>
-                      setPointerDragItem({ path, kind, startX, startY, active: false })
-                    }
-                    isPointerClickSuppressed={() => suppressTreeClickRef.current}
-                    entityTagColors={entityTagColors}
-                    customIcons={settings.explorer.customIcons}
-                  />
-                ))
-              ) : (
-                <p className="muted">No files yet.</p>
-              )}
-            </div>
-          </section>
-        )}
-      </div>
-
-      <section className={`templates-dock ${templatesExpanded ? "expanded" : ""}`}>
-        <div className="templates-dock-header">
-          <button
-            type="button"
-            className="templates-dock-toggle"
-            onClick={() => setTemplatesExpanded((expanded) => !expanded)}
-          >
-            {templatesExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <span>Templates</span>
-            <small>{index.templates.length}</small>
-          </button>
-          <button type="button" className="templates-dock-action" onClick={createTemplate} title="New template">
-            <Plus size={13} />
-          </button>
-        </div>
-        {templatesExpanded ? (
-          <div
-            className="template-list templates-dock-list"
-            onContextMenu={(event) => {
-              handleContextMenu(event, ".everend/templates", "folder");
-            }}
-          >
-            {index.templates.length ? (
-              index.templates.map((template) => (
-                <button
-                  key={template.path}
-                  type="button"
-                  className={`template-button ${selectedPath === template.path ? "active" : ""}`}
-                  onClick={() => selectPath(template.path)}
-                  onContextMenu={(event) => handleContextMenu(event, template.path, "file")}
-                >
-                  <FileText size={14} />
-                  {template.type}
-                </button>
-              ))
-            ) : (
-              <p className="muted">No templates in this universe.</p>
-            )}
-          </div>
-        ) : null}
-      </section>
-    </aside>
+    <ExplorerPanel
+      index={index}
+      query={query}
+      onQueryChange={setQuery}
+      activeSection={activeExplorerSection}
+      onSectionChange={(section) => updateExplorer({ activeSection: section })}
+      focusedFolderPath={focusedFolderPath}
+      focusBreadcrumb={explorerFocusBreadcrumb}
+      onSetFocusedFolder={setFocusedFolder}
+      visibleRows={visibleExplorerRows}
+      selectedPath={selectedPath}
+      openTabPaths={openTabPaths}
+      dirtyTabPaths={dirtyTabPaths}
+      favoritePaths={favoritePaths}
+      favoriteItems={favoriteItems}
+      ecosystemGroups={ecosystemGroups}
+      entityTagColors={entityTagColors}
+      folderNotesEnabled={!settings.explorer.ignoreFolderNoteMetadata}
+      customIcons={settings.explorer.customIcons}
+      pointerDragActive={Boolean(pointerDragItem?.active)}
+      templatesExpanded={templatesExpanded}
+      onToggleTemplatesExpanded={() => setTemplatesExpanded((expanded) => !expanded)}
+      onCreateTemplate={createTemplate}
+      onSelectPath={selectPath}
+      onSelectFolder={selectFolder}
+      onToggleExpand={toggleExpand}
+      onTreeAction={handleExplorerTreeAction}
+      onContextMenu={handleContextMenu}
+      onToggleFavorite={toggleFavorite}
+      onToggleFolderFocus={toggleFolderFocus}
+      onOpenFolderDescription={(folderPath, descriptionPath) => {
+        if (descriptionPath) {
+          selectPath(descriptionPath);
+        } else {
+          void createFolderDescription(folderPath);
+        }
+      }}
+      onDragMove={moveExplorerPath}
+      onPointerDragStart={(path, kind, startX, startY) => setPointerDragItem({ path, kind, startX, startY, active: false })}
+      isPointerClickSuppressed={() => suppressTreeClickRef.current}
+    />
   );
 
   function renderDocumentPanel(tabRef: DockTabRef) {
@@ -3165,6 +3059,7 @@ function App() {
                 theme={settings.theme}
                 mode={documentTab.mode}
                 settings={settings.editor}
+                pluginSettings={settings.plugins}
                 documentName={documentTab.title}
                 projectName={index?.universeProfile?.name ?? (index?.rootPath ? pathName(index.rootPath) : undefined)}
                 readOnly={!canWrite}

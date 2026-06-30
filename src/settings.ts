@@ -4,8 +4,10 @@ import {
   DEFAULT_EXPLORER_SETTINGS,
   DEFAULT_GRAPH_SETTINGS,
   DEFAULT_KEYBINDINGS,
+  DEFAULT_PLUGIN_SETTINGS,
 } from "./editorTypes";
 import { normalizeThemeId } from "./themes";
+import { normalizePluginSettings } from "./utils/pluginRegistry";
 
 export const SETTINGS_KEY = "worldnotion.settings.v4";
 export const LEGACY_SETTINGS_KEY = "worldnotion.settings.v3";
@@ -43,6 +45,7 @@ export function loadSettings(): AppSettingsV4 {
       editor: { ...DEFAULT_EDITOR_SETTINGS, ...(parsed.editor ?? {}) },
       explorer: { ...DEFAULT_EXPLORER_SETTINGS, ...parsedExplorer, activeSection },
       graph: { ...DEFAULT_GRAPH_SETTINGS, ...(parsed.graph ?? {}) },
+      plugins: normalizePluginSettings(parsed.plugins ?? DEFAULT_PLUGIN_SETTINGS),
       keybindings: mergedKeybindings,
       sessions: parsed.sessions ?? {},
     };
@@ -54,6 +57,7 @@ export function loadSettings(): AppSettingsV4 {
       editor: DEFAULT_EDITOR_SETTINGS,
       explorer: DEFAULT_EXPLORER_SETTINGS,
       graph: DEFAULT_GRAPH_SETTINGS,
+      plugins: DEFAULT_PLUGIN_SETTINGS,
       keybindings: DEFAULT_KEYBINDINGS,
       sessions: {},
     };
@@ -94,6 +98,10 @@ function settingsReplacer(key: string, value: unknown): unknown {
           activePath: workspaceSession.activePath,
           tabs: workspaceSession.tabs ?? [],
           layout: workspaceSession.layout,
+          documentTabGroups: workspaceSession.documentTabGroups,
+          explorerExpandedPaths: Array.isArray(workspaceSession.explorerExpandedPaths)
+            ? workspaceSession.explorerExpandedPaths
+            : undefined,
           editorState: workspaceSession.editorState ?? {},
           fileAccessStats: workspaceSession.fileAccessStats ?? [],
         };

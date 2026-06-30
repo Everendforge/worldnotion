@@ -8,7 +8,6 @@ import type {
   TagHierarchyNode,
   TaxonomyConfig,
 } from "../editorTypes";
-import { WORLDBUILDING_TEMPLATE } from "./propertyTemplates";
 
 export type TaxonomyEntityInput = {
   type: string;
@@ -17,31 +16,25 @@ export type TaxonomyEntityInput = {
   customProperties: Record<string, unknown>;
 };
 
-const PROTECTED_BASE_PROPERTY_IDS = ["id", "name", "type"] as const;
-const VISIBLE_CORE_PROPERTY_IDS = ["type"] as const;
-const NON_PROPERTY_FIELD_IDS = new Set(["folder", "tags"]);
-const WORLDBUILDING_DETAILS_GROUP_ID = "worldbuilding-details";
-const WORLDBUILDING_DETAIL_CHILD_IDS = new Set([
-  "role",
-  "affiliation",
-  "home",
-  "arc",
-  "scale",
-  "region",
-  "population",
-  "parentId",
-  "childrenIds",
-  "rarity",
-  "material",
-  "owner",
-  "date",
+const SPEC_ENTITY_TYPE_IDS = [
+  "character",
   "location",
-  "participants",
-  "theme",
-  "rules",
-  "category",
-  "lore-level",
-]);
+  "organization",
+  "event",
+  "concept",
+  "item",
+  "world",
+  "cycle",
+  "universe",
+  "story",
+  "arc",
+  "scene",
+  "quest",
+];
+const PROTECTED_BASE_PROPERTY_IDS = ["id", "name", "type", "status", "tags", "aliases", "parentId", "childrenIds"] as const;
+const VISIBLE_CORE_PROPERTY_IDS = ["type", "status", "aliases"] as const;
+const NON_PROPERTY_FIELD_IDS = new Set(["folder", "tags"]);
+export const WORLDBUILDING_DETAILS_GROUP_ID = "worldbuilding-details";
 
 function createCoreBaseProperties(): BasePropertyDefinition[] {
   return [
@@ -73,6 +66,49 @@ function createCoreBaseProperties(): BasePropertyDefinition[] {
       required: true,
       order: 2,
     },
+    {
+      id: "status",
+      label: "Status",
+      description: "Canon or editorial state",
+      type: "select",
+      immutable: true,
+      required: true,
+      order: 3,
+    },
+    {
+      id: "tags",
+      label: "Tags",
+      description: "Search and grouping labels",
+      type: "text",
+      immutable: true,
+      order: 4,
+    },
+    {
+      id: "aliases",
+      label: "Aliases",
+      description: "Alternate display names or wikilink candidates",
+      type: "text",
+      immutable: true,
+      order: 5,
+    },
+    {
+      id: "parentId",
+      label: "Parent",
+      description: "Stable ID of a parent entity",
+      type: "entity-ref",
+      immutable: true,
+      targetTypes: SPEC_ENTITY_TYPE_IDS,
+      order: 6,
+    },
+    {
+      id: "childrenIds",
+      label: "Children",
+      description: "Stable IDs of explicit child entities",
+      type: "entity-ref-list",
+      immutable: true,
+      targetTypes: SPEC_ENTITY_TYPE_IDS,
+      order: 7,
+    },
   ];
 }
 
@@ -92,14 +128,14 @@ export function normalizeCoreBaseProperties(config: TaxonomyConfig): TaxonomyCon
     });
   const existingCustomIds = new Set(config.customFields.definitions.map((definition) => definition.id));
   const nextCustomDefinitions = [
-    ...config.customFields.definitions.filter((definition) => !NON_PROPERTY_FIELD_IDS.has(definition.id)),
+    ...config.customFields.definitions.filter((definition) => !NON_PROPERTY_FIELD_IDS.has(definition.id) && !allowedIds.has(definition.id)),
     ...movableDefinitions.filter((definition) => !existingCustomIds.has(definition.id)),
   ];
   const previousVisible = config.baseProperties?.visibleByDefault ?? [...VISIBLE_CORE_PROPERTY_IDS];
   const visibleCore = previousVisible.filter((id) => allowedIds.has(id));
   const visibleCustom = previousVisible.filter((id) => !allowedIds.has(id) && !NON_PROPERTY_FIELD_IDS.has(id));
 
-  return normalizeWorldbuildingDetailsGroup({
+  return unwrapWorldbuildingDetailsGroup({
     ...config,
     baseProperties: {
       definitions: coreDefinitions,
@@ -110,92 +146,79 @@ export function normalizeCoreBaseProperties(config: TaxonomyConfig): TaxonomyCon
       ...config.customFields,
       definitions: nextCustomDefinitions,
       globalFields: [...new Set([...(config.customFields.globalFields ?? []), ...visibleCustom])].filter(
-        (id) => !NON_PROPERTY_FIELD_IDS.has(id),
+        (id) => !NON_PROPERTY_FIELD_IDS.has(id) && !allowedIds.has(id),
       ),
+    },
+    entityTypes: {
+      ...config.entityTypes,
+      definitions: config.entityTypes.definitions.map((definition) => ({
+        ...definition,
+        customFields: definition.customFields?.filter((id) => !allowedIds.has(id)),
+      })),
     },
   });
 }
 
-function replaceWorldbuildingDetailIds(ids: string[] | undefined): string[] | undefined {
+function propertyAppliesToType(property: PropertyDefinition, entityType: string): boolean {
+  const typeCondition = property.visibleWhen?.type;
+  return !typeCondition || typeCondition.includes(entityType);
+}
+
+function replaceWorldbuildingDetailIds(
+  ids: string[] | undefined,
+  children: PropertyDefinition[],
+  entityType?: string,
+): string[] | undefined {
   if (!ids) return ids;
+  const replacementIds = entityType
+    ? children
+        .filter((child) => propertyAppliesToType(child, entityType))
+        .map((child) => child.id)
+    : [];
   const next: string[] = [];
-  let insertedGroup = false;
   ids.forEach((id) => {
-    if (WORLDBUILDING_DETAIL_CHILD_IDS.has(id)) {
-      if (!insertedGroup) {
-        next.push(WORLDBUILDING_DETAILS_GROUP_ID);
-        insertedGroup = true;
-      }
+    if (id === WORLDBUILDING_DETAILS_GROUP_ID) {
+      next.push(...replacementIds);
       return;
     }
-    if (id === WORLDBUILDING_DETAILS_GROUP_ID) insertedGroup = true;
     next.push(id);
   });
   return next.filter((id, index) => next.indexOf(id) === index);
 }
 
-function normalizeWorldbuildingDetailsGroup(config: TaxonomyConfig): TaxonomyConfig {
-  if (config.customFields.definitions.some((definition) => definition.id === WORLDBUILDING_DETAILS_GROUP_ID)) {
-    return config;
-  }
-
-  const existingWorldbuildingFields = config.customFields.definitions.filter((definition) =>
-    WORLDBUILDING_DETAIL_CHILD_IDS.has(definition.id),
+export function unwrapWorldbuildingDetailsGroup(config: TaxonomyConfig): TaxonomyConfig {
+  const group = config.customFields.definitions.find(
+    (definition) => definition.id === WORLDBUILDING_DETAILS_GROUP_ID && definition.type === "group",
   );
-  if (existingWorldbuildingFields.length === 0) return config;
+  if (!group?.children?.length) return config;
+  const groupChildren = group.children;
 
-  const defaultGroup = WORLDBUILDING_TEMPLATE.customFields.find(
-    (definition) => definition.id === WORLDBUILDING_DETAILS_GROUP_ID,
-  );
-  if (!defaultGroup?.children?.length) return config;
-
-  const existingById = new Map(existingWorldbuildingFields.map((definition) => [definition.id, definition]));
-  const groupChildren = defaultGroup.children.map((child) => {
-    const existing = existingById.get(child.id);
-    return existing
-      ? ({
-          ...child,
-          ...existing,
-          visibleWhen: existing.visibleWhen ?? child.visibleWhen,
-          children: existing.children ?? child.children,
-        } as PropertyDefinition)
-      : child;
-  });
-  const groupDefinition = {
-    ...defaultGroup,
-    children: groupChildren,
-  } as CustomFieldDefinition;
-
-  const remainingDefinitions = config.customFields.definitions.filter(
-    (definition) => !WORLDBUILDING_DETAIL_CHILD_IDS.has(definition.id),
-  );
-  const insertionIndex = Math.max(
-    remainingDefinitions.findIndex((definition) => definition.id === "aliases"),
-    remainingDefinitions.findIndex((definition) => definition.id === "status"),
-  );
-  const nextDefinitions =
-    insertionIndex >= 0
-      ? [
-          ...remainingDefinitions.slice(0, insertionIndex + 1),
-          groupDefinition,
-          ...remainingDefinitions.slice(insertionIndex + 1),
-        ]
-      : [...remainingDefinitions, groupDefinition];
+  const rootDefinitions = config.customFields.definitions.filter((definition) => definition.id !== WORLDBUILDING_DETAILS_GROUP_ID);
+  const rootIds = new Set(rootDefinitions.map((definition) => definition.id));
+  const childrenToLift = groupChildren
+    .filter((child) => !rootIds.has(child.id))
+    .map((child) => ({ ...child })) as CustomFieldDefinition[];
+  const groupIndex = config.customFields.definitions.findIndex((definition) => definition.id === WORLDBUILDING_DETAILS_GROUP_ID);
+  const nextDefinitions = [
+    ...rootDefinitions.slice(0, Math.max(groupIndex, 0)),
+    ...childrenToLift,
+    ...rootDefinitions.slice(Math.max(groupIndex, 0)),
+  ];
 
   return {
     ...config,
     customFields: {
       ...config.customFields,
       definitions: nextDefinitions,
-      globalFields: replaceWorldbuildingDetailIds(config.customFields.globalFields) ?? config.customFields.globalFields,
+      globalFields: replaceWorldbuildingDetailIds(config.customFields.globalFields, groupChildren) ?? config.customFields.globalFields,
     },
     entityTypes: {
       ...config.entityTypes,
       definitions: config.entityTypes.definitions.map((definition) => ({
         ...definition,
-        customFields: replaceWorldbuildingDetailIds(definition.customFields),
-        visibleProperties: replaceWorldbuildingDetailIds(definition.visibleProperties),
-        propertyOrder: replaceWorldbuildingDetailIds(definition.propertyOrder),
+        customFields: replaceWorldbuildingDetailIds(definition.customFields, groupChildren, definition.id),
+        visibleProperties: replaceWorldbuildingDetailIds(definition.visibleProperties, groupChildren, definition.id),
+        propertyOrder: replaceWorldbuildingDetailIds(definition.propertyOrder, groupChildren, definition.id),
       })),
     },
   };
@@ -274,6 +297,62 @@ export function createDefaultTaxonomyConfig(): TaxonomyConfig {
           description: "Object, relic, tool, or artifact",
           icon: "package",
           color: "#ec4899",
+          customFields: [],
+        },
+        {
+          id: "world",
+          label: "World",
+          description: "Major setting, planet, realm, or connected world",
+          icon: "globe",
+          color: "#0ea5e9",
+          customFields: [],
+        },
+        {
+          id: "cycle",
+          label: "Cycle",
+          description: "Era, cycle, age, or large continuity span",
+          icon: "refresh-cw",
+          color: "#14b8a6",
+          customFields: [],
+        },
+        {
+          id: "universe",
+          label: "Universe",
+          description: "Top-level canon container or cosmology",
+          icon: "sparkles",
+          color: "#a855f7",
+          customFields: [],
+        },
+        {
+          id: "story",
+          label: "Story",
+          description: "Narrative work, storyline, or authored plot container",
+          icon: "book-open",
+          color: "#f97316",
+          customFields: [],
+        },
+        {
+          id: "arc",
+          label: "Arc",
+          description: "Narrative arc within a story or continuity",
+          icon: "route",
+          color: "#eab308",
+          customFields: [],
+        },
+        {
+          id: "scene",
+          label: "Scene",
+          description: "Narrative scene, beat, or planning unit",
+          icon: "film",
+          color: "#22c55e",
+          customFields: [],
+        },
+        {
+          id: "quest",
+          label: "Quest",
+          description: "Playable or authored objective chain",
+          icon: "flag",
+          color: "#06b6d4",
           customFields: [],
         },
       ],

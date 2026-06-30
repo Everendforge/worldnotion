@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, Copy, Edit3, EyeOff, GitBranch, GripVertical, MoreHorizontal, Plus, SlidersHorizontal, Trash2, Wand2, X, ArrowRightLeft } from "lucide-react";
+import { AlertCircle, ArrowRightLeft, EyeOff, GripVertical, MoreHorizontal, Plus, Settings2, SlidersHorizontal, Trash2, Wand2, X } from "lucide-react";
 import type { Entity } from "../domain";
-import type { PropertiesConfig, BasePropertyDefinition, CustomFieldDefinition, PropertyDefinition } from "../editorTypes";
+import type { PropertiesConfig, BasePropertyDefinition, CustomFieldDefinition } from "../editorTypes";
 import {
   adaptFrontmatterProperty,
+  buildInspectorPropertySections,
+  type InspectorPropertyTreeNode,
   inferPropertyDefinition,
   listAllProperties,
   listInspectableProperties,
@@ -16,14 +18,12 @@ import {
   reorderInspectorPropertySiblings,
   removeInspectorProperty,
   reorderFrontmatter,
-  sanitizePropertyId,
-  labelFromPropertyId,
+  setInspectorPropertyVisibility,
   upsertInspectorProperty,
-  valuesToOptions,
 } from "../utils/propertiesConfig";
-import { isPropertyVisible } from "../utils/propertyTreeUtils";
 import { detectOrphanedFields, inferValueType } from "../utils/frontmatterValidator";
 import { PropertyFieldRenderer } from "./PropertyFieldRenderer";
+import { PropertyManagerModal } from "./PropertyManagerModal";
 
 type MetadataEditorProps = {
   entity: Entity;
@@ -37,13 +37,6 @@ type MetadataEditorProps = {
 };
 
 type EditableOption = { value: string; label: string; color?: string };
-type PropertyModalMode = "add" | "add-child" | "edit" | "group";
-type PropertyModalState = {
-  mode: PropertyModalMode;
-  property?: BasePropertyDefinition | CustomFieldDefinition;
-  parentId?: string;
-  sourceValue?: unknown;
-};
 type ConditionDraftState = {
   propertyId: string;
   parentId: string;
@@ -51,22 +44,6 @@ type ConditionDraftState = {
 };
 
 const ENTITY_FRONTMATTER_FIELD_IDS = new Set(["id", "name", "type", "status", "tags", "aliases", "parentId", "childrenIds", "folder"]);
-const PROPERTY_TYPES: Array<{ value: CustomFieldDefinition["type"]; label: string }> = [
-  { value: "text", label: "Text" },
-  { value: "number", label: "Number" },
-  { value: "boolean", label: "Boolean" },
-  { value: "date", label: "Date" },
-  { value: "select", label: "Select" },
-  { value: "multiselect", label: "Multi-select" },
-  { value: "entity-ref", label: "Entity ref" },
-  { value: "entity-ref-list", label: "Entity ref list" },
-  { value: "url", label: "URL" },
-  { value: "email", label: "Email" },
-  { value: "phone", label: "Phone" },
-  { value: "file", label: "File" },
-  { value: "image", label: "Image" },
-  { value: "group", label: "Group" },
-];
 
 function formatPreviewValue(value: unknown): string {
   if (Array.isArray(value)) return value.join(", ");
@@ -89,9 +66,11 @@ export function MetadataEditor({
   const [draggedPropertyId, setDraggedPropertyId] = useState<string | null>(null);
   const [optionDraft, setOptionDraft] = useState<{ propertyId: string; options: EditableOption[] } | null>(null);
   const [propertyContextMenu, setPropertyContextMenu] = useState<{ x: number; y: number; propertyId?: string } | null>(null);
-  const [propertyModal, setPropertyModal] = useState<PropertyModalState | null>(null);
+  const [propertyManagerSelection, setPropertyManagerSelection] = useState<string | undefined>();
   const [conditionDraft, setConditionDraft] = useState<ConditionDraftState | null>(null);
   const [showHiddenProperties, setShowHiddenProperties] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   const entityTypes = propertiesConfig?.entityTypes.definitions ?? [];
   const statuses = propertiesConfig?.statuses.definitions ?? [];
@@ -181,25 +160,8 @@ export function MetadataEditor({
     [inspectorProperties],
   );
 
-  const createDefaultProperty = (mode: PropertyModalMode, parentId?: string, sourceValue?: unknown): CustomFieldDefinition => {
-    const label = typeof sourceValue === "string" && sourceValue.trim() ? labelFromPropertyId(sourceValue) : mode === "group" ? "New group" : "New property";
-    const id = sanitizePropertyId(label) || (mode === "group" ? "new-group" : "new-property");
-    return {
-      id,
-      label,
-      type: mode === "group" ? "group" : inferPropertyDefinition(id, sourceValue).type,
-      required: false,
-      ...(parentId ? { visibleWhen: undefined } : {}),
-    };
-  };
-
-  const openPropertyModal = (mode: PropertyModalMode, property?: BasePropertyDefinition | CustomFieldDefinition, parentId?: string, sourceValue?: unknown) => {
-    setPropertyModal({
-      mode,
-      property: property ?? createDefaultProperty(mode, parentId, sourceValue),
-      parentId,
-      sourceValue,
-    });
+  const openPropertyManager = (propertyId?: string) => {
+    setPropertyManagerSelection(propertyId ?? inspectorProperties?.[0]?.id ?? allInspectableProperties[0]?.id);
     setPropertyContextMenu(null);
   };
 
@@ -207,7 +169,6 @@ export function MetadataEditor({
     if (!propertiesConfig) return;
     const nextConfig = upsertInspectorProperty(propertiesConfig, property, entity.type, parentId);
     saveConfig(nextConfig);
-    setPropertyModal(null);
   };
 
   const deletePropertyFromUniverse = (propertyId: string) => {
@@ -215,24 +176,6 @@ export function MetadataEditor({
     const confirmed = window.confirm("Delete this property from universe properties? Existing note values will stay until removed from frontmatter.");
     if (!confirmed) return;
     saveConfig(removeInspectorProperty(propertiesConfig, propertyId));
-    setPropertyContextMenu(null);
-  };
-
-  const duplicateProperty = (property: BasePropertyDefinition | CustomFieldDefinition) => {
-    const label = `${property.label || property.id} copy`;
-    const id = sanitizePropertyId(label);
-    const { immutable: _immutable, readOnly: _readOnly, order: _order, hidden: _hidden, ...propertyForCopy } =
-      property as BasePropertyDefinition & CustomFieldDefinition;
-    const copy = {
-      ...propertyForCopy,
-      id,
-      label,
-      children: property.children?.map((child) => ({
-        ...child,
-        id: `${id}-${child.id}`,
-      })),
-    } as CustomFieldDefinition;
-    savePropertyDefinition(copy);
     setPropertyContextMenu(null);
   };
 
@@ -370,67 +313,12 @@ export function MetadataEditor({
 
   const hideProperty = (propertyId: string) => {
     if (!propertiesConfig?.baseProperties) return;
-    const currentVisible = inspectorProperties?.map((property) => property.id).filter((id) => id !== propertyId) ?? [];
-
-    saveConfig({
-      ...propertiesConfig,
-      baseProperties: {
-        ...propertiesConfig.baseProperties,
-        visibleByDefault: (propertiesConfig.baseProperties.visibleByDefault ?? []).filter((id) => id !== propertyId),
-      },
-      customFields: {
-        ...propertiesConfig.customFields,
-        globalFields: (propertiesConfig.customFields.globalFields ?? []).filter((id) => id !== propertyId),
-      },
-      entityTypes: {
-        ...propertiesConfig.entityTypes,
-        definitions: propertiesConfig.entityTypes.definitions.map((definition) =>
-          definition.id === entity.type
-            ? {
-                ...definition,
-                visibleProperties: currentVisible,
-                customFields: (definition.customFields ?? []).filter((id) => id !== propertyId),
-              }
-            : definition,
-        ),
-      },
-    });
+    saveConfig(setInspectorPropertyVisibility(propertiesConfig, entity.type, propertyId, false));
   };
 
   const showProperty = (propertyId: string) => {
-    if (!propertiesConfig?.baseProperties || !inspectorProperties) return;
-    const currentVisible = inspectorProperties.map((property) => property.id);
-    if (currentVisible.includes(propertyId)) return;
-    const nextVisible = [...currentVisible, propertyId];
-    const isBaseProperty = propertiesConfig.baseProperties.definitions.some((definition) => definition.id === propertyId);
-
-    saveConfig({
-      ...propertiesConfig,
-      baseProperties: {
-        ...propertiesConfig.baseProperties,
-        visibleByDefault: isBaseProperty
-          ? [...new Set([...(propertiesConfig.baseProperties.visibleByDefault ?? []), propertyId])]
-          : propertiesConfig.baseProperties.visibleByDefault ?? [],
-      },
-      customFields: {
-        ...propertiesConfig.customFields,
-        globalFields: isBaseProperty
-          ? propertiesConfig.customFields.globalFields ?? []
-          : [...new Set([...(propertiesConfig.customFields.globalFields ?? []), propertyId])],
-      },
-      entityTypes: {
-        ...propertiesConfig.entityTypes,
-        definitions: propertiesConfig.entityTypes.definitions.map((definition) =>
-          definition.id === entity.type
-            ? {
-                ...definition,
-                visibleProperties: nextVisible,
-                propertyOrder: nextVisible,
-              }
-            : definition,
-        ),
-      },
-    });
+    if (!propertiesConfig?.baseProperties) return;
+    saveConfig(setInspectorPropertyVisibility(propertiesConfig, entity.type, propertyId, true));
   };
 
   const togglePropertyVisibility = (propertyId: string) => {
@@ -475,29 +363,29 @@ export function MetadataEditor({
    * Get all current property values for visibleWhen evaluation
    */
   const getPropertyValues = (): Record<string, unknown> => {
-    const values: Record<string, unknown> = {};
+    const values: Record<string, unknown> = {
+      id: entity.id,
+      name: entity.name,
+      type: entity.type,
+      status: entity.status,
+      tags: entity.tags,
+      aliases: entity.aliases,
+      parentId: entity.parentId,
+      childrenIds: entity.childrenIds,
+    };
     
-    // Collect all frontmatter properties
     Object.entries(frontmatterData).forEach(([key, value]) => {
       values[key] = value;
     });
     
-    // Collect custom properties
     Object.entries(entity.customProperties).forEach(([key, value]) => {
       values[key] = value;
     });
+
+    values.type = values.type || entity.type;
+    values.status = values.status || entity.status;
     
     return values;
-  };
-
-  const conditionText = (property: PropertyDefinition) => {
-    if (!property.visibleWhen) return "";
-    return Object.entries(property.visibleWhen)
-      .map(([parentId, values]) => {
-        const parent = allInspectableProperties.find((candidate) => candidate.id === parentId);
-        return `Requires ${parent?.label || parentId} = ${values.join(" or ")}`;
-      })
-      .join(", ");
   };
 
   const openPropertyContextMenu = (
@@ -515,34 +403,40 @@ export function MetadataEditor({
     });
   };
 
-  const renderPropertyNode = (
-    property: PropertyDefinition,
-    depth: number,
-    values: Record<string, unknown>,
-  ): React.ReactNode => {
-    const visible = isPropertyVisible(property, values);
-    const hasChildren = Boolean(property.children?.length);
+  const propertySections = useMemo(
+    () =>
+      buildInspectorPropertySections(propertiesConfig, entity.type, getPropertyValues(), {
+        includeHidden: showHiddenProperties,
+        includeInactiveConditions: showHiddenProperties,
+      }),
+    [entity.customProperties, entity.type, frontmatterData, propertiesConfig, showHiddenProperties],
+  );
+
+  const renderPropertyNode = (node: InspectorPropertyTreeNode): React.ReactNode => {
+    const property = node.property;
+    const hasChildren = Boolean(node.children.length);
     const value = getPropertyValue(property as BasePropertyDefinition | CustomFieldDefinition);
     const options = getPropertyOptions(property as BasePropertyDefinition | CustomFieldDefinition);
     const isReadOnly = "readOnly" in property && property.readOnly;
     const isGroup = property.type === "group";
+    const isCollapsed = collapsedGroups.has(property.id);
 
-    if (!visible) {
+    if (!node.conditionActive) {
       return (
         <div
           key={property.id}
-          className={`metadata-property-node metadata-property-node-locked metadata-field-depth-${depth}`}
+          className={`metadata-property-node metadata-property-node-locked metadata-field-depth-${node.depth}`}
           onContextMenu={(event) => openPropertyContextMenu(event, property as BasePropertyDefinition | CustomFieldDefinition)}
         >
           <div className="metadata-property-rail" />
           <div className="metadata-property-locked-content">
             <strong>{property.label || property.id}</strong>
-            <span>{conditionText(property)}</span>
+            <span>Conditional property</span>
           </div>
           <button
             type="button"
             title="Edit property"
-            onClick={() => openPropertyModal("edit", property as BasePropertyDefinition | CustomFieldDefinition)}
+            onClick={() => openPropertyManager(property.id)}
           >
             <MoreHorizontal size={14} />
           </button>
@@ -553,7 +447,7 @@ export function MetadataEditor({
     return (
       <div
         key={property.id}
-        className={`metadata-property-node metadata-property-depth-${depth} ${draggedPropertyId === property.id ? "dragging" : ""} ${isGroup ? "metadata-property-group" : ""}`}
+        className={`metadata-property-node metadata-property-depth-${node.depth} ${draggedPropertyId === property.id ? "dragging" : ""} ${isGroup || hasChildren ? "metadata-property-group" : ""} ${!node.visibleInType ? "metadata-property-hidden-node" : ""}`}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.stopPropagation();
@@ -575,8 +469,25 @@ export function MetadataEditor({
           <div className="metadata-property-body">
             {isGroup ? (
               <div className="metadata-property-group-title">
+                <button
+                  type="button"
+                  className="metadata-property-group-toggle"
+                  onClick={() =>
+                    setCollapsedGroups((current) => {
+                      const next = new Set(current);
+                      if (next.has(property.id)) next.delete(property.id);
+                      else next.add(property.id);
+                      return next;
+                    })
+                  }
+                  aria-expanded={!isCollapsed}
+                >
+                  {isCollapsed ? "+" : "-"}
+                </button>
                 <span>{property.label || property.id}</span>
-                <small>{hasChildren ? `${property.children?.length} child properties` : "Empty group"}</small>
+                <small>
+                  {hasChildren ? `${node.children.length} child properties` : "Empty group"}
+                </small>
               </div>
             ) : (
               <label>
@@ -597,50 +508,59 @@ export function MetadataEditor({
           </div>
           <div className="metadata-field-actions">
             {propertyCanEditOptions(property as BasePropertyDefinition | CustomFieldDefinition) ? (
-              <button
-                type="button"
-                className="metadata-field-options"
+            <button
+              type="button"
+              className="metadata-field-options"
                 aria-expanded={optionDraft?.propertyId === property.id}
                 onClick={() =>
                   optionDraft?.propertyId === property.id ? closeOptionsPopup() : openOptionsPopup(property as BasePropertyDefinition | CustomFieldDefinition)
                 }
                 title="Edit dropdown options"
               >
-                <SlidersHorizontal size={14} />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => openPropertyModal("add-child", undefined, property.id)}
-              title="Add child property"
-            >
-              <GitBranch size={14} />
+              <SlidersHorizontal size={14} />
             </button>
-            <button type="button" onClick={() => hideProperty(property.id)} title="Hide property">
-              <EyeOff size={14} />
-            </button>
+          ) : null}
             <button type="button" onClick={(event) => openPropertyContextMenu(event, property as BasePropertyDefinition | CustomFieldDefinition)} title="More">
               <MoreHorizontal size={14} />
             </button>
           </div>
         </div>
-        {hasChildren ? (
+        {hasChildren && !isCollapsed ? (
           <div className="metadata-property-children">
-            {property.children?.map((child) => renderPropertyNode(child, depth + 1, values))}
+            {node.children.map((child) => renderPropertyNode(child))}
           </div>
         ) : null}
       </div>
     );
   };
 
-  const renderPropertyTree = (
-    properties: PropertyDefinition[] | undefined,
-    depth: number = 0,
-    parentValues?: Record<string, unknown>,
-  ): React.ReactNode[] => {
-    if (!properties || properties.length === 0) return [];
-    const values = parentValues || getPropertyValues();
-    return properties.map((property) => renderPropertyNode(property, depth, values));
+  const renderPropertySections = (): React.ReactNode[] => {
+    return propertySections
+      .filter((section) => section.nodes.length > 0)
+      .map((section) => {
+        const isCollapsed = collapsedSections.has(section.id);
+        return (
+          <section key={section.id} className={`metadata-property-section metadata-property-section-${section.kind}`}>
+            <button
+              type="button"
+              className="metadata-property-section-title"
+              onClick={() =>
+                setCollapsedSections((current) => {
+                  const next = new Set(current);
+                  if (next.has(section.id)) next.delete(section.id);
+                  else next.add(section.id);
+                  return next;
+                })
+              }
+              aria-expanded={!isCollapsed}
+            >
+              <span>{section.title}</span>
+              <small>{isCollapsed ? "+" : "-"} {section.nodes.length}</small>
+            </button>
+            {!isCollapsed ? section.nodes.map((node) => renderPropertyNode(node)) : null}
+          </section>
+        );
+      });
   };
 
   const renderOptionsPopup = () => {
@@ -713,15 +633,16 @@ export function MetadataEditor({
               <button
                 type="button"
                 onClick={() => {
-                  const child = createDefaultProperty("add-child", property.id, option.label);
+                  const child = inferPropertyDefinition(`${property.id}-${option.value}`, option.label);
                   child.visibleWhen = { [property.id]: [option.value] };
                   updatePropertyOptions(property, optionDraft.options);
                   setOptionDraft(null);
-                  openPropertyModal("add-child", child, property.id, option.label);
+                  savePropertyDefinition(child, property.id);
+                  openPropertyManager(child.id);
                 }}
                 title="Create child property for this option"
               >
-                <GitBranch size={13} />
+                <Plus size={13} />
               </button>
             </div>
           ))}
@@ -745,13 +666,9 @@ export function MetadataEditor({
       >
         {property ? (
           <>
-            <button type="button" className="context-menu-item" onClick={() => openPropertyModal("edit", property)}>
-              <Edit3 size={16} />
-              <span>Edit property</span>
-            </button>
-            <button type="button" className="context-menu-item" onClick={() => openPropertyModal("add-child", undefined, property.id)}>
-              <GitBranch size={16} />
-              <span>Add child property</span>
+            <button type="button" className="context-menu-item" onClick={() => openPropertyManager(property.id)}>
+              <Settings2 size={16} />
+              <span>Customize properties</span>
             </button>
             <button
               type="button"
@@ -768,10 +685,6 @@ export function MetadataEditor({
               <SlidersHorizontal size={16} />
               <span>Add unlock condition</span>
             </button>
-            <button type="button" className="context-menu-item" onClick={() => duplicateProperty(property)}>
-              <Copy size={16} />
-              <span>Duplicate</span>
-            </button>
             <button type="button" className="context-menu-item" onClick={() => hideProperty(property.id)}>
               <EyeOff size={16} />
               <span>Hide</span>
@@ -785,16 +698,30 @@ export function MetadataEditor({
               <Trash2 size={16} />
               <span>Delete from universe</span>
             </button>
+            <div className="context-menu-separator" />
+            {allInspectableProperties.map((candidate) => {
+              const visible = visiblePropertyIds.has(candidate.id);
+              return (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  className="context-menu-item"
+                  onClick={() => {
+                    togglePropertyVisibility(candidate.id);
+                    setPropertyContextMenu(null);
+                  }}
+                >
+                  <span className="context-menu-check">{visible ? "✓" : ""}</span>
+                  <span>{candidate.label || candidate.id}</span>
+                </button>
+              );
+            })}
           </>
         ) : (
           <>
-            <button type="button" className="context-menu-item" onClick={() => openPropertyModal("add")}>
-              <Plus size={16} />
-              <span>Add property</span>
-            </button>
-            <button type="button" className="context-menu-item" onClick={() => openPropertyModal("group")}>
-              <GitBranch size={16} />
-              <span>Add group</span>
+            <button type="button" className="context-menu-item" onClick={() => openPropertyManager()}>
+              <Settings2 size={16} />
+              <span>Customize properties</span>
             </button>
             <button
               type="button"
@@ -894,18 +821,15 @@ export function MetadataEditor({
     );
   };
 
-  const renderPropertyModal = () => {
-    if (!propertyModal) return null;
-    const existingIds = allInspectableProperties
-      .filter((property) => property.id !== propertyModal.property?.id)
-      .map((property) => property.id);
+  const renderPropertyManager = () => {
+    if (!propertyManagerSelection || !propertiesConfig) return null;
     return (
-      <PropertyDefinitionModal
-        state={propertyModal}
-        existingIds={existingIds}
-        parent={propertyModal.parentId ? allInspectableProperties.find((property) => property.id === propertyModal.parentId) : undefined}
-        onCancel={() => setPropertyModal(null)}
-        onSave={(property) => savePropertyDefinition(property, propertyModal.parentId)}
+      <PropertyManagerModal
+        propertiesConfig={propertiesConfig}
+        entityType={entity.type}
+        initialPropertyId={propertyManagerSelection}
+        onChange={saveConfig}
+        onClose={() => setPropertyManagerSelection(undefined)}
       />
     );
   };
@@ -917,36 +841,24 @@ export function MetadataEditor({
         if (!(event.target as HTMLElement).closest(".inspector-local-popover, .metadata-field-options")) {
           closeOptionsPopup();
         }
-        if (!(event.target as HTMLElement).closest(".inspector-property-context-menu, .inspector-property-modal")) {
+        if (!(event.target as HTMLElement).closest(".inspector-property-context-menu, .property-manager-modal")) {
           setPropertyContextMenu(null);
         }
       }}
       onContextMenu={(event) => openPropertyContextMenu(event)}>
         {renderOptionsPopup()}
         {renderConditionPopover()}
-        {renderPropertyModal()}
+        {renderPropertyManager()}
         {renderPropertyContextMenu()}
         <div className="metadata-fields">
           <div className="metadata-inspector-toolbar">
             <span>Properties</span>
-            <button type="button" onClick={() => openPropertyModal("add")} title="Add property">
-              <Plus size={14} />
+            <button type="button" onClick={() => openPropertyManager()} title="Customize properties">
+              <Settings2 size={14} />
+              Customize
             </button>
           </div>
-          {renderPropertyTree(inspectorProperties as PropertyDefinition[] | undefined)}
-
-          {showHiddenProperties ? (
-            <div className="metadata-hidden-properties">
-              {allInspectableProperties
-                .filter((property) => !visiblePropertyIds.has(property.id))
-                .map((property) => (
-                  <button key={property.id} type="button" onClick={() => showProperty(property.id)}>
-                    <Plus size={13} />
-                    <span>{property.label || property.id}</span>
-                  </button>
-                ))}
-            </div>
-          ) : null}
+          {renderPropertySections()}
 
           {orphanedFields.length > 0 ? (
             <div className="metadata-orphaned-fields">
@@ -1081,7 +993,11 @@ export function MetadataEditor({
                   <div className="metadata-unconfigured-actions">
                     <button
                       type="button"
-                      onClick={() => openPropertyModal("add", inferPropertyDefinition(property.key, property.value), undefined, property.value)}
+                      onClick={() => {
+                        const nextProperty = inferPropertyDefinition(property.key, property.value);
+                        savePropertyDefinition(nextProperty);
+                        openPropertyManager(nextProperty.id);
+                      }}
                       title="Add to universe properties"
                     >
                       <Plus size={13} />
@@ -1089,11 +1005,17 @@ export function MetadataEditor({
                     </button>
                     <button
                       type="button"
-                      onClick={() => openPropertyModal("add-child", inferPropertyDefinition(property.key, property.value), inspectorProperties[0]?.id, property.value)}
+                      onClick={() => {
+                        const parentId = inspectorProperties[0]?.id;
+                        if (!parentId) return;
+                        const nextProperty = inferPropertyDefinition(property.key, property.value);
+                        savePropertyDefinition(nextProperty, parentId);
+                        openPropertyManager(nextProperty.id);
+                      }}
                       title="Attach as child property"
                       disabled={!inspectorProperties.length}
                     >
-                      <GitBranch size={13} />
+                      <Plus size={13} />
                       Attach
                     </button>
                     <label>
@@ -1361,189 +1283,3 @@ export function MetadataEditor({
   );
 }
 
-function PropertyDefinitionModal({
-  state,
-  existingIds,
-  parent,
-  onCancel,
-  onSave,
-}: {
-  state: PropertyModalState;
-  existingIds: string[];
-  parent?: BasePropertyDefinition | CustomFieldDefinition;
-  onCancel: () => void;
-  onSave: (property: CustomFieldDefinition) => void;
-}) {
-  const [draft, setDraft] = useState<CustomFieldDefinition>(() => ({
-    id: state.property?.id ?? "",
-    label: state.property?.label ?? "",
-    type: state.property?.type ?? "text",
-    description: state.property?.description,
-    required: state.property?.required ?? false,
-    options: state.property?.options,
-    targetTypes: state.property?.targetTypes,
-    min: state.property?.min,
-    max: state.property?.max,
-    pattern: state.property?.pattern,
-    children: state.property?.children,
-    visibleWhen: state.property?.visibleWhen,
-    group: state.property?.group,
-  }));
-  const [optionLabel, setOptionLabel] = useState("");
-  const [error, setError] = useState("");
-  const isEditing = state.mode === "edit";
-  const isGroup = state.mode === "group" || draft.type === "group";
-  const usesOptions = draft.type === "select" || draft.type === "multiselect";
-
-  function updateDraft(patch: Partial<CustomFieldDefinition>) {
-    setDraft((current) => ({ ...current, ...patch }));
-  }
-
-  function save() {
-    const id = sanitizePropertyId(draft.id || draft.label || "");
-    if (!id || !draft.label?.trim()) {
-      setError("Property needs a label and id.");
-      return;
-    }
-    if (!isEditing && existingIds.includes(id)) {
-      setError("A property with this id already exists.");
-      return;
-    }
-    onSave({
-      ...draft,
-      id,
-      label: draft.label.trim(),
-      type: isGroup ? "group" : draft.type,
-      options: usesOptions ? draft.options ?? [] : undefined,
-      visibleWhen: draft.visibleWhen && Object.keys(draft.visibleWhen).length ? draft.visibleWhen : undefined,
-    });
-  }
-
-  function addOption() {
-    if (!optionLabel.trim()) return;
-    const option = valuesToOptions([optionLabel.trim()])[0];
-    updateDraft({ options: [...(draft.options ?? []), option] });
-    setOptionLabel("");
-  }
-
-  function updateOption(index: number, patch: Partial<EditableOption>) {
-    const options = [...(draft.options ?? [])];
-    options[index] = { ...options[index], ...patch };
-    updateDraft({ options });
-  }
-
-  return (
-    <div className="inspector-property-modal" role="dialog" aria-label="Property definition">
-      <div className="inspector-property-modal-header">
-        <div>
-          <strong>{isEditing ? "Edit property" : state.mode === "add-child" ? "Add child property" : isGroup ? "Add group" : "Add property"}</strong>
-          {parent ? <span>Under {parent.label || parent.id}</span> : null}
-        </div>
-        <button type="button" onClick={onCancel} title="Close">
-          <X size={14} />
-        </button>
-      </div>
-      <div className="inspector-property-form">
-        <label>
-          <span>Label</span>
-          <input
-            value={draft.label ?? ""}
-            onChange={(event) => {
-              const label = event.target.value;
-              updateDraft({ label, ...(isEditing || draft.id ? {} : { id: sanitizePropertyId(label) }) });
-            }}
-            placeholder="Lore level"
-          />
-        </label>
-        <label>
-          <span>ID</span>
-          <input
-            value={draft.id}
-            disabled={isEditing}
-            onChange={(event) => updateDraft({ id: sanitizePropertyId(event.target.value) })}
-            placeholder="lore-level"
-          />
-        </label>
-        <label>
-          <span>Type</span>
-          <select
-            value={draft.type}
-            disabled={isGroup}
-            onChange={(event) => updateDraft({ type: event.target.value as CustomFieldDefinition["type"], options: [] })}
-          >
-            {PROPERTY_TYPES.map((type) => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Description</span>
-          <input
-            value={draft.description ?? ""}
-            onChange={(event) => updateDraft({ description: event.target.value })}
-            placeholder="Optional"
-          />
-        </label>
-        <label className="inspector-checkbox-row">
-          <input
-            type="checkbox"
-            checked={draft.required ?? false}
-            onChange={(event) => updateDraft({ required: event.target.checked })}
-          />
-          <span>Required</span>
-        </label>
-        {usesOptions ? (
-          <div className="inspector-property-options-editor">
-            <span>Options</span>
-            {(draft.options ?? []).map((option, index) => (
-              <div key={`${option.value}-${index}`} className="inspector-option-row">
-                <input
-                  value={option.label}
-                  onChange={(event) => {
-                    const label = event.target.value;
-                    updateOption(index, { label, value: sanitizePropertyId(label) || option.value });
-                  }}
-                />
-                <input
-                  value={option.value}
-                  onChange={(event) => updateOption(index, { value: sanitizePropertyId(event.target.value) })}
-                />
-                <input
-                  type="color"
-                  value={option.color ?? "#64748b"}
-                  onChange={(event) => updateOption(index, { color: event.target.value })}
-                />
-                <button type="button" className="danger" onClick={() => updateDraft({ options: (draft.options ?? []).filter((_, optionIndex) => optionIndex !== index) })}>
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            ))}
-            <div className="inspector-option-add-row">
-              <input
-                value={optionLabel}
-                onChange={(event) => setOptionLabel(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addOption();
-                  }
-                }}
-                placeholder="New option"
-              />
-              <button type="button" onClick={addOption}>
-                <Plus size={13} />
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-      {error ? <p className="property-form-error">{error}</p> : null}
-      <div className="inspector-property-modal-actions">
-        <button type="button" onClick={onCancel}>Cancel</button>
-        <button type="button" className="primary" onClick={save}>Save</button>
-      </div>
-    </div>
-  );
-}

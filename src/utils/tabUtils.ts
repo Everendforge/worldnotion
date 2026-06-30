@@ -36,6 +36,7 @@ export function serializeWorkspaceSession(
   tabs: OpenTab[],
   layout?: WorkspaceLayoutV1,
   documentTabGroups?: DocumentTabGroup[],
+  explorerExpandedPaths?: string[],
 ): WorkspaceSession {
   return {
     rootPath,
@@ -50,6 +51,7 @@ export function serializeWorkspaceSession(
     })),
     layout,
     documentTabGroups,
+    explorerExpandedPaths,
   };
 }
 

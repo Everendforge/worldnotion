@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { BookOpen, Castle, ExternalLink, FileText, Folder, Globe2, Hash, Keyboard, PanelLeft, Settings, Sparkles, TextCursorInput, Upload, Wrench, X } from "lucide-react";
+import { BookOpen, Castle, ExternalLink, FileText, Folder, Globe2, Hash, Keyboard, PanelLeft, Plug, Settings, Sparkles, TextCursorInput, Upload, Wrench, X } from "lucide-react";
 import {
   AppSettingsV4,
   DEFAULT_KEYBINDINGS,
@@ -8,6 +8,7 @@ import {
   EditorCommandId,
   EditorSettings,
   Keybinding,
+  PluginCategory,
   PropertiesConfig,
 } from "../editorTypes";
 import type { UniverseProfile } from "../domain";
@@ -16,6 +17,13 @@ import { applyPropertyTemplate, WORLDBUILDING_TEMPLATE } from "../utils/property
 import type { FrontmatterNormalizationItem } from "../utils/frontmatterNormalizer";
 import { themeById } from "../themes";
 import { PropertiesManager } from "./TaxonomyManager";
+import {
+  getPluginDefinitions,
+  isPluginEnabled,
+  legacyPluginEnabled,
+  pluginCategoryLabel,
+  updatePluginEnabled,
+} from "../utils/pluginRegistry";
 import "../App.css";
 
 type SettingsModalProps = {
@@ -106,7 +114,7 @@ function readImageFile(file: File) {
   });
 }
 
-type SettingsSection = "overview" | "tags" | "utils" | "editor" | "shortcuts" | "tabs" | "explorer";
+type SettingsSection = "overview" | "tags" | "utils" | "editor" | "shortcuts" | "tabs" | "explorer" | "plugins";
 
 export function SettingsModal({
   settings,
@@ -139,6 +147,7 @@ export function SettingsModal({
   const [selectedNormalizationPaths, setSelectedNormalizationPaths] = useState<Set<string>>(new Set());
   const [normalizationBusy, setNormalizationBusy] = useState(false);
   const [normalizationErrors, setNormalizationErrors] = useState<string[]>([]);
+  const [pluginQuery, setPluginQuery] = useState("");
 
   useEffect(() => {
     if (initialSection) setActiveSection(initialSection);
@@ -184,6 +193,21 @@ export function SettingsModal({
         ...settings.keybindings.filter((binding) => binding.commandId !== commandId),
         { commandId, shortcut },
       ].filter((binding) => binding.shortcut),
+    });
+  }
+
+  function updateEditorWithPluginMirror(next: Partial<EditorSettings>) {
+    const pluginEnabled = { ...settings.plugins.enabled };
+    if (typeof next.hideMarkdownSyntaxInWrite === "boolean") {
+      pluginEnabled["markdown-syntax-hiding"] = next.hideMarkdownSyntaxInWrite;
+    }
+    if (typeof next.documentHeaderEnabled === "boolean") {
+      pluginEnabled["document-header"] = next.documentHeaderEnabled;
+    }
+    onChange({
+      ...settings,
+      editor: { ...settings.editor, ...next },
+      plugins: { enabled: pluginEnabled },
     });
   }
 
@@ -269,6 +293,10 @@ export function SettingsModal({
               <button className={activeSection === "explorer" ? "active" : ""} onClick={() => setActiveSection("explorer")} type="button">
                 <Folder size={14} />
                 Explorer
+              </button>
+              <button className={activeSection === "plugins" ? "active" : ""} onClick={() => setActiveSection("plugins")} type="button">
+                <Plug size={14} />
+                Plugins
               </button>
             </div>
           </nav>
@@ -446,7 +474,7 @@ export function SettingsModal({
                 </label>
                 <label>
                   <span>Hide Markdown syntax in Write</span>
-                  <input type="checkbox" checked={settings.editor.hideMarkdownSyntaxInWrite} onChange={(event) => updateEditor({ hideMarkdownSyntaxInWrite: event.target.checked })} />
+                  <input type="checkbox" checked={settings.editor.hideMarkdownSyntaxInWrite} onChange={(event) => updateEditorWithPluginMirror({ hideMarkdownSyntaxInWrite: event.target.checked })} />
                 </label>
                 <label>
                   <span>Font size</span>
@@ -518,7 +546,7 @@ export function SettingsModal({
                 </label>
                 <label>
                   <span>Document Header</span>
-                  <input type="checkbox" checked={settings.editor.documentHeaderEnabled} onChange={(event) => updateEditor({ documentHeaderEnabled: event.target.checked })} />
+                  <input type="checkbox" checked={settings.editor.documentHeaderEnabled} onChange={(event) => updateEditorWithPluginMirror({ documentHeaderEnabled: event.target.checked })} />
                 </label>
                 <label>
                   <span>Show Project Name in Header</span>
@@ -597,7 +625,7 @@ export function SettingsModal({
 
             {activeSection === "tags" && universe ? (
               <div className="settings-panel">
-                <PropertiesManager config={propertiesDraft} onChange={setPropertiesDraft} activeTab="tags" showTabs={false} />
+                <PropertiesManager config={propertiesDraft} onChange={setPropertiesDraft} />
                 <div className="settings-actions">
                   <button
                     type="button"
@@ -756,6 +784,74 @@ export function SettingsModal({
                     }
                   />
                 </label>
+              </div>
+            ) : null}
+
+            {activeSection === "plugins" ? (
+              <div className="settings-panel">
+                <div className="settings-page-title">
+                  <h3>Plugins</h3>
+                  <p>Manage WorldNotion editor plugins and preview planned Everend runtime adapters.</p>
+                </div>
+                <label className="plugin-search">
+                  <span>Filter plugins</span>
+                  <input value={pluginQuery} onChange={(event) => setPluginQuery(event.target.value)} placeholder="Search plugins" />
+                </label>
+                <div className="plugin-manager-list">
+                  {(["navigation", "editor", "visual", "runtime-adapter"] as PluginCategory[]).map((category) => {
+                    const normalizedQuery = pluginQuery.trim().toLowerCase();
+                    const plugins = getPluginDefinitions().filter((plugin) => {
+                      const matchesCategory = plugin.category === category;
+                      const matchesQuery =
+                        !normalizedQuery ||
+                        plugin.name.toLowerCase().includes(normalizedQuery) ||
+                        plugin.description.toLowerCase().includes(normalizedQuery);
+                      return matchesCategory && matchesQuery;
+                    });
+                    if (!plugins.length) return null;
+                    return (
+                      <section key={category} className="plugin-category">
+                        <h4>{pluginCategoryLabel(category)}</h4>
+                        {plugins.map((plugin) => {
+                          const enabled = isPluginEnabled(
+                            settings.plugins,
+                            plugin.id,
+                            legacyPluginEnabled(settings.editor, plugin.id),
+                          );
+                          const badge = plugin.status === "planned" ? "Planned" : plugin.status === "core" ? "Core" : "Optional";
+                          return (
+                            <article key={plugin.id} className={`plugin-card ${plugin.status}`}>
+                              <div className="plugin-card-main">
+                                <div className="plugin-card-title">
+                                  <strong>{plugin.name}</strong>
+                                  <span className={`plugin-badge ${plugin.status}`}>{badge}</span>
+                                  <span className={`plugin-badge ${enabled ? "enabled" : "disabled"}`}>
+                                    {enabled ? "Enabled" : "Disabled"}
+                                  </span>
+                                </div>
+                                <p>{plugin.description}</p>
+                                {plugin.status === "planned" ? (
+                                  <small>Documentation only for now. Engine adapters are not installed or executed in v1.</small>
+                                ) : plugin.status === "core" ? (
+                                  <small>Core plugin. Protected to keep editing and navigation behavior stable.</small>
+                                ) : null}
+                              </div>
+                              <label className="plugin-toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  disabled={!plugin.configurable || plugin.status === "planned"}
+                                  onChange={(event) => onChange(updatePluginEnabled(settings, plugin.id, event.target.checked))}
+                                />
+                                <span>{plugin.configurable ? "Active" : "Locked"}</span>
+                              </label>
+                            </article>
+                          );
+                        })}
+                      </section>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
           </section>

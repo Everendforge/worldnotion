@@ -1,45 +1,25 @@
 import { useState } from "react";
-import { Hash, Wand2 } from "lucide-react";
+import { Hash } from "lucide-react";
 import type { PropertiesConfig } from "../editorTypes";
 import { TagHierarchyEditor } from "./TagHierarchyEditor";
-import { PropertyConfigPanel } from "./PropertyConfigPanel";
 import "../App.css";
-
-type PropertiesTab = "tags" | "properties";
 
 type PropertiesManagerProps = {
   config: PropertiesConfig;
   onChange: (config: PropertiesConfig) => void;
-  activeTab?: PropertiesTab;
-  showTabs?: boolean;
 };
 
-export function PropertiesManager({ config, onChange, activeTab: controlledActiveTab, showTabs = true }: PropertiesManagerProps) {
-  const [localActiveTab, setLocalActiveTab] = useState<PropertiesTab>("properties");
-  const activeTab = controlledActiveTab ?? localActiveTab;
-  const setActiveTab = controlledActiveTab ? undefined : setLocalActiveTab;
+export function PropertiesManager({ config, onChange }: PropertiesManagerProps) {
+  const [showTagSettings, setShowTagSettings] = useState(true);
 
   return (
     <div className="ecosystem-manager">
-      {showTabs ? (
       <div className="ecosystem-tabs">
         <button
-          className={`ecosystem-tab ${activeTab === "properties" ? "active" : ""}`}
-          onClick={() => setActiveTab?.("properties")}
+          className="ecosystem-tab active"
+          onClick={() => setShowTagSettings((current) => !current)}
           type="button"
-        >
-          <Wand2 size={18} />
-          <div className="tab-info">
-            <span className="tab-title">Propiedades</span>
-            <span className="tab-subtitle">
-              {config.baseProperties ? config.baseProperties.definitions.length : 0} base + {config.customFields.definitions.length} custom
-            </span>
-          </div>
-        </button>
-        <button
-          className={`ecosystem-tab ${activeTab === "tags" ? "active" : ""}`}
-          onClick={() => setActiveTab?.("tags")}
-          type="button"
+          aria-expanded={showTagSettings}
         >
           <Hash size={18} />
           <div className="tab-info">
@@ -48,11 +28,10 @@ export function PropertiesManager({ config, onChange, activeTab: controlledActiv
           </div>
         </button>
       </div>
-      ) : null}
 
       <div className="ecosystem-content">
-        {activeTab === "tags" && (
           <div className="ecosystem-panel">
+            {showTagSettings ? (
             <div className="panel-settings">
               <label className="setting-toggle">
                 <input
@@ -87,6 +66,7 @@ export function PropertiesManager({ config, onChange, activeTab: controlledActiv
                 </div>
               </label>
             </div>
+            ) : null}
             <TagHierarchyEditor
               nodes={config.tags.rootNodes}
               onChange={(rootNodes) =>
@@ -97,16 +77,6 @@ export function PropertiesManager({ config, onChange, activeTab: controlledActiv
               }
             />
           </div>
-        )}
-
-        {activeTab === "properties" && (
-          <div className="ecosystem-panel">
-            <PropertyConfigPanel
-              propertiesConfig={config}
-              onChange={onChange}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

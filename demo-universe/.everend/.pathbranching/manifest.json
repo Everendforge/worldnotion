@@ -4,10 +4,10 @@
   "stories": [
     {
       "id": "universe-of-notion",
-      "name": "Universe of Notion: First Road Demo",
+      "name": "Branching Story",
       "path": ".everend/.pathbranching/stories/universe-of-notion.pathbranching.json",
-      "createdAt": "2026-06-22T15:24:56.313Z",
-      "updatedAt": "2026-06-22T16:00:00.000Z"
+      "createdAt": "2026-06-27T19:22:06.522Z",
+      "updatedAt": "2026-06-27T19:25:15.316Z"
     }
   ]
 }

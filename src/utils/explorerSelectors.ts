@@ -3,6 +3,12 @@ import type { Entity, VaultIndex, VaultTreeNode } from "../domain";
 import { buildTree } from "./treeBuilder";
 import { pathName } from "./pathUtils";
 
+export type VisibleExplorerRow = VaultTreeNode & {
+  depth: number;
+  hasChildren: boolean;
+  isExpanded: boolean;
+};
+
 function collectSearchMatches(
   nodes: VaultTreeNode[],
   normalized: string,
@@ -51,6 +57,61 @@ export function selectVisibleTree(
   const folders: VaultTreeNode[] = [];
   collectSearchMatches(scopedTree, normalized, files, folders);
   return [...files, ...folders];
+}
+
+export function flattenVisibleExplorerTree(
+  tree: VaultTreeNode[],
+  expandedPaths: Set<string>,
+  focusedFolderPath?: string,
+): VisibleExplorerRow[] {
+  const rows: VisibleExplorerRow[] = [];
+
+  function visit(nodes: VaultTreeNode[], depth: number) {
+    for (const node of nodes) {
+      const hasChildren = node.children.length > 0;
+      const isExpanded = expandedPaths.has(node.path) || focusedFolderPath === node.path;
+      rows.push({
+        ...node,
+        depth,
+        hasChildren,
+        isExpanded,
+        children: [],
+      });
+      if (node.kind === "folder" && hasChildren && isExpanded) {
+        visit(node.children, depth + 1);
+      }
+    }
+  }
+
+  visit(tree, 0);
+  return rows;
+}
+
+export function explorerAncestorsForPath(path: string): string[] {
+  const parts = path.split("/");
+  parts.pop();
+  const ancestors: string[] = [];
+  for (let index = 1; index <= parts.length; index += 1) {
+    ancestors.push(parts.slice(0, index).join("/"));
+  }
+  return ancestors.filter(Boolean);
+}
+
+export function expandedPathsToDepth(tree: VaultTreeNode[], maxDepth: number): Set<string> {
+  const expanded = new Set<string>();
+
+  function visit(nodes: VaultTreeNode[], depth: number) {
+    for (const node of nodes) {
+      if (node.kind !== "folder" || node.children.length === 0) continue;
+      if (depth < maxDepth) {
+        expanded.add(node.path);
+        visit(node.children, depth + 1);
+      }
+    }
+  }
+
+  visit(tree, 0);
+  return expanded;
 }
 
 export function selectFavoriteItems(index: VaultIndex | undefined, favorites: ExplorerFavorite[]): ExplorerFavorite[] {

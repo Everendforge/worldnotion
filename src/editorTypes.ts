@@ -63,6 +63,37 @@ export type Keybinding = {
   shortcut: string;
 };
 
+export type PluginId =
+  | "wikilinks"
+  | "footnotes"
+  | "code-folding"
+  | "markdown-syntax-hiding"
+  | "font-family-rendering"
+  | "document-header"
+  | "unity-adapter"
+  | "godot-adapter"
+  | "unreal-adapter";
+
+export type PluginCategory = "editor" | "navigation" | "visual" | "runtime-adapter";
+export type PluginStatus = "available" | "core" | "planned";
+export type PluginRiskLevel = "low" | "medium" | "high";
+
+export type PluginDefinition = {
+  id: PluginId;
+  name: string;
+  description: string;
+  category: PluginCategory;
+  status: PluginStatus;
+  scope: "worldnotion" | "everend-runtime";
+  defaultEnabled: boolean;
+  configurable: boolean;
+  riskLevel: PluginRiskLevel;
+};
+
+export type PluginSettings = {
+  enabled: Partial<Record<PluginId, boolean>>;
+};
+
 export type EditorSettings = {
   lineNumbers: boolean;
   lineWrap: boolean;
@@ -200,6 +231,7 @@ export type WorkspaceSession = {
   tabs: PersistedOpenTab[];
   layout?: WorkspaceLayoutV1;
   documentTabGroups?: DocumentTabGroup[];
+  explorerExpandedPaths?: string[];
   editorState?: Record<string, FileEditorState>;
   fileAccessStats?: FileAccessStats[];
 };
@@ -267,6 +299,7 @@ export type AppSettingsV4 = {
   editor: EditorSettings;
   explorer: ExplorerSettings;
   graph: GraphSettings;
+  plugins: PluginSettings;
   keybindings: Keybinding[];
   sessions: Record<string, WorkspaceSession>;
 };
@@ -522,6 +555,20 @@ export const DEFAULT_GRAPH_SETTINGS: GraphSettings = {
   linkForce: 0.45,
   linkDistance: 110,
   groups: [],
+};
+
+export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
+  enabled: {
+    wikilinks: true,
+    footnotes: true,
+    "code-folding": true,
+    "markdown-syntax-hiding": true,
+    "font-family-rendering": true,
+    "document-header": true,
+    "unity-adapter": false,
+    "godot-adapter": false,
+    "unreal-adapter": false,
+  },
 };
 
 export const EDITOR_COMMANDS: EditorCommand[] = [

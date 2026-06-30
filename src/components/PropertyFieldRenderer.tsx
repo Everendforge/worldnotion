@@ -9,6 +9,18 @@ export type PropertyFieldRendererProps = {
   availableOptions?: Array<{ value: string; label: string; color?: string }>;
 };
 
+const FIELD_CONTROL_CLASS = "property-field-control";
+const FIELD_INLINE_CLASS = "property-field-inline";
+const FIELD_CHECKBOX_ROW_CLASS = "property-field-checkbox-row";
+const FIELD_CHECKBOX_CLASS = "property-field-checkbox";
+const FIELD_HELPER_CLASS = "property-field-helper";
+const FIELD_LINK_CLASS = "property-field-link";
+const FIELD_MULTISELECT_CLASS = "property-field-multiselect";
+const FIELD_SWATCH_CLASS = "property-field-swatch";
+const FIELD_PREVIEW_CLASS = "property-field-preview";
+const FIELD_PREVIEW_IMAGE_CLASS = "property-field-preview-image";
+const FIELD_UNSUPPORTED_CLASS = "property-field-unsupported";
+
 /**
  * Universal field renderer for all property types (base + custom)
  * Handles rendering and editing of properties based on their type configuration
@@ -65,7 +77,7 @@ export function PropertyFieldRenderer({
       return renderImageInput(property, value, onChange, isReadOnly);
     
     default:
-      return <div className="text-xs text-gray-500">Unsupported type: {property.type}</div>;
+      return <div className={FIELD_UNSUPPORTED_CLASS}>Unsupported type: {property.type}</div>;
   }
 }
 
@@ -91,7 +103,7 @@ function renderTextInput(
       required={required}
       pattern={property.pattern}
       placeholder={property.description}
-      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      className={FIELD_CONTROL_CLASS}
       disabled={readOnly}
     />
   );
@@ -116,7 +128,7 @@ function renderNumberInput(
       min={property.min}
       max={property.max}
       placeholder={property.description}
-      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      className={FIELD_CONTROL_CLASS}
       disabled={readOnly}
     />
   );
@@ -131,15 +143,15 @@ function renderCheckbox(
   const checked = value === true;
   
   return (
-    <div className="flex items-center">
+    <div className={FIELD_CHECKBOX_ROW_CLASS}>
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={readOnly}
-        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+        className={FIELD_CHECKBOX_CLASS}
       />
-      <label className="ml-2 text-sm text-gray-700">{property.description}</label>
+      <label>{property.description}</label>
     </div>
   );
 }
@@ -161,7 +173,7 @@ function renderDateInput(
       readOnly={readOnly}
       required={required}
       placeholder={property.description}
-      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      className={FIELD_CONTROL_CLASS}
       disabled={readOnly}
     />
   );
@@ -184,7 +196,7 @@ function renderSelect(
       onChange={(e) => onChange(e.target.value)}
       disabled={readOnly}
       required={required}
-      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      className={FIELD_CONTROL_CLASS}
     >
       {!required && <option value="">None</option>}
       {options.map((opt) => (
@@ -217,22 +229,22 @@ function renderMultiselect(
   };
   
   return (
-    <div className="space-y-1">
+    <div className={FIELD_MULTISELECT_CLASS}>
       {options.map((opt) => {
         const isSelected = selectedValues.includes(opt.value);
         return (
-          <div key={opt.value} className="flex items-center">
+          <div key={opt.value} className={FIELD_CHECKBOX_ROW_CLASS}>
             <input
               type="checkbox"
               checked={isSelected}
               onChange={() => handleToggle(opt.value)}
               disabled={readOnly}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+              className={FIELD_CHECKBOX_CLASS}
             />
-            <label className="ml-2 text-sm text-gray-700">
+            <label>
               {opt.color && (
                 <span
-                  className="inline-block w-3 h-3 mr-1 rounded-full"
+                  className={FIELD_SWATCH_CLASS}
                   style={{ backgroundColor: opt.color }}
                 />
               )}
@@ -264,7 +276,7 @@ function renderEntityRef(
       readOnly={readOnly}
       required={required}
       placeholder={`Reference to ${property.targetTypes?.join(", ") || "entity"}`}
-      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      className={FIELD_CONTROL_CLASS}
       disabled={readOnly}
     />
   );
@@ -287,7 +299,7 @@ function renderEntityRefList(
       onChange={(e) => onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
       readOnly={readOnly}
       placeholder={`References to ${property.targetTypes?.join(", ") || "entities"} (comma-separated)`}
-      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      className={FIELD_CONTROL_CLASS}
       disabled={readOnly}
     />
   );
@@ -303,7 +315,7 @@ function renderUrlInput(
   const stringValue = typeof value === "string" ? value : "";
   
   return (
-    <div className="flex items-center gap-2">
+    <div className={FIELD_INLINE_CLASS}>
       <input
         type="url"
         value={stringValue}
@@ -311,7 +323,7 @@ function renderUrlInput(
         readOnly={readOnly}
         required={required}
         placeholder={property.description || "https://example.com"}
-        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className={FIELD_CONTROL_CLASS}
         disabled={readOnly}
       />
       {stringValue && (
@@ -319,10 +331,10 @@ function renderUrlInput(
           href={stringValue}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-600 hover:text-blue-800"
+          className={FIELD_LINK_CLASS}
           title="Open link"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
         </a>
@@ -341,7 +353,7 @@ function renderEmailInput(
   const stringValue = typeof value === "string" ? value : "";
   
   return (
-    <div className="flex items-center gap-2">
+    <div className={FIELD_INLINE_CLASS}>
       <input
         type="email"
         value={stringValue}
@@ -349,16 +361,16 @@ function renderEmailInput(
         readOnly={readOnly}
         required={required}
         placeholder={property.description || "email@example.com"}
-        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className={FIELD_CONTROL_CLASS}
         disabled={readOnly}
       />
       {stringValue && (
         <a
           href={`mailto:${stringValue}`}
-          className="text-blue-600 hover:text-blue-800"
+          className={FIELD_LINK_CLASS}
           title="Send email"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
         </a>
@@ -377,7 +389,7 @@ function renderPhoneInput(
   const stringValue = typeof value === "string" ? value : "";
   
   return (
-    <div className="flex items-center gap-2">
+    <div className={FIELD_INLINE_CLASS}>
       <input
         type="tel"
         value={stringValue}
@@ -385,16 +397,16 @@ function renderPhoneInput(
         readOnly={readOnly}
         required={required}
         placeholder={property.description || "+1 234 567 8900"}
-        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className={FIELD_CONTROL_CLASS}
         disabled={readOnly}
       />
       {stringValue && (
         <a
           href={`tel:${stringValue}`}
-          className="text-blue-600 hover:text-blue-800"
+          className={FIELD_LINK_CLASS}
           title="Call number"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
           </svg>
         </a>
@@ -413,19 +425,19 @@ function renderFileInput(
   
   // TODO: Implement file picker with vault file browser
   return (
-    <div className="space-y-2">
+    <div className={FIELD_MULTISELECT_CLASS}>
       <input
         type="text"
         value={stringValue}
         onChange={(e) => onChange(e.target.value)}
         readOnly={readOnly}
         placeholder="Path to file in vault"
-        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className={FIELD_CONTROL_CLASS}
         disabled={readOnly}
       />
       {stringValue && (
-        <div className="text-xs text-gray-600 flex items-center gap-1">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={FIELD_HELPER_CLASS}>
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
           </svg>
           <span>{stringValue}</span>
@@ -445,22 +457,22 @@ function renderImageInput(
   
   // TODO: Implement image picker with preview
   return (
-    <div className="space-y-2">
+    <div className={FIELD_MULTISELECT_CLASS}>
       <input
         type="text"
         value={stringValue}
         onChange={(e) => onChange(e.target.value)}
         readOnly={readOnly}
         placeholder="Path to image in vault"
-        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className={FIELD_CONTROL_CLASS}
         disabled={readOnly}
       />
       {stringValue && (
-        <div className="border border-gray-300 rounded p-2">
+        <div className={FIELD_PREVIEW_CLASS}>
           <img
             src={stringValue}
             alt="Preview"
-            className="max-w-full h-auto max-h-48 rounded"
+            className={FIELD_PREVIEW_IMAGE_CLASS}
             onError={(e) => {
               e.currentTarget.style.display = "none";
             }}

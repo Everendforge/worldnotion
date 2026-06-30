@@ -1,50 +1,203 @@
 {
   "specVersion": "0.1",
   "projectId": "pathbranching:universe-of-notion",
-  "name": "Universe of Notion: First Road Demo",
+  "name": "Branching Story",
   "sourceVault": {
     "kind": "worldnotion",
     "relativePath": "."
   },
-  "entrySequenceId": "sequence:mara-first-road",
   "canonRefs": [
     {
-      "id": "demo-universe",
-      "kind": "universe",
-      "label": "demo-universe",
-      "preview": "# demo-universe\nHola este universo es god dasdadasd",
+      "id": "characters-folder",
+      "kind": "folder-description",
+      "label": "Characters",
+      "preview": "# Characters\n\nCast notes, viewpoint characters, factions-as-people, and recurring figures.a\n\nCameelo\ndasdasdasddsadasd",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": true,
       "source": "worldnotion",
-      "canonSourcePath": "demo-universe.md"
-    },
-    {
-      "id": "mara-voss",
-      "kind": "character",
-      "label": "Mara Voss",
-      "preview": "# Mara Voss\n\nMara is a cartographer tracking the old roads beneath [[Ash Gate]] for the [[Glass Cartographers]].\nShe believes the [[Iron Meridian]] is not a myth but a broken navigation system.",
-      "source": "worldnotion",
-      "canonSourcePath": "Characters/Mara-Voss.md"
+      "canonSourcePath": "Characters.md"
     },
     {
       "id": "kellan-or",
       "kind": "character",
       "label": "Kellan Or",
-      "preview": "# Kellan Or\n\nKellan Or is a cistern scout who sells route rumors to anyone willing to cross the [[Old Roads]].",
+      "preview": "# Kellan Or\n\nKellan Or is a cistern scout who sells route rumors to anyone willing to cross the [[Old Roads]].\n\nHe once carried the [[Glass Key]] for the [[Ashen Choir]], but he claims the key changed hands before [[Mara Voss]] arrived at [[Ash Gate]].\n\n## Playable Pressure\n\n- Kellan can become an ally if Mara shares the truth of the [[Iron Meridian]].\n- He withholds cistern access unless the player has the [[Cinder Lantern]] or a favor from the [[Glass Cartographers]].",
+      "tags": [
+        "scout",
+        "rival"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
       "canonSourcePath": "Characters/Kellan-Or.md"
+    },
+    {
+      "id": "mara-voss",
+      "kind": "character",
+      "label": "Mara Voss",
+      "preview": "# Mara Voss\n\nMara is a cartographer tracking the old roads beneath [[Ash Gate]] for the [[Glass Cartographers]].\nShe believes the [[Iron Meridian]] is not a myth but a broken navigation system.\ndsadasd\n\n## Current Thread\n\n- Follow the signal from the [[Iron Meridian]].\n- Decide whether the [[First Road]] is a route, a ritual, or a memory.\n- dasdasdasd",
+      "tags": [],
+      "status": "canon",
+      "favorite": false,
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Characters/Mara-Voss.md"
     },
     {
       "id": "sera-nym",
       "kind": "character",
       "label": "Sera Nym",
-      "preview": "# Sera Nym\n\nSera Nym is a silent archivist embedded inside the [[Glass Cartographers]] on behalf of the [[Ashen Choir]].",
+      "preview": "# Sera Nym\n\nSera Nym is a silent archivist embedded inside the [[Glass Cartographers]] on behalf of the [[Ashen Choir]].\n\nShe believes the [[First Road]] should stay buried because every opened route demands a [[Resonance Debt]] from the traveler who names it.\n\n## Branch Use\n\nSera is the pressure point for routes that trade knowledge for safety.",
+      "tags": [
+        "archivist",
+        "choir"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
       "canonSourcePath": "Characters/Sera-Nym.md"
+    },
+    {
+      "id": "concepts-folder",
+      "kind": "folder-description",
+      "label": "Concepts",
+      "preview": "# Concepts\n\nDescription of this folder's contents.",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Concepts.md"
+    },
+    {
+      "id": "first-road",
+      "kind": "concept",
+      "label": "First Road",
+      "preview": "# First Road\n\nThe First Road is the original decision-route beneath [[Ash Gate]].\n\nUnlike the [[Old Roads]], it does not connect places. It connects a person to the version of themselves that made a different promise.\n\nThe [[Iron Meridian]] can locate it only after the player resolves who owns the [[Glass Key]].",
+      "tags": [
+        "myth",
+        "threshold"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Concepts/First-Road.md"
+    },
+    {
+      "id": "old-roads",
+      "kind": "concept",
+      "label": "Old Roads",
+      "preview": "# Old Roads\n\nThe Old Roads are buried routes that connect decisions instead of places.\n\nThe [[Iron Meridian]] can sense them, and the [[Glass Cartographers]] keep partial surveys below [[Ash Gate]].",
+      "tags": [
+        "myth",
+        "travel"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Concepts/Old-Roads.md"
+    },
+    {
+      "id": "resonance-debt",
+      "kind": "concept",
+      "label": "Resonance Debt",
+      "preview": "# Resonance Debt\n\nResonance Debt is the price paid when a traveler forces an [[Old Roads]] route to remember them.\n\nThe debt can be paid with memory, an oath, or a carried flame from the [[Cinder Lantern]].\n\nThe [[Ashen Choir]] calls it justice. [[Mara Voss]] calls it blackmail.",
+      "tags": [
+        "cost",
+        "magic"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Concepts/Resonance-Debt.md"
+    },
+    {
+      "id": "items-folder",
+      "kind": "folder-description",
+      "label": "Items",
+      "preview": "# Items\n\nDescription of this folder's content",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Items.md"
+    },
+    {
+      "id": "cinder-lantern",
+      "kind": "item",
+      "label": "Cinder Lantern",
+      "preview": "# Cinder Lantern\n\nThe Cinder Lantern is a miner's lamp modified by the [[Glass Cartographers]] to reveal false passages.\n\nIts blue flame exposes ash-thread traps inside the [[Ember Cistern]].\n\nWhen carried onto the [[First Road]], it can absorb one [[Resonance Debt]] before going dark.",
+      "tags": [
+        "tool",
+        "light"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Items/Cinder-Lantern.md"
+    },
+    {
+      "id": "glass-key",
+      "kind": "item",
+      "label": "Glass Key",
+      "preview": "# Glass Key\n\nThe Glass Key is a brittle charm that opens cartographic locks in the lower archive.\n\nIt belonged to [[Kellan Or]] before [[Sera Nym]] claimed it for the [[Ashen Choir]].\n\nIt can tune the [[Iron Meridian]] toward the [[First Road]] or shatter to erase one [[Resonance Debt]].",
+      "tags": [
+        "key",
+        "ritual"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Items/Glass-Key.md"
+    },
+    {
+      "id": "iron-meridian",
+      "kind": "item",
+      "label": "Iron Meridian",
+      "preview": "# Iron Meridian\n\nThe Iron Meridian is a relic compass that points toward decisions instead of north.\n\nIt last activated below [[Ash Gate]], where [[Mara Voss]] found a route marker for the [[First Road]].",
+      "tags": [
+        "artifact"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Items/Iron-Meridian.md"
+    },
+    {
+      "id": "locations-folder",
+      "kind": "folder-description",
+      "label": "Locations",
+      "preview": "# Locations\n\nPlaces, routes, settlements, regions, and sites used by the active universe.",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Locations.md"
     },
     {
       "id": "ash-gate",
       "kind": "location",
       "label": "Ash Gate",
-      "preview": "# Ash Gate\n\nAsh Gate is a trade city built against black basalt cliffs.",
+      "preview": "# Ash Gate\n\nAsh Gate is a trade city built against black basalt cliffs.\n\nMara Voss begins her search here after receiving the [[Iron Meridian]].\n\nThe city archive is managed by the [[Glass Cartographers]].\n\nAs it began",
+      "tags": [
+        "city",
+        "frontier"
+      ],
+      "status": "canon",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
       "canonSourcePath": "Locations/Ash-Gate.md"
     },
@@ -52,902 +205,267 @@
       "id": "ember-cistern",
       "kind": "location",
       "label": "Ember Cistern",
-      "preview": "# Ember Cistern\n\nThe Ember Cistern sits below [[Ash Gate]], where hot springs keep the old tunnels breathing.",
+      "preview": "# Ember Cistern\n\nThe Ember Cistern sits below [[Ash Gate]], where hot springs keep the old tunnels breathing.\n\nIts sluice gates hide a marker for the [[First Road]], but the [[Ashen Choir]] marks every trespass with ash-thread.\n\nThe [[Cinder Lantern]] burns blue when the cistern is lying.",
+      "tags": [
+        "underground",
+        "waterworks"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
       "canonSourcePath": "Locations/Ember-Cistern.md"
     },
     {
-      "id": "glass-cartographers",
-      "kind": "organization",
-      "label": "Glass Cartographers",
-      "preview": "# Glass Cartographers\n\nThe Glass Cartographers maintain the civic maps of [[Ash Gate]] and suppress records of the [[First Road]].",
+      "id": "organizations-folder",
+      "kind": "folder-description",
+      "label": "Organizations",
+      "preview": "# Organizations\n\nDescription of this folder's contents.",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": true,
       "source": "worldnotion",
-      "canonSourcePath": "Organizations/Glass-Cartographers.md"
+      "canonSourcePath": "Organizations.md"
     },
     {
       "id": "ashen-choir",
       "kind": "organization",
       "label": "Ashen Choir",
-      "preview": "# Ashen Choir\n\nThe Ashen Choir guards the thresholds below [[Ash Gate]] and teaches that every road has a voice.",
+      "preview": "# Ashen Choir\n\nThe Ashen Choir guards the thresholds below [[Ash Gate]] and teaches that every road has a voice.\n\nThey cooperate with the [[Glass Cartographers]] in public, but privately they steal surveys that mention the [[Old Roads]].\n\nTheir oldest rite requires the [[Glass Key]] and a traveler willing to accept a [[Resonance Debt]].",
+      "tags": [
+        "cult",
+        "custodians"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
       "canonSourcePath": "Organizations/Ashen-Choir.md"
     },
     {
-      "id": "old-roads",
-      "kind": "concept",
-      "label": "Old Roads",
-      "preview": "# Old Roads\n\nThe Old Roads are buried routes that connect decisions instead of places.",
+      "id": "glass-cartographers",
+      "kind": "organization",
+      "label": "Glass Cartographers",
+      "preview": "# Glass Cartographers\n\nThe Glass Cartographers maintain the civic maps of [[Ash Gate]] and suppress records of the [[First Road]].\n\nThey trained [[Mara Voss]], but no longer trust what she found in the [[Iron Meridian]].",
+      "tags": [
+        "guild",
+        "archive"
+      ],
+      "status": "canon",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
-      "canonSourcePath": "Concepts/Old-Roads.md"
+      "canonSourcePath": "Organizations/Glass-Cartographers.md"
     },
     {
-      "id": "first-road",
-      "kind": "concept",
-      "label": "First Road",
-      "preview": "# First Road\n\nThe First Road is the original decision-route beneath [[Ash Gate]].",
+      "id": "stories-folder",
+      "kind": "folder-description",
+      "label": "Stories",
+      "preview": "# Stories\nDescription of this folder's contents.",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": true,
       "source": "worldnotion",
-      "canonSourcePath": "Concepts/First-Road.md"
-    },
-    {
-      "id": "resonance-debt",
-      "kind": "concept",
-      "label": "Resonance Debt",
-      "preview": "# Resonance Debt\n\nResonance Debt is the price paid when a traveler forces an [[Old Roads]] route to remember them.",
-      "source": "worldnotion",
-      "canonSourcePath": "Concepts/Resonance-Debt.md"
-    },
-    {
-      "id": "iron-meridian",
-      "kind": "item",
-      "label": "Iron Meridian",
-      "preview": "# Iron Meridian\n\nThe Iron Meridian is a relic compass that points toward decisions instead of north.",
-      "source": "worldnotion",
-      "canonSourcePath": "Items/Iron-Meridian.md"
-    },
-    {
-      "id": "glass-key",
-      "kind": "item",
-      "label": "Glass Key",
-      "preview": "# Glass Key\n\nThe Glass Key is a brittle charm that opens cartographic locks in the lower archive.",
-      "source": "worldnotion",
-      "canonSourcePath": "Items/Glass-Key.md"
-    },
-    {
-      "id": "cinder-lantern",
-      "kind": "item",
-      "label": "Cinder Lantern",
-      "preview": "# Cinder Lantern\n\nThe Cinder Lantern is a miner's lamp modified by the [[Glass Cartographers]] to reveal false passages.",
-      "source": "worldnotion",
-      "canonSourcePath": "Items/Cinder-Lantern.md"
+      "canonSourcePath": "Stories.md"
     },
     {
       "id": "first-road-story",
       "kind": "story",
       "label": "First Road",
-      "preview": "# First Road\n\nMara Voss follows the [[Iron Meridian]] from the lower archive of [[Ash Gate]] into the [[Ember Cistern]].",
+      "preview": "# First Road\n\nMara Voss follows the [[Iron Meridian]] from the lower archive of [[Ash Gate]] into the [[Ember Cistern]].\n\nThe path splits around three questions: who holds the [[Glass Key]], whether the [[Ashen Choir]] can be trusted, and what kind of [[Resonance Debt]] Mara is willing to carry.",
+      "tags": [
+        "act-one"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
       "canonSourcePath": "Stories/First-Road.md"
     },
     {
-      "id": "basalt-archive-scene",
-      "kind": "scene",
-      "label": "The Basalt Archive",
-      "preview": "# The Basalt Archive\n\n[[Mara Voss]] breaks into the lower archive of [[Ash Gate]] and finds a sealed survey from the [[Glass Cartographers]].",
+      "id": "scenes-folder",
+      "kind": "folder-description",
+      "label": "Scenes",
+      "preview": "# Scenes\n\nDescription of this folder's contents.\ndasdas",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": true,
       "source": "worldnotion",
-      "canonSourcePath": "Stories/Scenes/The-Basalt-Archive.md"
-    },
-    {
-      "id": "market-interference-scene",
-      "kind": "scene",
-      "label": "Market Interference",
-      "preview": "# Market Interference\n\n[[Mara Voss]] follows a false needle-reading through the ash market and discovers [[Kellan Or]] bargaining with a courier from the [[Ashen Choir]].",
-      "source": "worldnotion",
-      "canonSourcePath": "Stories/Scenes/Market-Interference.md"
+      "canonSourcePath": "Stories/Scenes.md"
     },
     {
       "id": "cistern-threshold-scene",
       "kind": "scene",
       "label": "Cistern Threshold",
-      "preview": "# Cistern Threshold\n\nAt the sealed sluice below [[Ash Gate]], [[Mara Voss]] must decide whether to burn the [[Cinder Lantern]], bargain with [[Sera Nym]], or trust [[Kellan Or]] with the route.",
+      "preview": "# Cistern Threshold\n\nAt the sealed sluice below [[Ash Gate]], [[Mara Voss]] must decide whether to burn the [[Cinder Lantern]], bargain with [[Sera Nym]], or trust [[Kellan Or]] with the route.\n\nThis scene is a branch hub for inventory, trust, and knowledge conditions.",
+      "tags": [
+        "act-one",
+        "branch"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
       "canonSourcePath": "Stories/Scenes/Cistern-Threshold.md"
+    },
+    {
+      "id": "market-interference-scene",
+      "kind": "scene",
+      "label": "Market Interference",
+      "preview": "# Market Interference\n\n[[Mara Voss]] follows a false needle-reading through the ash market and discovers [[Kellan Or]] bargaining with a courier from the [[Ashen Choir]].\n\nThe scene can reveal the [[Glass Key]], expose [[Sera Nym]], or force Mara to chase Kellan into the [[Ember Cistern]] without preparation.",
+      "tags": [
+        "act-one",
+        "branch"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Stories/Scenes/Market-Interference.md"
     },
     {
       "id": "road-under-ash-scene",
       "kind": "scene",
       "label": "Road Under Ash",
-      "preview": "# Road Under Ash\n\nThe [[First Road]] opens beneath the [[Ember Cistern]] and asks [[Mara Voss]] which promise she wants to preserve.",
+      "preview": "# Road Under Ash\n\nThe [[First Road]] opens beneath the [[Ember Cistern]] and asks [[Mara Voss]] which promise she wants to preserve.\n\nThe ending depends on whether the player carries the [[Glass Key]], the [[Cinder Lantern]], or an unpaid [[Resonance Debt]].",
+      "tags": [
+        "act-one",
+        "finale"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
       "canonSourcePath": "Stories/Scenes/Road-Under-Ash.md"
     },
     {
-      "id": "ridina",
+      "id": "basalt-archive-scene",
       "kind": "scene",
-      "label": "Ridina Pemarik",
-      "preview": "# Ridina\n\nA scratch scene kept in the demo as a formatting and outline stress test.",
+      "label": "The Basalt Archive",
+      "preview": "# The Basalt Archive\n\n[[Mara Voss]] breaks into the lower archive of [[Ash Gate]] and finds a sealed survey from the [[Glass Cartographers]].\n\nThe survey points to the [[Old Roads]] but contradicts the pull of the [[Iron Meridian]].",
+      "tags": [
+        "act-one"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "folderDescription": false,
       "source": "worldnotion",
-      "canonSourcePath": "Ridina Pemarik.md"
-    }
-  ],
-  "dataClasses": [
-    {
-      "id": "class:RouteKnowledge",
-      "label": "Route Knowledge",
-      "category": "canonProjection",
-      "roles": ["unlockable", "conditionTarget"],
-      "fields": [
-        { "name": "sourceRef", "type": "canonRef", "required": true },
-        { "name": "title", "type": "text", "required": true },
-        { "name": "summary", "type": "text" },
-        { "name": "certainty", "type": "number" }
-      ]
+      "canonSourcePath": "Stories/Scenes/The-Basalt-Archive.md"
     },
     {
-      "id": "class:RuntimeItem",
-      "label": "Runtime Item",
-      "category": "runtime",
-      "roles": ["inventory", "conditionTarget"],
-      "fields": [
-        { "name": "sourceRef", "type": "canonRef", "required": true },
-        { "name": "title", "type": "text", "required": true },
-        { "name": "runtimeKey", "type": "text", "required": true },
-        { "name": "charges", "type": "number" }
-      ]
-    },
-    {
-      "id": "class:FactionState",
-      "label": "Faction State",
-      "category": "runtime",
-      "roles": ["conditionTarget"],
-      "fields": [
-        { "name": "sourceRef", "type": "canonRef", "required": true },
-        { "name": "trust", "type": "number", "required": true },
-        { "name": "stance", "type": "select", "options": ["hostile", "watching", "helpful"], "required": true }
-      ]
+      "id": "demo-universe",
+      "kind": "universe",
+      "label": "demo-universe",
+      "preview": "# demo-universe\nHola este universo es god dasdadasd",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "demo-universe.md"
     }
   ],
-  "projectionRules": [
-    {
-      "id": "projection:concept-to-route-knowledge",
-      "label": "WorldNotion concept to RouteKnowledge",
-      "from": {
-        "layer": "worldnotion",
-        "type": "concept",
-        "role": "unlockable"
-      },
-      "to": {
-        "layer": "pathbranching",
-        "classId": "class:RouteKnowledge"
-      },
-      "fieldMappings": [
-        { "targetField": "sourceRef", "sourcePath": "$source.id", "required": true },
-        { "targetField": "title", "sourcePath": "$source.name", "required": true },
-        { "targetField": "summary", "sourcePath": "$source.body" }
-      ]
-    }
-  ],
-  "graphModules": [
-    {
-      "id": "module:data.route-knowledge",
-      "label": "Route Knowledge",
-      "graph": "data",
-      "nodeType": "routeKnowledge",
-      "dataClassId": "class:RouteKnowledge",
-      "ports": [
-        { "id": "source", "direction": "input", "accepts": ["canonRef"], "required": true },
-        { "id": "runtime", "direction": "output", "accepts": ["class:RouteKnowledge"] }
-      ]
-    },
-    {
-      "id": "module:data.runtime-item",
-      "label": "Runtime Item",
-      "graph": "data",
-      "nodeType": "runtimeItem",
-      "dataClassId": "class:RuntimeItem",
-      "ports": [
-        { "id": "source", "direction": "input", "accepts": ["canonRef"], "required": true },
-        { "id": "inventory", "direction": "output", "accepts": ["class:RuntimeItem"] }
-      ]
-    }
-  ],
+  "dataClasses": [],
+  "projectionRules": [],
+  "graphModules": [],
   "sequences": [
     {
-      "id": "sequence:mara-first-road",
-      "name": "Mara Voss: The First Road",
-      "characterRef": "mara-voss",
-      "entryEventId": "event:basalt-archive",
+      "id": "sequence:new-route",
+      "name": "New Sequence",
+      "entryEventId": "event:sequence:new-route:entry",
       "eventIds": [
-        "event:basalt-archive",
-        "event:market-interference",
-        "event:cistern-threshold",
-        "event:road-under-ash"
+        "event:sequence:new-route:entry",
+        "event:sequence:new-route:normal"
       ],
-      "branchIds": ["branch:archive-route", "branch:cistern-route"],
-      "ruleSets": [
-        {
-          "id": "rule:sequence:meridian-equipped",
-          "label": "Mara starts with the Iron Meridian",
-          "when": {
-            "all": [
-              { "type": "runtimeItem", "itemId": "data:item:iron-meridian", "operator": "has" }
-            ]
-          },
-          "then": [
-            { "type": "setVariable", "name": "meridianReady", "value": true }
-          ]
-        }
-      ],
-      "legacyUnity": {
-        "scriptableObject": "SequenceData",
-        "assetName": "MaraFirstRoad"
-      }
-    },
-    {
-      "id": "sequence:kellan-cistern",
-      "name": "Kellan Or: Cistern Debt",
-      "characterRef": "kellan-or",
-      "entryEventId": "event:kellan-deal",
-      "eventIds": [
-        "event:kellan-deal",
-        "event:road-under-ash"
-      ],
-      "branchIds": [],
-      "availability": {
-        "any": [
-          { "type": "canonEntryUnlocked", "ref": "glass-key" },
-          { "type": "visited", "targetType": "event", "targetId": "event:market-interference" }
-        ]
-      },
-      "legacyUnity": {
-        "scriptableObject": "SequenceData",
-        "assetName": "KellanCisternDebt"
-      }
+      "branchIds": []
     }
   ],
-  "branches": [
-    {
-      "id": "branch:archive-route",
-      "title": "Archive Route",
-      "description": "Investigate the lower archive before entering the cistern.",
-      "eventIds": ["event:basalt-archive", "event:market-interference"],
-      "availability": {
-        "all": [
-          { "type": "runtimeItem", "itemId": "data:item:iron-meridian", "operator": "has" }
-        ]
-      }
-    },
-    {
-      "id": "branch:cistern-route",
-      "title": "Cistern Route",
-      "description": "Cross the Ember Cistern with whatever tools and allies the player has earned.",
-      "eventIds": ["event:cistern-threshold", "event:road-under-ash"],
-      "availability": {
-        "any": [
-          { "type": "dataObjectExists", "objectId": "data:knowledge:first-road-marker" },
-          { "type": "runtimeItem", "itemId": "data:item:glass-key", "operator": "has" }
-        ]
-      }
-    }
-  ],
+  "branches": [],
   "events": [
     {
-      "id": "event:basalt-archive",
-      "legacyId": "FR-001",
-      "name": "The Basalt Archive",
-      "type": "exploration",
-      "branchRef": "branch:archive-route",
-      "script": {
-        "id": "script:basalt-archive",
-        "format": "ink",
-        "sourcePath": "Stories/FirstRoad/BasaltArchive.ink",
-        "compiledPath": "Stories/FirstRoad/BasaltArchive.json",
-        "entrySection": "Start"
-      },
-      "canonRefs": [
-        "basalt-archive-scene",
-        "mara-voss",
-        "ash-gate",
-        "glass-cartographers",
-        "iron-meridian",
-        "old-roads"
-      ],
-      "decisions": [
-        {
-          "id": "decision:read-or-steal-survey",
-          "name": "Handle the sealed survey",
-          "description": "Mara decides whether to copy, steal, or destroy the cartographers' survey.",
-          "type": "dialogue",
-          "outcomes": [
-            {
-              "id": "outcome:copy-survey",
-              "name": "Copy the survey quietly",
-              "description": "Gain route knowledge without immediately angering the guild.",
-              "consequences": [
-                { "type": "unlockDataObject", "objectId": "data:knowledge:archive-survey" },
-                { "type": "unlockCanonEntry", "ref": "old-roads" },
-                { "type": "setVariable", "name": "cartographerSuspicion", "value": 1 }
-              ]
-            },
-            {
-              "id": "outcome:steal-survey",
-              "name": "Steal the sealed survey",
-              "description": "Faster evidence, higher heat.",
-              "consequences": [
-                { "type": "unlockDataObject", "objectId": "data:knowledge:archive-survey" },
-                { "type": "setVariable", "name": "cartographerSuspicion", "value": 3 },
-                { "type": "engineSignal", "name": "SpawnPursuit", "arguments": ["glass-cartographers"] }
-              ]
-            }
-          ]
-        }
-      ],
-      "unlocks": [
-        { "type": "unlockCanonEntry", "ref": "basalt-archive-scene" },
-        { "type": "unlockCanonEntry", "ref": "old-roads" }
-      ],
-      "transitions": [
-        {
-          "id": "transition:basalt-archive-to-market",
-          "from": "event:basalt-archive",
-          "to": "event:market-interference",
-          "label": "follow false needle",
-          "conditions": {
-            "all": [
-              { "type": "dataObjectExists", "objectId": "data:knowledge:archive-survey" }
-            ]
-          },
-          "source": "graph"
-        },
-        {
-          "id": "transition:basalt-archive-to-cistern",
-          "from": "event:basalt-archive",
-          "to": "event:cistern-threshold",
-          "label": "descend immediately",
-          "conditions": {
-            "all": [
-              { "type": "runtimeItem", "itemId": "data:item:iron-meridian", "operator": "has" }
-            ]
-          },
-          "consequences": [
-            { "type": "setVariable", "name": "marketSkipped", "value": true }
-          ],
-          "source": "graph"
-        }
-      ],
-      "legacyUnity": {
-        "scriptableObject": "EventsData",
-        "assetName": "EVT_BASALT_ARCHIVE",
-        "eventID": "FR-001"
-      }
-    },
-    {
-      "id": "event:market-interference",
-      "legacyId": "FR-002",
-      "name": "Market Interference",
+      "id": "event:sequence:new-route:entry",
+      "name": "Opening Event",
       "type": "normal",
-      "branchRef": "branch:archive-route",
-      "script": {
-        "id": "script:market-interference",
-        "format": "ink",
-        "sourcePath": "Stories/FirstRoad/MarketInterference.ink",
-        "compiledPath": "Stories/FirstRoad/MarketInterference.json",
-        "entrySection": "Start"
+      "text": {
+        "format": "plain",
+        "content": ""
       },
-      "canonRefs": [
-        "market-interference-scene",
-        "mara-voss",
-        "kellan-or",
-        "sera-nym",
-        "ash-gate",
-        "ashen-choir",
-        "glass-key"
-      ],
-      "decisions": [
-        {
-          "id": "decision:kellan-bargain",
-          "name": "Bargain with Kellan",
-          "description": "Choose whether to pay, threaten, or trust Kellan.",
-          "type": "dialogue",
-          "outcomes": [
-            {
-              "id": "outcome:buy-key",
-              "name": "Buy the Glass Key",
-              "description": "Spend leverage to claim the key openly.",
-              "requiredCanonRefs": ["glass-key"],
-              "consequences": [
-                { "type": "unlockDataObject", "objectId": "data:item:glass-key" },
-                { "type": "unlockCanonEntry", "ref": "glass-key" },
-                { "type": "setVariable", "name": "kellanTrust", "value": 2 }
-              ]
-            },
-            {
-              "id": "outcome:expose-sera",
-              "name": "Expose Sera's courier",
-              "description": "Turn the market against the Choir agent.",
-              "consequences": [
-                { "type": "unlockCanonEntry", "ref": "sera-nym" },
-                { "type": "setVariable", "name": "choirSuspicion", "value": 2 },
-                { "type": "engineSignal", "name": "FactionPulse", "arguments": ["ashen-choir", "hostile"] }
-              ]
-            }
-          ]
-        }
-      ],
-      "unlocks": [
-        { "type": "unlockCanonEntry", "ref": "market-interference-scene" },
-        { "type": "unlockCanonEntry", "ref": "kellan-or" }
-      ],
+      "canonRefs": [],
       "transitions": [
         {
-          "id": "transition:market-to-cistern",
-          "from": "event:market-interference",
-          "to": "event:cistern-threshold",
-          "label": "take the cistern lead",
-          "source": "graph"
-        },
-        {
-          "id": "transition:market-to-kellan-sequence",
-          "from": "event:market-interference",
-          "to": "event:kellan-deal",
-          "label": "follow Kellan",
-          "conditions": {
-            "any": [
-              { "type": "canonEntryUnlocked", "ref": "kellan-or" },
-              { "type": "dataObjectField", "objectId": "data:item:glass-key", "field": "runtimeKey", "operator": "exists" }
-            ]
-          },
+          "id": "transition:event:sequence:new-route:entry:event:sequence:new-route:normal:1",
+          "from": "event:sequence:new-route:entry",
+          "to": "event:sequence:new-route:normal",
+          "label": "transition",
           "source": "graph"
         }
-      ],
-      "legacyUnity": {
-        "scriptableObject": "EventsData",
-        "assetName": "EVT_MARKET_INTERFERENCE",
-        "eventID": "FR-002"
-      }
+      ]
     },
     {
-      "id": "event:cistern-threshold",
-      "legacyId": "FR-003",
-      "name": "Cistern Threshold",
-      "type": "exploration",
-      "branchRef": "branch:cistern-route",
-      "script": {
-        "id": "script:cistern-threshold",
-        "format": "ink",
-        "sourcePath": "Stories/FirstRoad/CisternThreshold.ink",
-        "compiledPath": "Stories/FirstRoad/CisternThreshold.json",
-        "entrySection": "Start"
-      },
-      "canonRefs": [
-        "cistern-threshold-scene",
-        "mara-voss",
-        "ember-cistern",
-        "cinder-lantern",
-        "ashen-choir",
-        "resonance-debt",
-        "first-road"
-      ],
-      "availability": {
-        "any": [
-          { "type": "runtimeItem", "itemId": "data:item:glass-key", "operator": "has" },
-          { "type": "dataObjectExists", "objectId": "data:knowledge:archive-survey" }
-        ]
-      },
-      "decisions": [
-        {
-          "id": "decision:open-sluice",
-          "name": "Open the sealed sluice",
-          "description": "Inventory and knowledge decide how expensive the threshold becomes.",
-          "type": "dialogue",
-          "outcomes": [
-            {
-              "id": "outcome:use-glass-key",
-              "name": "Use the Glass Key",
-              "conditions": {
-                "all": [
-                  { "type": "runtimeItem", "itemId": "data:item:glass-key", "operator": "has" }
-                ]
-              },
-              "consequences": [
-                { "type": "unlockCanonEntry", "ref": "first-road" },
-                { "type": "unlockDataObject", "objectId": "data:knowledge:first-road-marker" },
-                { "type": "setVariable", "name": "resonanceDebt", "value": 0 }
-              ]
-            },
-            {
-              "id": "outcome:burn-lantern",
-              "name": "Burn the Cinder Lantern",
-              "conditions": {
-                "all": [
-                  { "type": "runtimeItem", "itemId": "data:item:cinder-lantern", "operator": "has" }
-                ]
-              },
-              "consequences": [
-                { "type": "unlockCanonEntry", "ref": "resonance-debt" },
-                { "type": "setVariable", "name": "resonanceDebt", "value": 1 }
-              ]
-            },
-            {
-              "id": "outcome:accept-debt",
-              "name": "Accept the Choir's debt",
-              "consequences": [
-                { "type": "unlockCanonEntry", "ref": "ashen-choir" },
-                { "type": "setVariable", "name": "resonanceDebt", "value": 2 },
-                { "type": "engineSignal", "name": "MarkPlayer", "arguments": ["ash-thread"] }
-              ]
-            }
-          ]
-        }
-      ],
-      "unlocks": [
-        { "type": "unlockCanonEntry", "ref": "cistern-threshold-scene" },
-        { "type": "unlockCanonEntry", "ref": "ember-cistern" }
-      ],
-      "transitions": [
-        {
-          "id": "transition:cistern-to-road",
-          "from": "event:cistern-threshold",
-          "to": "event:road-under-ash",
-          "label": "cross the threshold",
-          "conditions": {
-            "any": [
-              { "type": "canonEntryUnlocked", "ref": "first-road" },
-              { "type": "variable", "name": "resonanceDebt", "operator": ">=", "value": 1 }
-            ]
-          },
-          "source": "graph"
-        }
-      ],
-      "legacyUnity": {
-        "scriptableObject": "EventsData",
-        "assetName": "EVT_CISTERN_THRESHOLD",
-        "eventID": "FR-003"
-      }
-    },
-    {
-      "id": "event:kellan-deal",
-      "legacyId": "KO-001",
-      "name": "Kellan's Cistern Deal",
+      "id": "event:sequence:new-route:normal",
+      "name": "New Event",
       "type": "normal",
-      "branchRef": null,
-      "script": {
-        "id": "script:kellan-deal",
-        "format": "ink",
-        "sourcePath": "Stories/FirstRoad/KellanDeal.ink",
-        "compiledPath": "Stories/FirstRoad/KellanDeal.json",
-        "entrySection": "Start"
+      "text": {
+        "format": "plain",
+        "content": ""
       },
-      "canonRefs": [
-        "kellan-or",
-        "glass-key",
-        "ember-cistern",
-        "ashen-choir"
-      ],
-      "availability": {
-        "any": [
-          { "type": "canonEntryUnlocked", "ref": "kellan-or" },
-          { "type": "visited", "targetType": "event", "targetId": "event:market-interference" }
-        ]
-      },
-      "decisions": [
-        {
-          "id": "decision:kellan-price",
-          "name": "Set Kellan's price",
-          "description": "Decide whether Kellan receives trust, coin, or leverage.",
-          "type": "dialogue",
-          "outcomes": [
-            {
-              "id": "outcome:promise-safe-passage",
-              "name": "Promise safe passage",
-              "consequences": [
-                { "type": "setVariable", "name": "kellanTrust", "value": 3 },
-                { "type": "unlockCanonEntry", "ref": "ember-cistern" }
-              ]
-            },
-            {
-              "id": "outcome:take-key-by-force",
-              "name": "Take the key by force",
-              "consequences": [
-                { "type": "unlockDataObject", "objectId": "data:item:glass-key" },
-                { "type": "setVariable", "name": "kellanTrust", "value": -1 },
-                { "type": "engineSignal", "name": "StartAmbush", "arguments": ["cistern-scouts"] }
-              ]
-            }
-          ]
-        }
-      ],
-      "unlocks": [
-        { "type": "unlockCanonEntry", "ref": "kellan-or" }
-      ],
-      "transitions": [
-        {
-          "id": "transition:kellan-to-road",
-          "from": "event:kellan-deal",
-          "to": "event:road-under-ash",
-          "label": "let Kellan guide the road",
-          "conditions": {
-            "any": [
-              { "type": "runtimeItem", "itemId": "data:item:glass-key", "operator": "has" },
-              { "type": "variable", "name": "kellanTrust", "operator": ">=", "value": 3 }
-            ]
-          },
-          "source": "graph"
-        }
-      ],
-      "legacyUnity": {
-        "scriptableObject": "EventsData",
-        "assetName": "EVT_KELLAN_DEAL",
-        "eventID": "KO-001"
-      }
-    },
-    {
-      "id": "event:road-under-ash",
-      "legacyId": "FR-004",
-      "name": "Road Under Ash",
-      "type": "final",
-      "branchRef": "branch:cistern-route",
-      "script": {
-        "id": "script:road-under-ash",
-        "format": "ink",
-        "sourcePath": "Stories/FirstRoad/RoadUnderAsh.ink",
-        "compiledPath": "Stories/FirstRoad/RoadUnderAsh.json",
-        "entrySection": "Start"
-      },
-      "canonRefs": [
-        "road-under-ash-scene",
-        "mara-voss",
-        "kellan-or",
-        "first-road",
-        "resonance-debt",
-        "iron-meridian",
-        "glass-key",
-        "cinder-lantern"
-      ],
-      "decisions": [
-        {
-          "id": "decision:final-promise",
-          "name": "Choose the promise preserved by the road",
-          "description": "The final choice consumes the route state established by previous nodes.",
-          "type": "dialogue",
-          "outcomes": [
-            {
-              "id": "outcome:preserve-map",
-              "name": "Preserve the map",
-              "conditions": {
-                "all": [
-                  { "type": "dataObjectExists", "objectId": "data:knowledge:first-road-marker" }
-                ]
-              },
-              "consequences": [
-                { "type": "engineSignal", "name": "EndingUnlocked", "arguments": ["cartographer-map"] }
-              ]
-            },
-            {
-              "id": "outcome:preserve-person",
-              "name": "Preserve Kellan's promise",
-              "conditions": {
-                "all": [
-                  { "type": "variable", "name": "kellanTrust", "operator": ">=", "value": 2 }
-                ]
-              },
-              "consequences": [
-                { "type": "engineSignal", "name": "EndingUnlocked", "arguments": ["kellan-ally"] }
-              ]
-            },
-            {
-              "id": "outcome:pay-debt",
-              "name": "Pay the Resonance Debt",
-              "conditions": {
-                "all": [
-                  { "type": "variable", "name": "resonanceDebt", "operator": ">=", "value": 1 }
-                ]
-              },
-              "consequences": [
-                { "type": "engineSignal", "name": "EndingUnlocked", "arguments": ["debt-paid"] }
-              ]
-            }
-          ]
-        }
-      ],
-      "unlocks": [
-        { "type": "unlockCanonEntry", "ref": "road-under-ash-scene" },
-        { "type": "unlockCanonEntry", "ref": "first-road" }
-      ],
-      "transitions": [],
-      "legacyUnity": {
-        "scriptableObject": "EventsData",
-        "assetName": "EVT_ROAD_UNDER_ASH",
-        "eventID": "FR-004"
-      }
+      "canonRefs": [],
+      "transitions": []
     }
   ],
-  "scripts": [
-    {
-      "id": "script:basalt-archive",
-      "format": "ink",
-      "sourcePath": "Stories/FirstRoad/BasaltArchive.ink",
-      "compiledPath": "Stories/FirstRoad/BasaltArchive.json",
-      "entrySection": "Start"
-    },
-    {
-      "id": "script:market-interference",
-      "format": "ink",
-      "sourcePath": "Stories/FirstRoad/MarketInterference.ink",
-      "compiledPath": "Stories/FirstRoad/MarketInterference.json",
-      "entrySection": "Start"
-    },
-    {
-      "id": "script:cistern-threshold",
-      "format": "ink",
-      "sourcePath": "Stories/FirstRoad/CisternThreshold.ink",
-      "compiledPath": "Stories/FirstRoad/CisternThreshold.json",
-      "entrySection": "Start"
-    },
-    {
-      "id": "script:kellan-deal",
-      "format": "ink",
-      "sourcePath": "Stories/FirstRoad/KellanDeal.ink",
-      "compiledPath": "Stories/FirstRoad/KellanDeal.json",
-      "entrySection": "Start"
-    },
-    {
-      "id": "script:road-under-ash",
-      "format": "ink",
-      "sourcePath": "Stories/FirstRoad/RoadUnderAsh.ink",
-      "compiledPath": "Stories/FirstRoad/RoadUnderAsh.json",
-      "entrySection": "Start"
-    }
-  ],
-  "externalFunctions": [
-    { "name": "UnlockKnowledge", "kind": "consequence", "mapsTo": "unlockCanonEntry" },
-    { "name": "KnowledgeUnlocked", "kind": "condition", "mapsTo": "canonEntryUnlocked" },
-    { "name": "SetNextEvent", "kind": "transition", "mapsTo": "setNextEvent" },
-    { "name": "SpawnPursuit", "kind": "engineSignal", "mapsTo": "spawnPursuit" },
-    { "name": "FactionPulse", "kind": "engineSignal", "mapsTo": "factionPulse" },
-    { "name": "StartAmbush", "kind": "engineSignal", "mapsTo": "startAmbush" },
-    { "name": "EndingUnlocked", "kind": "engineSignal", "mapsTo": "endingUnlocked" },
-    { "name": "ReturnMenu", "kind": "engineSignal", "mapsTo": "returnMenu" }
-  ],
-  "variables": {
-    "meridianReady": true,
-    "cartographerSuspicion": 0,
-    "choirSuspicion": 0,
-    "kellanTrust": 0,
-    "resonanceDebt": 0,
-    "marketSkipped": false
-  },
-  "projectDataObjects": [
-    {
-      "id": "data:knowledge:archive-survey",
-      "classId": "class:RouteKnowledge",
-      "name": "Basalt Archive Survey",
-      "canonRefs": ["basalt-archive-scene", "old-roads"],
-      "fields": {
-        "sourceRef": "basalt-archive-scene",
-        "title": "Basalt Archive Survey",
-        "summary": "A sealed survey proves that the Old Roads respond to choices, not distance.",
-        "certainty": 70
-      },
-      "tags": ["knowledge", "unlockable"],
-      "scope": { "sequenceId": "sequence:mara-first-road" }
-    },
-    {
-      "id": "data:knowledge:first-road-marker",
-      "classId": "class:RouteKnowledge",
-      "name": "First Road Marker",
-      "canonRefs": ["first-road", "ember-cistern"],
-      "fields": {
-        "sourceRef": "first-road",
-        "title": "First Road Marker",
-        "summary": "A cistern marker indicates the First Road is a threshold below Ash Gate.",
-        "certainty": 50
-      },
-      "tags": ["knowledge", "threshold"],
-      "scope": { "sequenceId": "sequence:mara-first-road" },
-      "availability": {
-        "all": [
-          { "type": "canonEntryUnlocked", "ref": "first-road" }
-        ]
-      }
-    },
-    {
-      "id": "data:item:iron-meridian",
-      "classId": "class:RuntimeItem",
-      "name": "Iron Meridian",
-      "canonRefs": ["iron-meridian"],
-      "fields": {
-        "sourceRef": "iron-meridian",
-        "title": "Iron Meridian",
-        "runtimeKey": "iron_meridian",
-        "charges": 1
-      },
-      "tags": ["inventory", "starting-item"],
-      "scope": { "global": true }
-    },
-    {
-      "id": "data:item:glass-key",
-      "classId": "class:RuntimeItem",
-      "name": "Glass Key",
-      "canonRefs": ["glass-key"],
-      "fields": {
-        "sourceRef": "glass-key",
-        "title": "Glass Key",
-        "runtimeKey": "glass_key",
-        "charges": 1
-      },
-      "tags": ["inventory", "route-key"],
-      "scope": { "global": true }
-    },
-    {
-      "id": "data:item:cinder-lantern",
-      "classId": "class:RuntimeItem",
-      "name": "Cinder Lantern",
-      "canonRefs": ["cinder-lantern"],
-      "fields": {
-        "sourceRef": "cinder-lantern",
-        "title": "Cinder Lantern",
-        "runtimeKey": "cinder_lantern",
-        "charges": 1
-      },
-      "tags": ["inventory", "light"],
-      "scope": { "global": true }
-    },
-    {
-      "id": "data:faction:glass-cartographers",
-      "classId": "class:FactionState",
-      "name": "Glass Cartographers Trust",
-      "canonRefs": ["glass-cartographers"],
-      "fields": {
-        "sourceRef": "glass-cartographers",
-        "trust": 45,
-        "stance": "watching"
-      },
-      "tags": ["faction"],
-      "scope": { "global": true }
-    },
-    {
-      "id": "data:faction:ashen-choir",
-      "classId": "class:FactionState",
-      "name": "Ashen Choir Trust",
-      "canonRefs": ["ashen-choir"],
-      "fields": {
-        "sourceRef": "ashen-choir",
-        "trust": 20,
-        "stance": "hostile"
-      },
-      "tags": ["faction"],
-      "scope": { "global": true }
-    }
-  ],
+  "scripts": [],
+  "externalFunctions": [],
+  "variables": {},
+  "projectDataObjects": [],
   "panels": {
-    "canonOpen": true,
+    "canonOpen": false,
     "filesOpen": true
   },
   "canvas": {
-    "activeSequenceId": "sequence:mara-first-road",
-    "viewport": {
-      "x": -40,
-      "y": 0,
-      "zoom": 0.72
-    },
+    "activeSequenceId": "sequence:new-route",
     "nodes": {
-      "sequence:mara-first-road": { "position": { "x": 60, "y": 80 } },
-      "start:sequence:mara-first-road": { "position": { "x": 330, "y": 80 } },
-      "branch:archive-route": { "position": { "x": 600, "y": 50 } },
-      "branch:cistern-route": { "position": { "x": 600, "y": 390 } },
-      "event:basalt-archive": { "position": { "x": 24, "y": 86 } },
-      "event:market-interference": { "position": { "x": 24, "y": 230 } },
-      "event:cistern-threshold": { "position": { "x": 24, "y": 86 } },
-      "event:road-under-ash": { "position": { "x": 24, "y": 230 } },
-      "event:kellan-deal": { "position": { "x": 1080, "y": 300 } }
+      "sequence:new-route": {
+        "position": {
+          "x": 80,
+          "y": 80
+        }
+      },
+      "start:sequence:new-route": {
+        "position": {
+          "x": 340,
+          "y": 80
+        }
+      },
+      "event:sequence:new-route:entry": {
+        "position": {
+          "x": 620,
+          "y": 80
+        }
+      },
+      "event:sequence:new-route:normal": {
+        "position": {
+          "x": 1008.0510304575341,
+          "y": -216.31902037020672
+        }
+      }
     }
   },
-  "storyId": "universe-of-notion",
-  "universeRootPath": "worldnotion/demo-universe",
-  "engineTargets": {
-    "unity": {
-      "adapter": "unity-ink",
-      "minimumAdapterVersion": "0.1"
+  "entrySequenceId": "sequence:new-route",
+  "eventCategories": [
+    {
+      "id": "normal",
+      "label": "Event",
+      "terminal": false
+    },
+    {
+      "id": "final",
+      "label": "Final",
+      "terminal": true
     }
-  }
+  ],
+  "storyId": "universe-of-notion",
+  "universeRootPath": "D:\\Repositorio\\Apps\\Everend Forge\\worldnotion\\demo-universe"
 }

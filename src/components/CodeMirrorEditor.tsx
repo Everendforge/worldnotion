@@ -15,11 +15,13 @@ import {
   EditorMode,
   EditorSettings,
   NoteSuggestion,
+  PluginSettings,
   ResolvedWikilink,
   SlashCommandDefinition,
   ThemeId,
 } from "../editorTypes";
 import { isDarkTheme, selectionColorForTheme } from "../themes";
+import { isPluginEnabled } from "../utils/pluginRegistry";
 
 export interface CodeMirrorEditorProps {
   value: string;
@@ -28,6 +30,7 @@ export interface CodeMirrorEditorProps {
   readOnly?: boolean;
   mode?: EditorMode;
   settings: EditorSettings;
+  pluginSettings?: PluginSettings;
   documentName?: string;
   projectName?: string;
   resolveWikilink?: (label: string) => ResolvedWikilink;
@@ -94,6 +97,7 @@ export function CodeMirrorEditor({
   readOnly = false,
   mode = "write",
   settings,
+  pluginSettings,
   documentName,
   projectName,
   resolveWikilink,
@@ -590,24 +594,24 @@ export function CodeMirrorEditor({
         theme={isDarkTheme(theme) ? oneDark : undefined}
         extensions={[
           markdown(),
-          ...(settings.documentHeaderEnabled && documentName && mode === "write" 
+          ...(isPluginEnabled(pluginSettings, "document-header", settings.documentHeaderEnabled) && documentName && mode === "write" 
             ? [createDocumentHeaderPlugin({ 
                 documentName, 
                 projectName, 
                 showProjectName: settings.showProjectNameInHeader 
               })] 
             : []),
-          ...(settings.codeFoldingEnabled ? [
+          ...(isPluginEnabled(pluginSettings, "code-folding", settings.codeFoldingEnabled) ? [
             foldGutter({
               openText: "▼",
               closedText: "▶",
             }),
             keymap.of(foldKeymap),
           ] : []),
-          ...(mode === "write" ? [wikilinkPlugin({ resolveWikilink, onOpenWikilink, onMissingWikilink })] : []),
-          ...(mode === "write" ? [footnotePlugin()] : []),
-          ...(mode === "write" && settings.hideMarkdownSyntaxInWrite ? [markdownSyntaxPlugin] : []),
-          ...(mode === "write" ? [fontFamilyPlugin] : []),
+          ...(mode === "write" && isPluginEnabled(pluginSettings, "wikilinks") ? [wikilinkPlugin({ resolveWikilink, onOpenWikilink, onMissingWikilink })] : []),
+          ...(mode === "write" && isPluginEnabled(pluginSettings, "footnotes") ? [footnotePlugin()] : []),
+          ...(mode === "write" && isPluginEnabled(pluginSettings, "markdown-syntax-hiding", settings.hideMarkdownSyntaxInWrite) ? [markdownSyntaxPlugin] : []),
+          ...(mode === "write" && isPluginEnabled(pluginSettings, "font-family-rendering") ? [fontFamilyPlugin] : []),
           ...(settings.lineWrap ? [EditorView.lineWrapping] : []),
           CodeMirrorState.tabSize.of(settings.tabSize),
           Prec.highest(keymap.of([

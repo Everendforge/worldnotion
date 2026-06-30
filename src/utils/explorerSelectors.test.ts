@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { Entity, VaultIndex, VaultTreeNode } from "../domain";
 import type { TaxonomyConfig } from "../editorTypes";
 import {
+  expandedPathsToDepth,
+  explorerAncestorsForPath,
+  flattenVisibleExplorerTree,
   selectEcosystemGroups,
   selectEntityTagColors,
   selectFavoriteItems,
@@ -176,5 +179,29 @@ describe("explorer selectors", () => {
 
   it("selects primary tag colors for entities", () => {
     expect(Array.from(selectEntityTagColors(index()).entries())).toEqual([["World/Ada.md", "#00ff00"]]);
+  });
+
+  it("flattens only expanded tree rows", () => {
+    const rows = flattenVisibleExplorerTree(index().tree, new Set(["World"]));
+
+    expect(rows.map((item) => [item.path, item.depth, item.isExpanded])).toEqual([
+      ["World", 0, true],
+      ["World/Ada.md", 1, false],
+      ["World/Notes.md", 1, false],
+      ["World/Scenes", 1, false],
+    ]);
+  });
+
+  it("does not include children of collapsed folders", () => {
+    expect(flattenVisibleExplorerTree(index().tree, new Set()).map((item) => item.path)).toEqual(["World"]);
+  });
+
+  it("expands ancestors for an active path", () => {
+    expect(explorerAncestorsForPath("World/Scenes/Arrival.md")).toEqual(["World", "World/Scenes"]);
+  });
+
+  it("expands folders to a fixed depth", () => {
+    expect(Array.from(expandedPathsToDepth(index().tree, 1))).toEqual(["World"]);
+    expect(Array.from(expandedPathsToDepth(index().tree, 2))).toEqual(["World", "World/Scenes"]);
   });
 });

@@ -1,8 +1,39 @@
 import YAML from "yaml";
 import type { CustomFieldDefinition, CustomFieldType, PropertiesConfig, PropertyDefinition } from "../editorTypes";
+import { isStructureProperty, type PropertyLayoutSectionKind } from "./propertyLayout";
 import { traversePropertyTree } from "./propertyTreeUtils";
 
 export type VisiblePropertyDefinition = PropertyDefinition & { source: "base" | "custom" };
+export type PropertyParentTarget = string | null | undefined;
+export type InspectorPropertySectionId = PropertyLayoutSectionKind;
+export type InspectorPropertyTreeNode = {
+  property: VisiblePropertyDefinition;
+  depth: number;
+  parentId?: string;
+  path: string[];
+  visibleInType: boolean;
+  conditionActive: boolean;
+  conditionLabel?: string;
+  children: InspectorPropertyTreeNode[];
+};
+
+export type InspectorPropertySection = {
+  id: string;
+  kind: InspectorPropertySectionId;
+  title: string;
+  rootId?: string;
+  nodes: InspectorPropertyTreeNode[];
+};
+
+export type PropertySchemaSectionId = PropertyLayoutSectionKind;
+export type PropertySchemaTreeNode = InspectorPropertyTreeNode;
+export type PropertySchemaSection = {
+  id: string;
+  kind: PropertySchemaSectionId;
+  title: string;
+  rootId?: string;
+  nodes: PropertySchemaTreeNode[];
+};
 
 export type UnconfiguredProperty = {
   key: string;
@@ -13,6 +44,7 @@ export type UnconfiguredProperty = {
 const BASE_FRONTMATTER_KEYS = ["id", "type", "name", "status", "tags", "aliases", "parentId", "childrenIds", "folder"];
 export const SYSTEM_FRONTMATTER_KEYS = new Set(["folder"]);
 export const NON_INSPECTOR_PROPERTY_IDS = new Set(["folder", "tags"]);
+const BASE_INSPECTOR_PROPERTY_IDS = new Set(["id", "name", "type", "status", "aliases"]);
 
 // System property comment for folder field
 const FOLDER_SYSTEM_PROPERTY_COMMENT =
@@ -27,6 +59,17 @@ export function knownPropertyIds(config?: PropertiesConfig): Set<string> {
 
 function uniqueInOrder(values: string[]): string[] {
   return values.filter((value, index) => value && values.indexOf(value) === index);
+}
+
+export function uniquePropertyId(label: string, existingIds: Iterable<string>): string {
+  const existing = new Set(existingIds);
+  const baseId = sanitizePropertyId(label) || "property";
+  if (!existing.has(baseId)) return baseId;
+  let index = 2;
+  while (existing.has(`${baseId}-${index}`)) {
+    index += 1;
+  }
+  return `${baseId}-${index}`;
 }
 
 export function getTypeDefinition(config: PropertiesConfig | undefined, entityType: string | undefined) {
@@ -44,6 +87,7 @@ export function listVisibleProperties(config?: PropertiesConfig, entityType?: st
     ...(typeDefinition?.customFields ?? []),
   ];
   const visibleIds = new Set([...baseVisible, ...customVisible]);
+  const hiddenIds = new Set(typeDefinition?.hiddenProperties ?? []);
   const order = uniqueInOrder([
     ...(typeDefinition?.propertyOrder ?? config.baseProperties.order ?? []),
     ...customVisible,
@@ -57,6 +101,7 @@ export function listVisibleProperties(config?: PropertiesConfig, entityType?: st
   ].filter(
     (property) =>
       visibleIds.has(property.id) &&
+      !hiddenIds.has(property.id) &&
       !NON_INSPECTOR_PROPERTY_IDS.has(property.id) &&
       !("hidden" in property && property.hidden),
   );
@@ -182,6 +227,230 @@ function findDefinitionInTree(definitions: PropertyDefinition[], propertyId: str
       if (child) return child;
     }
   }
+  return undefined;
+}
+
+function conditionLabelForProperty(property: PropertyDefinition, allProperties: VisiblePropertyDefinition[]): string | undefined {
+  if (!property.visibleWhen) return undefined;
+  return Object.entries(property.visibleWhen)
+    .map(([parentId, values]) => {
+      const parent = allProperties.find((candidate) => candidate.id === parentId);
+      return `Depends on ${parent?.label ?? parentId} = ${values.join(" or ")}`;
+    })
+    .join(", ");
+}
+
+function conditionIsActive(property: PropertyDefinition, values: Record<string, unknown>): boolean {
+  if (!property.visibleWhen) return true;
+  return Object.entries(property.visibleWhen).every(([parentId, allowedValues]) => {
+    const currentValue = values[parentId];
+    if (Array.isArray(currentValue)) {
+      return currentValue.some((value) => allowedValues.includes(String(value)));
+    }
+    return allowedValues.includes(String(currentValue));
+  });
+}
+
+function collectDefinitionTreeIds(definitions: PropertyDefinition[], ids = new Set<string>()): Set<string> {
+  definitions.forEach((definition) => {
+    ids.add(definition.id);
+    if (definition.children?.length) {
+      collectDefinitionTreeIds(definition.children, ids);
+    }
+  });
+  return ids;
+}
+
+function collectNodeTreeIds(nodes: InspectorPropertyTreeNode[], ids = new Set<string>()): Set<string> {
+  nodes.forEach((node) => {
+    ids.add(node.property.id);
+    if (node.children.length) {
+      collectNodeTreeIds(node.children, ids);
+    }
+  });
+  return ids;
+}
+
+function hasInspectorChildren(property: PropertyDefinition): boolean {
+  return Boolean(property.children?.some((child) => !NON_INSPECTOR_PROPERTY_IDS.has(child.id)));
+}
+
+function splitRootSections(nodes: InspectorPropertyTreeNode[], hiddenTitle = "HIDDEN"): InspectorPropertySection[] {
+  const structureNodes = nodes.filter((node) => isStructureProperty(node.property));
+  const mainNodes = nodes.filter(
+    (node) => !isStructureProperty(node.property) && (node.property.source === "base" || !hasInspectorChildren(node.property)),
+  );
+  const rootSections = nodes
+    .filter((node) => !isStructureProperty(node.property) && node.property.source === "custom" && hasInspectorChildren(node.property))
+    .map((node) => ({
+      id: `root:${node.property.id}`,
+      kind: "root" as const,
+      title: (node.property.label ?? node.property.id).toUpperCase(),
+      rootId: node.property.id,
+      nodes: [node],
+    }));
+
+  return [
+    { id: "main", kind: "main", title: "MAIN", nodes: mainNodes },
+    { id: "structure", kind: "structure", title: "STRUCTURE", nodes: structureNodes },
+    ...rootSections,
+    { id: "hidden", kind: "hidden", title: hiddenTitle, nodes: [] },
+  ];
+}
+
+function toTreeNode(
+  property: VisiblePropertyDefinition,
+  allProperties: VisiblePropertyDefinition[],
+  visibleIds: Set<string>,
+  hiddenIds: Set<string>,
+  values: Record<string, unknown>,
+  depth: number,
+  parentId: string | undefined,
+  path: string[],
+): InspectorPropertyTreeNode {
+  const nextPath = [...path, property.id];
+  const children = (property.children ?? [])
+    .filter((child) => !NON_INSPECTOR_PROPERTY_IDS.has(child.id))
+    .map((child) => {
+      const source = allProperties.find((candidate) => candidate.id === child.id)?.source ?? property.source;
+      return toTreeNode(
+        { ...child, source } as VisiblePropertyDefinition,
+        allProperties,
+        visibleIds,
+        hiddenIds,
+        values,
+        depth + 1,
+        property.id,
+        nextPath,
+      );
+    });
+
+  return {
+    property,
+    depth,
+    parentId,
+    path: nextPath,
+    visibleInType: visibleIds.has(property.id) && !hiddenIds.has(property.id),
+    conditionActive: conditionIsActive(property, values),
+    conditionLabel: conditionLabelForProperty(property, allProperties),
+    children,
+  };
+}
+
+export function buildInspectorPropertySections(
+  config: PropertiesConfig | undefined,
+  entityType: string | undefined,
+  values: Record<string, unknown> = {},
+  options: { includeHidden?: boolean; includeInactiveConditions?: boolean } = {},
+): InspectorPropertySection[] {
+  if (!config?.baseProperties) {
+    return [
+      { id: "main", kind: "main", title: "MAIN", nodes: [] },
+      { id: "hidden", kind: "hidden", title: "HIDDEN", nodes: [] },
+    ];
+  }
+
+  const allProperties = listAllProperties(config);
+  const visibleRoots = listVisibleProperties(config, entityType);
+  const visibleIds = collectDefinitionTreeIds(visibleRoots);
+  const hiddenIds = new Set(getTypeDefinition(config, entityType)?.hiddenProperties ?? []);
+  const visibleNodes = visibleRoots
+    .map((property) => toTreeNode(property, allProperties, visibleIds, hiddenIds, values, 0, undefined, []))
+    .map((node) => filterTreeNode(node, options.includeInactiveConditions ?? false, options.includeHidden ?? false))
+    .filter((node): node is InspectorPropertyTreeNode => Boolean(node));
+  const renderedIds = collectNodeTreeIds(visibleNodes);
+  const hiddenNodes = options.includeHidden
+    ? allProperties
+        .filter((property) => !renderedIds.has(property.id) && !NON_INSPECTOR_PROPERTY_IDS.has(property.id))
+        .map((property) => toTreeNode(property, allProperties, visibleIds, hiddenIds, values, 0, undefined, []))
+    : [];
+  const sections = splitRootSections(
+    visibleNodes.map((node) =>
+      BASE_INSPECTOR_PROPERTY_IDS.has(node.property.id)
+        ? { ...node, property: { ...node.property, source: "base" as const } }
+        : node,
+    ),
+  );
+  const hiddenSection = sections.find((section) => section.kind === "hidden");
+  if (hiddenSection) {
+    hiddenSection.nodes = hiddenNodes;
+  }
+
+  return sections.filter((section) => section.kind !== "hidden" || options.includeHidden || section.nodes.length > 0);
+}
+
+export function buildPropertySchemaSections(
+  config: PropertiesConfig | undefined,
+  entityType: string | undefined,
+  options: { includeHidden?: boolean } = { includeHidden: true },
+): PropertySchemaSection[] {
+  if (!config?.baseProperties) {
+    return [
+      { id: "main", kind: "main", title: "MAIN", nodes: [] },
+      { id: "hidden", kind: "hidden", title: "HIDDEN", nodes: [] },
+    ];
+  }
+
+  const typeDefinition = getTypeDefinition(config, entityType);
+  const allProperties = listAllProperties(config);
+  const hiddenIds = new Set(typeDefinition?.hiddenProperties ?? []);
+  const visibleRoots = listVisibleProperties(config, entityType);
+  const visibleIds = collectDefinitionTreeIds(visibleRoots);
+  const roots = [
+    ...config.baseProperties.definitions
+      .filter((property) => !NON_INSPECTOR_PROPERTY_IDS.has(property.id))
+      .map((property) => ({ ...property, source: "base" as const })),
+    ...config.customFields.definitions
+      .filter((property) => !config.baseProperties?.definitions.some((baseProperty) => baseProperty.id === property.id))
+      .filter((property) => !NON_INSPECTOR_PROPERTY_IDS.has(property.id))
+      .map((property) => ({ ...property, source: "custom" as const })),
+  ];
+  const order = getConfiguredFrontmatterOrder(config, entityType, roots.map((property) => property.id));
+  const orderedRoots = [...roots].sort((first, second) => {
+    const firstIndex = order.indexOf(first.id);
+    const secondIndex = order.indexOf(second.id);
+    if (firstIndex === -1 && secondIndex === -1) {
+      return (first.label ?? first.id).localeCompare(second.label ?? second.id);
+    }
+    if (firstIndex === -1) return 1;
+    if (secondIndex === -1) return -1;
+    return firstIndex - secondIndex;
+  });
+  const rootNodes = orderedRoots.map((property) =>
+    toTreeNode(property, allProperties, visibleIds, hiddenIds, { type: entityType }, 0, undefined, []),
+  );
+  const visibleRootNodes = rootNodes.filter((node) => node.visibleInType);
+  const hiddenRootNodes = rootNodes.filter((node) => !node.visibleInType);
+  const sections = splitRootSections(visibleRootNodes, "HIDDEN") as PropertySchemaSection[];
+  const hiddenSection = sections.find((section) => section.kind === "hidden");
+  if (hiddenSection) {
+    hiddenSection.nodes = options.includeHidden === false ? [] : hiddenRootNodes;
+  }
+
+  return sections.filter((section) => section.kind !== "hidden" || section.nodes.length > 0);
+}
+
+function filterTreeNode(
+  node: InspectorPropertyTreeNode,
+  includeInactiveConditions: boolean,
+  includeHidden: boolean,
+): InspectorPropertyTreeNode | null {
+  if (!includeInactiveConditions && !node.conditionActive) return null;
+  if (!includeHidden && !node.visibleInType) return null;
+  const children = node.children
+    .map((child) => filterTreeNode(child, includeInactiveConditions, includeHidden))
+    .filter((child): child is InspectorPropertyTreeNode => Boolean(child));
+  return { ...node, children };
+}
+
+function findDefinitionWithSource(
+  config: PropertiesConfig,
+  propertyId: string,
+): { definition: PropertyDefinition; source: "base" | "custom" } | undefined {
+  const base = findDefinitionInTree(config.baseProperties?.definitions ?? [], propertyId);
+  if (base) return { definition: base, source: "base" };
+  const custom = findDefinitionInTree(config.customFields.definitions ?? [], propertyId);
+  if (custom) return { definition: custom, source: "custom" };
   return undefined;
 }
 
@@ -353,6 +622,204 @@ export function upsertInspectorProperty(
   );
 }
 
+export function createInspectorProperty(
+  config: PropertiesConfig,
+  entityType: string | undefined,
+  label: string,
+  type: CustomFieldType,
+  parentId?: string,
+): PropertiesConfig {
+  const id = uniquePropertyId(label, listAllProperties(config).map((property) => property.id));
+  return upsertInspectorProperty(
+    config,
+    {
+      id,
+      label: label.trim() || labelFromPropertyId(id),
+      type,
+      required: false,
+    },
+    entityType,
+    parentId,
+  );
+}
+
+export function setInspectorPropertyVisibility(
+  config: PropertiesConfig,
+  entityType: string | undefined,
+  propertyId: string,
+  visible: boolean,
+): PropertiesConfig {
+  if (!config.baseProperties) return config;
+  const isBaseProperty = config.baseProperties.definitions.some((definition) => definition.id === propertyId);
+  const currentType = entityType ? getTypeDefinition(config, entityType) : undefined;
+  const currentVisibleIds = listVisibleProperties(config, entityType).map((property) => property.id);
+  const nextVisibleIds = visible
+    ? uniqueInOrder([...currentVisibleIds, propertyId])
+    : currentVisibleIds.filter((id) => id !== propertyId);
+
+  return {
+    ...config,
+    baseProperties: {
+      ...config.baseProperties,
+      visibleByDefault: entityType
+        ? config.baseProperties.visibleByDefault
+        : visible && isBaseProperty
+          ? uniqueInOrder([...(config.baseProperties.visibleByDefault ?? []), propertyId])
+          : (config.baseProperties.visibleByDefault ?? []).filter((id) => id !== propertyId),
+    },
+    customFields: {
+      ...config.customFields,
+      globalFields: entityType
+        ? config.customFields.globalFields
+        : visible && !isBaseProperty
+          ? uniqueInOrder([...(config.customFields.globalFields ?? []), propertyId])
+          : (config.customFields.globalFields ?? []).filter((id) => id !== propertyId),
+    },
+    entityTypes: {
+      ...config.entityTypes,
+      definitions: config.entityTypes.definitions.map((definition) => {
+        if (entityType && definition.id !== entityType) return definition;
+        if (!entityType) return definition;
+        const currentCustomFields = definition.customFields ?? [];
+        const nextCustomFields = isBaseProperty
+          ? currentCustomFields
+          : visible
+            ? uniqueInOrder([...currentCustomFields, propertyId])
+            : currentCustomFields.filter((id) => id !== propertyId);
+        const order = currentType?.propertyOrder ?? currentVisibleIds;
+        const nextOrder = visible
+          ? uniqueInOrder([...order, propertyId])
+          : order.filter((id) => id !== propertyId);
+        return {
+          ...definition,
+          customFields: nextCustomFields,
+          visibleProperties: nextVisibleIds,
+          hiddenProperties: visible
+            ? (definition.hiddenProperties ?? []).filter((id) => id !== propertyId)
+            : uniqueInOrder([...(definition.hiddenProperties ?? []), propertyId]),
+          propertyOrder: nextOrder,
+        };
+      }),
+    },
+  };
+}
+
+function appendPropertyToParent(
+  definitions: PropertyDefinition[],
+  parentId: string,
+  property: PropertyDefinition,
+): { definitions: PropertyDefinition[]; changed: boolean } {
+  let changed = false;
+  const nextDefinitions = definitions.map((definition) => {
+    if (definition.id === parentId) {
+      changed = true;
+      return {
+        ...definition,
+        children: [...(definition.children ?? []).filter((child) => child.id !== property.id), property],
+      };
+    }
+    if (!definition.children?.length) return definition;
+    const result = appendPropertyToParent(definition.children, parentId, property);
+    if (!result.changed) return definition;
+    changed = true;
+    return { ...definition, children: result.definitions };
+  });
+  return { definitions: nextDefinitions, changed };
+}
+
+export function moveInspectorProperty(
+  config: PropertiesConfig,
+  entityType: string | undefined,
+  propertyId: string,
+  parentId?: PropertyParentTarget,
+): PropertiesConfig {
+  const found = findDefinitionWithSource(config, propertyId);
+  if (!found) return config;
+  if ("immutable" in found.definition && found.definition.immutable) return config;
+  if (parentId === propertyId) return config;
+  const roots = [
+    ...(config.baseProperties?.definitions ?? []),
+    ...(config.customFields.definitions ?? []),
+  ];
+  if (parentId) {
+    const parentPath = getPropertyPathFromDefinitions(roots, parentId);
+    if (parentPath.length === 0) return config;
+    if (parentPath.includes(propertyId)) return config;
+  }
+
+  const detachedCustom = removePropertyDefinitions(config.customFields.definitions, propertyId) as CustomFieldDefinition[];
+  const detachedBase = config.baseProperties
+    ? removePropertyDefinitions(config.baseProperties.definitions, propertyId) as typeof config.baseProperties.definitions
+    : undefined;
+
+  let nextConfig: PropertiesConfig = {
+    ...config,
+    customFields: {
+      ...config.customFields,
+      definitions: detachedCustom,
+    },
+    baseProperties: config.baseProperties
+      ? {
+          ...config.baseProperties,
+          definitions: detachedBase ?? config.baseProperties.definitions,
+        }
+      : config.baseProperties,
+  };
+
+  if (parentId) {
+    const customResult = appendPropertyToParent(nextConfig.customFields.definitions, parentId, found.definition);
+    if (customResult.changed) {
+      nextConfig = {
+        ...nextConfig,
+        customFields: {
+          ...nextConfig.customFields,
+          definitions: customResult.definitions as CustomFieldDefinition[],
+        },
+      };
+    } else if (nextConfig.baseProperties) {
+      const baseResult = appendPropertyToParent(nextConfig.baseProperties.definitions, parentId, found.definition);
+      if (baseResult.changed) {
+        nextConfig = {
+          ...nextConfig,
+          baseProperties: {
+            ...nextConfig.baseProperties,
+            definitions: baseResult.definitions as typeof nextConfig.baseProperties.definitions,
+          },
+        };
+      }
+    }
+  } else if (found.source === "base" && nextConfig.baseProperties) {
+    nextConfig = {
+      ...nextConfig,
+      baseProperties: {
+        ...nextConfig.baseProperties,
+        definitions: [...nextConfig.baseProperties.definitions, found.definition as typeof nextConfig.baseProperties.definitions[number]],
+      },
+    };
+  } else {
+    nextConfig = {
+      ...nextConfig,
+      customFields: {
+        ...nextConfig.customFields,
+        definitions: [...nextConfig.customFields.definitions, found.definition as CustomFieldDefinition],
+      },
+    };
+  }
+
+  return ensureTypePropertyMembership(nextConfig, entityType, [parentId || propertyId, propertyId]);
+}
+
+function getPropertyPathFromDefinitions(definitions: PropertyDefinition[], targetId: string): string[] {
+  for (const definition of definitions) {
+    if (definition.id === targetId) return [definition.id];
+    if (definition.children?.length) {
+      const childPath = getPropertyPathFromDefinitions(definition.children, targetId);
+      if (childPath.length) return [definition.id, ...childPath];
+    }
+  }
+  return [];
+}
+
 export function removeInspectorProperty(config: PropertiesConfig, propertyId: string): PropertiesConfig {
   const nextOrder = (config.baseProperties?.order ?? []).filter((id) => id !== propertyId);
   return {
@@ -376,6 +843,7 @@ export function removeInspectorProperty(config: PropertiesConfig, propertyId: st
         ...definition,
         customFields: (definition.customFields ?? []).filter((id) => id !== propertyId),
         visibleProperties: definition.visibleProperties?.filter((id) => id !== propertyId),
+        hiddenProperties: definition.hiddenProperties?.filter((id) => id !== propertyId),
         propertyOrder: definition.propertyOrder?.filter((id) => id !== propertyId),
       })),
     },

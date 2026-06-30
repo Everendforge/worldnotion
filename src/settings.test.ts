@@ -22,6 +22,15 @@ describe("settings persistence", () => {
     expect(loadSettings().recentUniverses).toEqual(["C:/Vault"]);
   });
 
+  it("adds plugin defaults when loading older settings", () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "worldnotion-light", recentUniverses: [] }));
+
+    const settings = loadSettings();
+
+    expect(settings.plugins.enabled["markdown-syntax-hiding"]).toBe(true);
+    expect(settings.plugins.enabled["unity-adapter"]).toBe(false);
+  });
+
   it("persists simplified session state", () => {
     const settings = loadSettings();
     const layout = resizeDockSplit(
@@ -37,6 +46,7 @@ describe("settings persistence", () => {
           activePath: "Notes/Mara.md",
           tabs: [],
           layout,
+          explorerExpandedPaths: ["Notes", "Notes/Cast"],
           editorState: {
             "Notes/Mara.md": {
               cursorPosition: { line: 4, column: 2 },
@@ -61,5 +71,9 @@ describe("settings persistence", () => {
         ratio: 0.34,
       },
     });
+    expect(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}").sessions["C:/Vault"].explorerExpandedPaths).toEqual([
+      "Notes",
+      "Notes/Cast",
+    ]);
   });
 });

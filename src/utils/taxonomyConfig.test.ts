@@ -17,7 +17,7 @@ describe("taxonomy config helpers", () => {
     expect(taxonomy.statuses.definitions.map((definition) => definition.id)).toContain("draft");
   });
 
-  it("keeps folder out of properties while preserving type as the default visible base field", () => {
+  it("keeps folder out of properties while preserving the Everend base contract", () => {
     const taxonomy = normalizeCoreBaseProperties({
       ...createDefaultTaxonomyConfig(),
       customFields: {
@@ -26,12 +26,21 @@ describe("taxonomy config helpers", () => {
       },
     });
 
-    expect(taxonomy.baseProperties?.definitions.map((definition) => definition.id)).toEqual(["id", "name", "type"]);
-    expect(taxonomy.baseProperties?.visibleByDefault).toEqual(["type"]);
+    expect(taxonomy.baseProperties?.definitions.map((definition) => definition.id)).toEqual([
+      "id",
+      "name",
+      "type",
+      "status",
+      "tags",
+      "aliases",
+      "parentId",
+      "childrenIds",
+    ]);
+    expect(taxonomy.baseProperties?.visibleByDefault).toEqual(["type", "status", "aliases"]);
     expect(taxonomy.customFields.definitions.some((definition) => definition.id === "folder")).toBe(false);
   });
 
-  it("migrates flat worldbuilding fields into the details group", () => {
+  it("unwraps legacy worldbuilding details into type-specific root properties", () => {
     const base = createDefaultTaxonomyConfig();
     const taxonomy = normalizeCoreBaseProperties({
       ...base,
@@ -85,26 +94,19 @@ describe("taxonomy config helpers", () => {
     });
 
     const rootFieldIds = taxonomy.customFields.definitions.map((definition) => definition.id);
-    const detailsGroup = taxonomy.customFields.definitions.find((definition) => definition.id === "worldbuilding-details");
+    const role = taxonomy.customFields.definitions.find((definition) => definition.id === "role");
     const character = taxonomy.entityTypes.definitions.find((definition) => definition.id === "character");
 
-    expect(rootFieldIds).toContain("worldbuilding-details");
-    expect(rootFieldIds).not.toContain("role");
-    expect(rootFieldIds).not.toContain("affiliation");
-    expect(rootFieldIds).not.toContain("lore-level");
-    expect(detailsGroup?.children?.map((definition) => definition.id)).toEqual(
-      expect.arrayContaining(["role", "affiliation", "lore-level"]),
-    );
-    expect(detailsGroup?.children?.find((definition) => definition.id === "role")?.options).toEqual([
+    expect(rootFieldIds).not.toContain("worldbuilding-details");
+    expect(rootFieldIds).toEqual(expect.arrayContaining(["role", "affiliation", "lore-level"]));
+    expect(role?.options).toEqual([
       { value: "protagonist", label: "Protagonist" },
       { value: "antagonist", label: "Antagonist" },
     ]);
-    expect(detailsGroup?.children?.find((definition) => definition.id === "role")?.visibleWhen).toEqual({
-      type: ["character", "organization"],
-    });
-    expect(character?.customFields).toEqual(["status", "aliases", "worldbuilding-details"]);
-    expect(character?.visibleProperties).toEqual(["type", "status", "aliases", "worldbuilding-details"]);
-    expect(character?.propertyOrder).toEqual(["type", "status", "aliases", "worldbuilding-details"]);
+    expect(role?.visibleWhen).toBeUndefined();
+    expect(character?.customFields).toEqual(["role", "affiliation", "lore-level"]);
+    expect(character?.visibleProperties).toEqual(["type", "status", "aliases", "role", "affiliation", "lore-level"]);
+    expect(character?.propertyOrder).toEqual(["type", "status", "aliases", "role", "affiliation", "lore-level"]);
   });
 
   it("generates hierarchy, entity types, statuses, and frequent custom fields from entities", () => {
