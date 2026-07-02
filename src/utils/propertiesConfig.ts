@@ -1287,3 +1287,136 @@ export function valuesToOptions(values: unknown[]) {
 export function propertyUsesOptions(type: CustomFieldType) {
   return type === "select" || type === "multiselect";
 }
+
+function renameInDefinitionTree(
+  definitions: PropertyDefinition[],
+  oldId: string,
+  newId: string,
+): PropertyDefinition[] {
+  return definitions.map((definition) => {
+    const next: PropertyDefinition = {
+      ...definition,
+      id: definition.id === oldId ? newId : definition.id,
+      label:
+        definition.id === oldId && (!definition.label || definition.label === definition.id)
+          ? labelFromPropertyId(newId)
+          : definition.label,
+    };
+    if (next.visibleWhen && oldId in next.visibleWhen) {
+      const { [oldId]: renamedValues, ...rest } = next.visibleWhen;
+      next.visibleWhen = { ...rest, [newId]: renamedValues };
+    }
+    if (next.children?.length) {
+      next.children = renameInDefinitionTree(next.children, oldId, newId);
+    }
+    return next;
+  });
+}
+
+function renameIdInList(ids: string[] | undefined, oldId: string, newId: string) {
+  return ids?.map((id) => (id === oldId ? newId : id));
+}
+
+/**
+ * Renames a property everywhere in the schema: definitions (base + custom,
+ * including nested children), order lists, visibility lists, per-type
+ * memberships, and visibleWhen conditions that reference it.
+ *
+ * Note values in vault notes are NOT touched; callers migrate the active
+ * note with adaptFrontmatterProperty and rely on the unconfigured-property
+ * flow for other notes.
+ */
+export function renameInspectorProperty(
+  config: PropertiesConfig,
+  oldId: string,
+  newId: string,
+): PropertiesConfig {
+  if (oldId === newId || !newId) return config;
+  if (knownPropertyIds(config).has(newId)) return config;
+
+  return {
+    ...config,
+    baseProperties: config.baseProperties
+      ? {
+          ...config.baseProperties,
+          definitions: renameInDefinitionTree(
+            config.baseProperties.definitions,
+            oldId,
+            newId,
+          ) as typeof config.baseProperties.definitions,
+          order: renameIdInList(config.baseProperties.order, oldId, newId),
+          visibleByDefault: renameIdInList(config.baseProperties.visibleByDefault, oldId, newId),
+        }
+      : config.baseProperties,
+    customFields: {
+      ...config.customFields,
+      definitions: renameInDefinitionTree(
+        config.customFields.definitions,
+        oldId,
+        newId,
+      ) as CustomFieldDefinition[],
+      globalFields: renameIdInList(config.customFields.globalFields, oldId, newId),
+    },
+    entityTypes: {
+      ...config.entityTypes,
+      definitions: config.entityTypes.definitions.map((definition) => ({
+        ...definition,
+        customFields: renameIdInList(definition.customFields, oldId, newId),
+        visibleProperties: renameIdInList(definition.visibleProperties, oldId, newId),
+        hiddenProperties: renameIdInList(definition.hiddenProperties, oldId, newId),
+        propertyOrder: renameIdInList(definition.propertyOrder, oldId, newId),
+      })),
+    },
+  };
+}
+
+/**
+ * Changes the type of a schema property (base or custom, at any depth).
+ * Options are kept only for option-based types; they are initialized empty
+ * when switching into select/multiselect without existing options.
+ */
+export function changePropertyType(
+  config: PropertiesConfig,
+  propertyId: string,
+  newType: CustomFieldType,
+): PropertiesConfig {
+  const applyType = (definition: PropertyDefinition): PropertyDefinition => {
+    if (definition.type === newType) return definition;
+    const next: PropertyDefinition = { ...definition, type: newType };
+    if (propertyUsesOptions(newType)) {
+      next.options = definition.options ?? [];
+    } else {
+      delete next.options;
+    }
+    if (newType !== "entity-ref" && newType !== "entity-ref-list") {
+      delete next.targetTypes;
+    }
+    if (newType !== "number") {
+      delete next.min;
+      delete next.max;
+    }
+    return next;
+  };
+
+  return {
+    ...config,
+    baseProperties: config.baseProperties
+      ? {
+          ...config.baseProperties,
+          definitions: mapPropertyDefinitions(
+            config.baseProperties.definitions,
+            propertyId,
+            applyType,
+          ) as typeof config.baseProperties.definitions,
+        }
+      : config.baseProperties,
+    customFields: {
+      ...config.customFields,
+      definitions: mapPropertyDefinitions(
+        config.customFields.definitions,
+        propertyId,
+        applyType,
+      ) as CustomFieldDefinition[],
+    },
+  };
+}

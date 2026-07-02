@@ -1,11 +1,17 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { useState } from "react";
+import { fireEvent, render as rtlRender, screen, within } from "@testing-library/react";
+import { useState, type ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { Entity } from "../domain";
 import { createDefaultTaxonomyConfig } from "../domain";
 import { applyPropertyTemplate, WORLDBUILDING_TEMPLATE } from "../utils/propertyTemplates";
 import type { PropertiesConfig } from "../editorTypes";
 import { MetadataEditor } from "./MetadataEditor";
+import { ToastProvider } from "./ToastProvider";
+
+// MetadataEditor uses useToast(), so every render needs the provider.
+function render(ui: ReactElement) {
+  return rtlRender(ui, { wrapper: ToastProvider });
+}
 
 function entity(overrides: Partial<Entity> = {}): Entity {
   return {
@@ -131,5 +137,62 @@ describe("MetadataEditor property manager", () => {
 
     expect(within(dialog).getAllByText("Power Level").length).toBeGreaterThan(0);
     expect(within(dialog).getAllByRole("button", { name: /MAGIC/i }).length).toBeGreaterThan(0);
+  });
+
+  it("adds an existing schema property to the note via the add-property picker", () => {
+    const config = applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE);
+    const onUpdateRawYaml = vi.fn();
+
+    render(
+      <MetadataEditor
+        entity={entity()}
+        propertiesConfig={config}
+        rawYaml={"---\ntype: character\nstatus: draft\n---"}
+        onUpdate={vi.fn()}
+        onUpdateRawYaml={onUpdateRawYaml}
+        onUpdatePropertiesConfig={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /add property/i }));
+    const listbox = screen.getByRole("listbox");
+    const roleOption = within(listbox)
+      .getAllByRole("option")
+      .find((option) => within(option).queryByText("Role"));
+    expect(roleOption).toBeTruthy();
+    fireEvent.click(roleOption!);
+
+    const nextYaml = onUpdateRawYaml.mock.calls[0]?.[0] as string;
+    expect(nextYaml).toContain("role:");
+  });
+
+  it("creates a brand-new property from the add-property picker query", () => {
+    const config = applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE);
+    const onUpdateRawYaml = vi.fn();
+    const onUpdatePropertiesConfig = vi.fn();
+
+    render(
+      <MetadataEditor
+        entity={entity()}
+        propertiesConfig={config}
+        rawYaml={"---\ntype: character\nstatus: draft\n---"}
+        onUpdate={vi.fn()}
+        onUpdateRawYaml={onUpdateRawYaml}
+        onUpdatePropertiesConfig={onUpdatePropertiesConfig}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /add property/i }));
+    fireEvent.change(screen.getByPlaceholderText("Property name…"), {
+      target: { value: "Secret Motive" },
+    });
+    fireEvent.click(screen.getByText('Create property "Secret Motive"'));
+
+    const savedConfig = onUpdatePropertiesConfig.mock.calls[0]?.[0];
+    expect(
+      savedConfig.customFields.definitions.map((property: { id: string }) => property.id),
+    ).toContain("secret-motive");
+    const nextYaml = onUpdateRawYaml.mock.calls[0]?.[0] as string;
+    expect(nextYaml).toContain("secret-motive:");
   });
 });

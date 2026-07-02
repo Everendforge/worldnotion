@@ -1,4 +1,5 @@
 import type { BasePropertyDefinition, CustomFieldDefinition } from "../editorTypes";
+import type { VaultIndex } from "../domain";
 
 export type PropertyFieldRendererProps = {
   property: BasePropertyDefinition | CustomFieldDefinition;
@@ -7,6 +8,9 @@ export type PropertyFieldRendererProps = {
   readOnly?: boolean;
   entityType?: string;
   availableOptions?: Array<{ value: string; label: string; color?: string }>;
+  /** Enables entity/file/image pickers; without it those types degrade to text inputs. */
+  vaultIndex?: VaultIndex;
+  onOpenEntity?: (path: string) => void;
 };
 
 const FIELD_CONTROL_CLASS = "property-field-control";

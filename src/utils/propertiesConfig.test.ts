@@ -7,6 +7,7 @@ import {
   addPropertyToConfig,
   buildInspectorPropertySections,
   buildPropertySchemaSections,
+  changePropertyType,
   getConfiguredFrontmatterOrder,
   inferPropertyDefinition,
   listAllProperties,
@@ -15,6 +16,7 @@ import {
   moveInspectorProperty,
   parseFrontmatterRaw,
   removeFrontmatterProperty,
+  renameInspectorProperty,
   reorderInspectorPropertySiblings,
   removeInspectorProperty,
   setInspectorPropertyVisibility,
@@ -22,6 +24,7 @@ import {
   upsertInspectorProperty,
   updateFrontmatterProperties,
 } from "./propertiesConfig";
+import { deserializePropertiesConfig, serializePropertiesConfig } from "./propertiesSerializer";
 import { isPropertyVisible } from "./propertyTreeUtils";
 
 describe("propertiesConfig", () => {
@@ -567,5 +570,77 @@ describe("propertiesConfig", () => {
 
   it("returns an empty object for malformed frontmatter instead of throwing", () => {
     expect(parseFrontmatterRaw("---\nid: iron\nlore-level: semi-canon\nc\n---")).toEqual({});
+  });
+
+  describe("renameInspectorProperty", () => {
+    it("renames a custom property across definitions, memberships, and conditions", () => {
+      let config = applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE);
+      config = addPropertyToConfig(config, {
+        id: "mood",
+        label: "Mood",
+        type: "select",
+        options: [{ value: "calm", label: "Calm" }],
+      });
+      config = addPropertyToConfig(config, {
+        id: "mood-notes",
+        label: "Mood notes",
+        type: "text",
+        visibleWhen: { mood: ["calm"] },
+      });
+
+      const renamed = renameInspectorProperty(config, "mood", "temperament");
+      const allIds = listAllProperties(renamed).map((property) => property.id);
+
+      expect(allIds).toContain("temperament");
+      expect(allIds).not.toContain("mood");
+      const dependent = listAllProperties(renamed).find((property) => property.id === "mood-notes");
+      expect(dependent?.visibleWhen).toEqual({ temperament: ["calm"] });
+    });
+
+    it("refuses to rename onto an existing property id", () => {
+      let config = applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE);
+      config = addPropertyToConfig(config, { id: "mood", label: "Mood", type: "text" });
+
+      expect(renameInspectorProperty(config, "mood", "status")).toBe(config);
+      expect(renameInspectorProperty(config, "mood", "mood")).toBe(config);
+    });
+
+    it("round-trips through serialization after a rename", () => {
+      let config = applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE);
+      config = addPropertyToConfig(config, { id: "mood", label: "Mood", type: "text" });
+      const renamed = renameInspectorProperty(config, "mood", "temperament");
+
+      const { config: reloaded } = deserializePropertiesConfig(serializePropertiesConfig(renamed));
+      expect(listAllProperties(reloaded).map((property) => property.id)).toContain("temperament");
+    });
+  });
+
+  describe("changePropertyType", () => {
+    it("changes the type and initializes options for select types", () => {
+      let config = applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE);
+      config = addPropertyToConfig(config, { id: "mood", label: "Mood", type: "text" });
+
+      const changed = changePropertyType(config, "mood", "select");
+      const property = listAllProperties(changed).find((candidate) => candidate.id === "mood");
+
+      expect(property?.type).toBe("select");
+      expect(property?.options).toEqual([]);
+    });
+
+    it("drops options and constraints that no longer apply", () => {
+      let config = applyPropertyTemplate(createDefaultTaxonomyConfig(), WORLDBUILDING_TEMPLATE);
+      config = addPropertyToConfig(config, {
+        id: "mood",
+        label: "Mood",
+        type: "select",
+        options: [{ value: "calm", label: "Calm" }],
+      });
+
+      const changed = changePropertyType(config, "mood", "text");
+      const property = listAllProperties(changed).find((candidate) => candidate.id === "mood");
+
+      expect(property?.type).toBe("text");
+      expect(property?.options).toBeUndefined();
+    });
   });
 });

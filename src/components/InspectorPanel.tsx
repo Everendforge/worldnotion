@@ -31,6 +31,7 @@ export function InspectorPanel({
   activeTab,
   onChangeFrontmatter,
   onUpdateEntity,
+  onOpenEntity,
   onAddFrontmatter,
   onUpdatePropertiesConfig,
   onApplyPropertiesTemplate,
@@ -146,11 +147,13 @@ export function InspectorPanel({
                     entity={entity}
                     propertiesConfig={propertiesConfig}
                     rawYaml={editableFrontmatter || "---\n\n---"}
+                    vaultIndex={index}
                     onUpdate={(updates) => onUpdateEntity(updates)}
                     onUpdateRawYaml={(yaml) => onChangeFrontmatter(yaml)}
                     onUpdatePropertiesConfig={onUpdatePropertiesConfig}
                     onConserveField={onConserveField}
                     onDeleteField={onDeleteField}
+                    onOpenEntity={onOpenEntity}
                   />
                 </Suspense>
               </>
