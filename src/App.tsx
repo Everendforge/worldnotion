@@ -160,12 +160,8 @@ import {
 } from "./utils/vaultOperations";
 import { editorCommandAction, nativeMenuEditorCommand } from "./utils/editorCommandActions";
 import { profileForRecent, rememberUniverse, universeDisplayName } from "./utils/universeSession";
-import {
-  canUseBrowserDirectoryPicker,
-  isTauriRuntime,
-  platformLabels,
-  shortcutMatches,
-} from "./utils/appEnvironment";
+import { isTauriRuntime, platformLabels, shortcutMatches } from "./utils/appEnvironment";
+import { pickBrowserDirectory } from "./utils/browserDirectoryPicker";
 import {
   expandedPathsToDepth,
   explorerAncestorsForPath,
@@ -1786,92 +1782,21 @@ function App() {
         return;
       }
 
-      if (!canUseBrowserDirectoryPicker()) {
-        throw new Error(
-          "Folder picker is unavailable in this browser. Please use a Chromium-based browser (Chrome, Edge, Brave) or the Tauri desktop app.",
-        );
+      const picked = await pickBrowserDirectory();
+      if (picked.status === "cancelled") {
+        setLoadState(index ? "ready" : "idle");
+        return;
       }
+      const root = picked.root;
 
-      // Diagnostics for VS Code web limitations
-      const isVSCodeElectron = navigator.userAgent.includes("Electron");
-      console.log("[openUniverse] Browser environment check:", {
-        canUseBrowserDirectoryPicker: canUseBrowserDirectoryPicker(),
-        hasShowDirectoryPicker: "showDirectoryPicker" in window,
-        isVSCodeElectron,
-        userAgent: navigator.userAgent.substring(0, 100),
-      });
-
-      if (isVSCodeElectron) {
-        throw new Error(
-          "File picker is restricted in VS Code's embedded browser. " +
-            "Please use the Tauri desktop app instead: npm run tauri dev",
-        );
-      }
-
-      const picker = window as unknown as {
-        showDirectoryPicker: (options?: {
-          mode?: "read" | "readwrite";
-        }) => Promise<BrowserDirectoryHandle>;
-      };
-
-      console.log("[openUniverse] Showing directory picker...");
-      let root: BrowserDirectoryHandle;
-      try {
-        // Try with readwrite first, but fall back to read-only if it fails in restricted environments
-        root = await picker.showDirectoryPicker({ mode: "readwrite" });
-        console.log("[openUniverse] Directory selected (readwrite):", root.name);
-      } catch (pickerError: unknown) {
-        const errorName = pickerError instanceof DOMException ? pickerError.name : undefined;
-        const errorCode = pickerError instanceof DOMException ? pickerError.code : undefined;
-        console.log("[openUniverse] Readwrite picker failed:", { errorName, errorCode });
-
-        // If readwrite fails with AbortError in restricted environment, try read-only
-        if (errorName === "AbortError") {
-          console.log("[openUniverse] Trying read-only mode...");
-          try {
-            root = await picker.showDirectoryPicker();
-            console.log("[openUniverse] Directory selected (read-only):", root.name);
-          } catch (readonlyError: unknown) {
-            const roErrorName =
-              readonlyError instanceof DOMException ? readonlyError.name : undefined;
-            console.log("[openUniverse] Read-only picker also failed:", { roErrorName });
-            if (roErrorName === "AbortError") {
-              console.log("[openUniverse] User cancelled directory selection");
-              setLoadState(index ? "ready" : "idle");
-              return;
-            }
-            throw readonlyError;
-          }
-        } else {
-          throw pickerError;
-        }
-      }
-
-      console.log("[openUniverse] Ensuring write permission...");
       await ensureBrowserWritePermission(root);
-      console.log("[openUniverse] Permission check complete (read-only or read-write mode)");
-      console.log("[openUniverse] Setting browser root...");
       setBrowserRoot(root);
-      console.log("[openUniverse] Reading browser universe...");
       const universeData = await readBrowserUniverse(root);
-      console.log(
-        "[openUniverse] Universe data loaded, entries:",
-        Object.keys(universeData).length,
-        "applying...",
-      );
       applyUniverse(universeData);
-      console.log("[openUniverse] Success!");
     } catch (error) {
       console.error("[openUniverse] Error:", error);
-      if (error instanceof Error) {
-        console.error("[openUniverse] Error name:", error.name);
-        console.error("[openUniverse] Error message:", error.message);
-        console.error("[openUniverse] Error stack:", error.stack);
-      }
       setLoadState("error");
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error("[openUniverse] Final error message set:", errorMsg);
-      setErrorMessage(errorMsg);
+      setErrorMessage(error instanceof Error ? error.message : String(error));
     }
   }
 
