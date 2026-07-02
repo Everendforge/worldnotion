@@ -1001,104 +1001,90 @@ function App() {
           return;
         }
 
-        try {
-          const fileName = name.endsWith(".md") ? name : `${name}.md`;
-          const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
-          const cleanName = name.replace(/\.md$/i, "");
-          const content = `${contentFromTemplate(index, "concept", cleanName)}\n`;
+        const fileName = name.endsWith(".md") ? name : `${name}.md`;
+        const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
+        const cleanName = name.replace(/\.md$/i, "");
+        const content = `${contentFromTemplate(index, "concept", cleanName)}\n`;
 
-          if (browserRoot) {
-            await writeBrowserFile(browserRoot, filePath, content);
-          } else {
-            const result = await invoke<WriteResult>("save_file", {
-              path: `${index.rootPath}/${filePath}`,
-              content,
-              expectedModifiedMs: null,
-            });
-            if (!result.ok) {
-              throw new Error(result.message ?? "Could not create page.");
-            }
+        if (browserRoot) {
+          await writeBrowserFile(browserRoot, filePath, content);
+        } else {
+          const result = await invoke<WriteResult>("save_file", {
+            path: `${index.rootPath}/${filePath}`,
+            content,
+            expectedModifiedMs: null,
+          });
+          if (!result.ok) {
+            throw new Error(result.message ?? "Could not create page.");
           }
-
-          const nextIndex = await refreshUniverse(filePath);
-          selectPathAfterRefresh(filePath, nextIndex);
-          showToast(`Created blank page: ${fileName}`);
-        } catch (error) {
-          throw error;
         }
+
+        const nextIndex = await refreshUniverse(filePath);
+        selectPathAfterRefresh(filePath, nextIndex);
+        showToast(`Created blank page: ${fileName}`);
       } else if (action === "newPageFromTemplate" && templateType) {
         const name = await promptUser(`Enter ${templateType} name:`);
         if (!name || name.trim() === "") {
           return;
         }
 
-        try {
-          const slug = slugify(name);
-          const filePath = parentPath ? `${parentPath}/${slug}.md` : `${slug}.md`;
+        const slug = slugify(name);
+        const filePath = parentPath ? `${parentPath}/${slug}.md` : `${slug}.md`;
 
-
-          if (browserRoot) {
-            await writeBrowserFile(browserRoot, filePath, contentFromTemplate(index, templateType, name));
-          } else {
-            const result = await invoke<WriteResult>("create_entity", {
-              vaultPath: index.rootPath,
-              universePath: "",
-              folderPath: parentPath,
-              entityType: templateType,
-              name,
-            });
-            if (!result.ok) {
-              throw new Error(result.message ?? "Could not create entity.");
-            }
+        if (browserRoot) {
+          await writeBrowserFile(browserRoot, filePath, contentFromTemplate(index, templateType, name));
+        } else {
+          const result = await invoke<WriteResult>("create_entity", {
+            vaultPath: index.rootPath,
+            universePath: "",
+            folderPath: parentPath,
+            entityType: templateType,
+            name,
+          });
+          if (!result.ok) {
+            throw new Error(result.message ?? "Could not create entity.");
           }
-
-          const nextIndex = await refreshUniverse(filePath);
-          selectPathAfterRefresh(filePath, nextIndex);
-          showToast(`Created ${templateType}: ${name}`);
-        } catch (error) {
-          throw error;
         }
+
+        const nextIndex = await refreshUniverse(filePath);
+        selectPathAfterRefresh(filePath, nextIndex);
+        showToast(`Created ${templateType}: ${name}`);
       } else if (action === "newFolder") {
         const name = await promptUser("Enter folder name:");
         if (!name || name.trim() === "") {
           return;
         }
 
-        try {
-          const folderPath = parentPath ? `${parentPath}/${name}` : name;
-          const descriptionPath = parentPath ? `${parentPath}/${name}.md` : `${name}.md`;
-          const descriptionContent = folderDescriptionContent(name);
+        const folderPath = parentPath ? `${parentPath}/${name}` : name;
+        const descriptionPath = parentPath ? `${parentPath}/${name}.md` : `${name}.md`;
+        const descriptionContent = folderDescriptionContent(name);
 
-
-          if (browserRoot) {
-            await ensureBrowserWritePermission(browserRoot);
-            await getBrowserDirectory(browserRoot, folderPath, true);
-            await writeBrowserFile(browserRoot, descriptionPath, descriptionContent);
-          } else {
-            const folderResult = await invoke<WriteResult>("create_folder", {
-              vaultPath: index.rootPath,
-              relativePath: folderPath,
-            });
-            if (!folderResult.ok) {
-              throw new Error(folderResult.message ?? "Could not create folder.");
-            }
-            const descriptionResult = await invoke<WriteResult>("save_file", {
-              path: `${index.rootPath}/${descriptionPath}`,
-              content: descriptionContent,
-              expectedModifiedMs: null,
-            });
-            if (!descriptionResult.ok) {
-              throw new Error(descriptionResult.message ?? "Could not create folder description.");
-            }
+        if (browserRoot) {
+          await ensureBrowserWritePermission(browserRoot);
+          await getBrowserDirectory(browserRoot, folderPath, true);
+          await writeBrowserFile(browserRoot, descriptionPath, descriptionContent);
+        } else {
+          const folderResult = await invoke<WriteResult>("create_folder", {
+            vaultPath: index.rootPath,
+            relativePath: folderPath,
+          });
+          if (!folderResult.ok) {
+            throw new Error(folderResult.message ?? "Could not create folder.");
           }
-          
-          const nextIndex = await refreshUniverse(descriptionPath);
-          setExpandedPaths((prev) => new Set(prev).add(folderPath));
-          selectPathAfterRefresh(descriptionPath, nextIndex);
-          showToast(`Created folder: ${name}`);
-        } catch (error) {
-          throw error;
+          const descriptionResult = await invoke<WriteResult>("save_file", {
+            path: `${index.rootPath}/${descriptionPath}`,
+            content: descriptionContent,
+            expectedModifiedMs: null,
+          });
+          if (!descriptionResult.ok) {
+            throw new Error(descriptionResult.message ?? "Could not create folder description.");
+          }
         }
+
+        const nextIndex = await refreshUniverse(descriptionPath);
+        setExpandedPaths((prev) => new Set(prev).add(folderPath));
+        selectPathAfterRefresh(descriptionPath, nextIndex);
+        showToast(`Created folder: ${name}`);
       } else if (action === "rename" && targetKind !== "empty") {
         const currentName = pathName(targetPath);
         const newName = await promptUser("New name:", "new name", currentName);
@@ -1741,8 +1727,8 @@ function App() {
         root = await picker.showDirectoryPicker({ mode: "readwrite" });
         console.log("[openUniverse] Directory selected (readwrite):", root.name);
       } catch (pickerError: unknown) {
-        const errorName = (pickerError as any)?.name;
-        const errorCode = (pickerError as any)?.code;
+        const errorName = pickerError instanceof DOMException ? pickerError.name : undefined;
+        const errorCode = pickerError instanceof DOMException ? pickerError.code : undefined;
         console.log("[openUniverse] Readwrite picker failed:", { errorName, errorCode });
         
         // If readwrite fails with AbortError in restricted environment, try read-only
@@ -1752,7 +1738,7 @@ function App() {
             root = await picker.showDirectoryPicker();
             console.log("[openUniverse] Directory selected (read-only):", root.name);
           } catch (readonlyError: unknown) {
-            const roErrorName = (readonlyError as any)?.name;
+            const roErrorName = readonlyError instanceof DOMException ? readonlyError.name : undefined;
             console.log("[openUniverse] Read-only picker also failed:", { roErrorName });
             if (roErrorName === "AbortError") {
               console.log("[openUniverse] User cancelled directory selection");

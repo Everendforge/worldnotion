@@ -40,7 +40,10 @@ export function deserializePropertiesConfig(jsonString: string): {
   try {
     config = JSON.parse(jsonString);
   } catch (error) {
-    throw new Error(`Failed to parse properties.json: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to parse properties.json: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 
   // Detect version
@@ -131,7 +134,10 @@ export function importPropertiesTemplate(jsonString: string): {
   try {
     template = JSON.parse(jsonString);
   } catch (error) {
-    throw new Error(`Failed to parse template: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to parse template: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 
   if (!template.definitions || !Array.isArray(template.definitions)) {

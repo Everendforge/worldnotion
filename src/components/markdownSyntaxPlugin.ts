@@ -9,7 +9,7 @@ const TASK_CHECKBOX_REGEX = /^(\s*)- \[[ xX]\]\s/; // Task list
 
 // Inline style patterns - compiled once at module load
 const BOLD_PATTERN = /(\*\*|__)([^*_`\n]+?)\1/g;
-const ITALIC_PATTERN = /(^|[^\*_\w])(\*|_)([^*_`\n]+?)\2(?![\*_\w])/g;
+const ITALIC_PATTERN = /(^|[^*_\w])(\*|_)([^*_`\n]+?)\2(?![*_\w])/g;
 const CODE_PATTERN = /`([^`\n]+?)`/g;
 const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\(([^)]+)\)/g;
 

@@ -600,7 +600,7 @@ export function mergeTagHierarchy(predefinedTags: TagHierarchyNode[], detectedTa
  */
 export function migrateTaxonomyConfig(config: TaxonomyConfig): TaxonomyConfig {
   let needsMigration = false;
-  let migratedConfig = { ...config };
+  const migratedConfig = { ...config };
 
   // Check if baseProperties migration is needed
   if (!config.baseProperties) {

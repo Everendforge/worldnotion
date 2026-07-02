@@ -465,6 +465,8 @@ function ExplorerTreeRow({
         </span>
         {tagColor && row.kind === "file" ? <span className="tree-tag-indicator" style={{ backgroundColor: tagColor }} title="Tag color" /> : null}
         {IconComponent ? (
+          // getIconComponent returns a module-level lucide component, not one created during render.
+          // eslint-disable-next-line react-hooks/static-components
           <IconComponent size={14} />
         ) : row.kind === "folder" ? (
           row.isExpanded ? <FolderOpen size={14} /> : <Folder size={14} />

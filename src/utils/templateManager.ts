@@ -37,7 +37,10 @@ export function savePropertyTemplate(template: PropertyTemplate): void {
     };
     localStorage.setItem(storageKey, JSON.stringify(templateData));
   } catch (error) {
-    throw new Error(`Failed to save template "${template.name}": ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to save template "${template.name}": ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 }
 

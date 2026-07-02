@@ -1128,7 +1128,7 @@ export function MetadataEditor({
           </select>
         );
 
-      case "multiselect":
+      case "multiselect": {
         const selected = Array.isArray(value) ? value : [];
         return (
           <div className="multiselect-field">
@@ -1149,6 +1149,7 @@ export function MetadataEditor({
             ))}
           </div>
         );
+      }
 
       default:
         return (

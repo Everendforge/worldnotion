@@ -438,7 +438,7 @@ export function CodeMirrorEditor({
     const line = view.state.doc.lineAt(selection.from);
     const lineText = line.text;
     // Match unordered lists (-, *), ordered lists (1.), or checkboxes (- [ ])
-    return /^(\s*)([-*]|(\d+)\.|\-\s\[[\sx]\])\s/.test(lineText);
+    return /^(\s*)([-*]|(\d+)\.|-\s\[[\sx]\])\s/.test(lineText);
   }
 
   function isInQuote(view: EditorView): boolean {
