@@ -75,16 +75,21 @@ import { recordFileAccessInSettings } from "./utils/fileAccessStats";
 import { loadSettings, saveSettings } from "./settings";
 import {
   type BrowserDirectoryHandle,
-  copyBrowserPath,
   ensureBrowserWritePermission,
-  getBrowserDirectory,
   getBrowserFile,
-  moveBrowserPath,
   readBrowserUniverse,
-  removeBrowserPath,
-  renameBrowserPath,
   writeBrowserFile,
 } from "./utils/browserVault";
+import {
+  createVaultEntity,
+  createVaultFolder,
+  duplicateVaultPath,
+  moveVaultPath,
+  renameVaultPath,
+  saveVaultFile,
+  trashVaultPath,
+  vaultHandleFor,
+} from "./utils/vaultFileOps";
 import { setBrowserVaultRoot } from "./utils/vaultImages";
 import {
   buildCommandResults,
@@ -111,7 +116,6 @@ import {
   pathExists,
   pathIsAffectedByChanges,
   pathName,
-  relativeFromAbsolute,
   selectedAbsolutePath as getSelectedAbsolutePath,
 } from "./utils/pathUtils";
 import {
@@ -976,31 +980,16 @@ function App() {
     const plan = planFolderDescriptionRename(index, folderPath, newFolderName);
     if (!plan) return undefined;
 
-    if (browserRoot) {
-      if (plan.oldDescriptionPath !== plan.newDescriptionPath) {
-        await renameBrowserPath(browserRoot, plan.oldDescriptionPath, plan.newFileName, "file");
-      }
-      await writeBrowserFile(browserRoot, plan.newDescriptionPath, plan.content);
-    } else {
-      if (plan.oldDescriptionPath !== plan.newDescriptionPath) {
-        const renameResult = await invoke<WriteResult>("rename_path", {
-          vaultPath: index.rootPath,
-          relativePath: plan.oldDescriptionPath,
-          newName: plan.newFileName,
-        });
-        if (!renameResult.ok) {
-          throw new Error(renameResult.message ?? "Could not rename folder description.");
-        }
-      }
-      const saveResult = await invoke<WriteResult>("save_file", {
-        path: `${index.rootPath}/${plan.newDescriptionPath}`,
-        content: plan.content,
-        expectedModifiedMs: null,
-      });
-      if (!saveResult.ok) {
-        throw new Error(saveResult.message ?? "Could not update folder description.");
-      }
+    const vault = vaultHandleFor(index.rootPath, browserRoot);
+    if (plan.oldDescriptionPath !== plan.newDescriptionPath) {
+      await renameVaultPath(vault, plan.oldDescriptionPath, plan.newFileName, "file");
     }
+    await saveVaultFile(
+      vault,
+      plan.newDescriptionPath,
+      plan.content,
+      "Could not update folder description.",
+    );
 
     return plan.change;
   }
@@ -1036,18 +1025,12 @@ function App() {
         const cleanName = name.replace(/\.md$/i, "");
         const content = `${contentFromTemplate(index, "concept", cleanName)}\n`;
 
-        if (browserRoot) {
-          await writeBrowserFile(browserRoot, filePath, content);
-        } else {
-          const result = await invoke<WriteResult>("save_file", {
-            path: `${index.rootPath}/${filePath}`,
-            content,
-            expectedModifiedMs: null,
-          });
-          if (!result.ok) {
-            throw new Error(result.message ?? "Could not create page.");
-          }
-        }
+        await saveVaultFile(
+          vaultHandleFor(index.rootPath, browserRoot),
+          filePath,
+          content,
+          "Could not create page.",
+        );
 
         const nextIndex = await refreshUniverse(filePath);
         selectPathAfterRefresh(filePath, nextIndex);
@@ -1061,24 +1044,13 @@ function App() {
         const slug = slugify(name);
         const filePath = parentPath ? `${parentPath}/${slug}.md` : `${slug}.md`;
 
-        if (browserRoot) {
-          await writeBrowserFile(
-            browserRoot,
-            filePath,
-            contentFromTemplate(index, templateType, name),
-          );
-        } else {
-          const result = await invoke<WriteResult>("create_entity", {
-            vaultPath: index.rootPath,
-            universePath: "",
-            folderPath: parentPath,
-            entityType: templateType,
-            name,
-          });
-          if (!result.ok) {
-            throw new Error(result.message ?? "Could not create entity.");
-          }
-        }
+        await createVaultEntity(vaultHandleFor(index.rootPath, browserRoot), {
+          parentPath,
+          entityType: templateType,
+          name,
+          browserPath: filePath,
+          browserContent: contentFromTemplate(index, templateType, name),
+        });
 
         const nextIndex = await refreshUniverse(filePath);
         selectPathAfterRefresh(filePath, nextIndex);
@@ -1093,27 +1065,14 @@ function App() {
         const descriptionPath = parentPath ? `${parentPath}/${name}.md` : `${name}.md`;
         const descriptionContent = folderDescriptionContent(name);
 
-        if (browserRoot) {
-          await ensureBrowserWritePermission(browserRoot);
-          await getBrowserDirectory(browserRoot, folderPath, true);
-          await writeBrowserFile(browserRoot, descriptionPath, descriptionContent);
-        } else {
-          const folderResult = await invoke<WriteResult>("create_folder", {
-            vaultPath: index.rootPath,
-            relativePath: folderPath,
-          });
-          if (!folderResult.ok) {
-            throw new Error(folderResult.message ?? "Could not create folder.");
-          }
-          const descriptionResult = await invoke<WriteResult>("save_file", {
-            path: `${index.rootPath}/${descriptionPath}`,
-            content: descriptionContent,
-            expectedModifiedMs: null,
-          });
-          if (!descriptionResult.ok) {
-            throw new Error(descriptionResult.message ?? "Could not create folder description.");
-          }
-        }
+        const vault = vaultHandleFor(index.rootPath, browserRoot);
+        await createVaultFolder(vault, folderPath);
+        await saveVaultFile(
+          vault,
+          descriptionPath,
+          descriptionContent,
+          "Could not create folder description.",
+        );
 
         const nextIndex = await refreshUniverse(descriptionPath);
         setExpandedPaths((prev) => new Set(prev).add(folderPath));
@@ -1126,16 +1085,12 @@ function App() {
         if (targetKind === "folder") {
           planFolderDescriptionRename(index, targetPath, newName);
         }
-        if (browserRoot) {
-          await renameBrowserPath(browserRoot, targetPath, newName, targetKind);
-        } else {
-          const result = await invoke<WriteResult>("rename_path", {
-            vaultPath: index.rootPath,
-            relativePath: targetPath,
-            newName,
-          });
-          if (!result.ok) throw new Error(result.message ?? "Could not rename item.");
-        }
+        await renameVaultPath(
+          vaultHandleFor(index.rootPath, browserRoot),
+          targetPath,
+          newName,
+          targetKind,
+        );
         const folderDescriptionChange =
           targetKind === "folder"
             ? await renameFolderDescriptionIfNeeded(targetPath, newName)
@@ -1146,19 +1101,12 @@ function App() {
         await refreshUniverse(undefined, changes);
         showToast(`Renamed ${currentName}.`, "success");
       } else if (action === "duplicate" && targetKind !== "empty") {
-        let nextPath: string;
-        if (browserRoot) {
-          nextPath = duplicatePathFor(index, targetPath, targetKind);
-          await copyBrowserPath(browserRoot, targetPath, nextPath, targetKind);
-        } else {
-          const result = await invoke<WriteResult>("duplicate_path", {
-            vaultPath: index.rootPath,
-            relativePath: targetPath,
-            targetName: null,
-          });
-          if (!result.ok) throw new Error(result.message ?? "Could not duplicate item.");
-          nextPath = relativeFromAbsolute(index.rootPath, result.path);
-        }
+        const nextPath = await duplicateVaultPath(
+          vaultHandleFor(index.rootPath, browserRoot),
+          targetPath,
+          targetKind,
+          duplicatePathFor(index, targetPath, targetKind),
+        );
         await refreshUniverse(nextPath);
         showToast("Duplicated item.", "success");
       } else if (action === "move" && targetKind !== "empty") {
@@ -1222,18 +1170,12 @@ function App() {
       ? window.confirm(`Move ${pathName(fromPath)} to ${toFolderPath || "root"}?`)
       : true;
     if (!confirmed) return;
-    let movedPath: string;
-    if (browserRoot) {
-      movedPath = await moveBrowserPath(browserRoot, fromPath, toFolderPath, itemKind);
-    } else {
-      const result = await invoke<WriteResult>("move_path", {
-        vaultPath: index.rootPath,
-        fromRelativePath: fromPath,
-        toFolderRelativePath: toFolderPath,
-      });
-      if (!result.ok) throw new Error(result.message ?? "Could not move item.");
-      movedPath = relativeFromAbsolute(index.rootPath, result.path);
-    }
+    const movedPath = await moveVaultPath(
+      vaultHandleFor(index.rootPath, browserRoot),
+      fromPath,
+      toFolderPath,
+      itemKind,
+    );
     const change = movePathChange(fromPath, dirname(movedPath));
     updateTabsForPathChange(change);
     await refreshUniverse(undefined, change);
@@ -1268,37 +1210,16 @@ function App() {
         : `${labels.trashAction} ${pathName(path)}?`,
     );
     if (!confirmed) return;
-    if (browserRoot) {
-      await removeBrowserPath(browserRoot, path, true);
-      // Also delete folder note if trashing a folder
-      if (kind === "folder") {
-        const folderNotePath = folderDescriptionPath(path);
-        if (index.files.some((file) => file.relativePath === folderNotePath)) {
-          try {
-            await removeBrowserPath(browserRoot, folderNotePath, true);
-          } catch {
-            // Ignore error if folder note doesn't exist
-          }
-        }
-      }
-    } else {
-      const result = await invoke<WriteResult>("trash_path", {
-        vaultPath: index.rootPath,
-        relativePath: path,
-      });
-      if (!result.ok) throw new Error(result.message ?? "Could not move item to Trash.");
-      // Also trash folder note if trashing a folder
-      if (kind === "folder") {
-        const folderNotePath = folderDescriptionPath(path);
-        if (index.files.some((file) => file.relativePath === folderNotePath)) {
-          try {
-            await invoke<WriteResult>("trash_path", {
-              vaultPath: index.rootPath,
-              relativePath: folderNotePath,
-            });
-          } catch {
-            // Ignore error if folder note doesn't exist
-          }
+    const vault = vaultHandleFor(index.rootPath, browserRoot);
+    await trashVaultPath(vault, path);
+    // Also trash the folder note when trashing a folder
+    if (kind === "folder") {
+      const folderNotePath = folderDescriptionPath(path);
+      if (index.files.some((file) => file.relativePath === folderNotePath)) {
+        try {
+          await trashVaultPath(vault, folderNotePath);
+        } catch {
+          // Ignore error if folder note doesn't exist
         }
       }
     }
@@ -1335,20 +1256,15 @@ function App() {
     const folderName = folderPath.split("/").pop() ?? folderPath;
     const parentPath = dirname(folderPath);
     const descriptionPath = parentPath ? `${parentPath}/${folderName}.md` : `${folderName}.md`;
-    const fullPath = `${index.rootPath}/${descriptionPath}`;
     const content = folderDescriptionContent(folderName);
 
     try {
-      if (browserRoot) {
-        await writeBrowserFile(browserRoot, descriptionPath, content);
-      } else {
-        const result = await invoke<WriteResult>("save_file", {
-          path: fullPath,
-          content,
-          expectedModifiedMs: null,
-        });
-        if (!result.ok) throw new Error(result.message ?? "Could not create folder description.");
-      }
+      await saveVaultFile(
+        vaultHandleFor(index.rootPath, browserRoot),
+        descriptionPath,
+        content,
+        "Could not create folder description.",
+      );
 
       const nextIndex = await refreshUniverse(descriptionPath);
       selectPathAfterRefresh(descriptionPath, nextIndex);
@@ -1366,16 +1282,12 @@ function App() {
     try {
       if (!index.files.some((file) => file.relativePath === relativePath)) {
         const content = universeNoteContent(universeName);
-        if (browserRoot) {
-          await writeBrowserFile(browserRoot, relativePath, content);
-        } else {
-          const result = await invoke<WriteResult>("save_file", {
-            path: `${index.rootPath}/${relativePath}`,
-            content,
-            expectedModifiedMs: null,
-          });
-          if (!result.ok) throw new Error(result.message ?? "Could not create universe note.");
-        }
+        await saveVaultFile(
+          vaultHandleFor(index.rootPath, browserRoot),
+          relativePath,
+          content,
+          "Could not create universe note.",
+        );
       }
 
       const nextIndex = await refreshUniverse(relativePath);
@@ -1396,16 +1308,12 @@ function App() {
     };
     const content = `${JSON.stringify(normalizedProfile, null, 2)}\n`;
     try {
-      if (browserRoot) {
-        await writeBrowserFile(browserRoot, ".everend/universe.json", content);
-      } else {
-        const result = await invoke<WriteResult>("save_file", {
-          path: `${index.rootPath}/.everend/universe.json`,
-          content,
-          expectedModifiedMs: null,
-        });
-        if (!result.ok) throw new Error(result.message ?? "Could not save universe profile.");
-      }
+      await saveVaultFile(
+        vaultHandleFor(index.rootPath, browserRoot),
+        ".everend/universe.json",
+        content,
+        "Could not save universe profile.",
+      );
       setIndex((current) =>
         current ? { ...current, universeProfile: normalizedProfile } : current,
       );
@@ -1428,17 +1336,12 @@ function App() {
     const normalizedProperties = normalizeCoreBaseProperties(properties);
     const content = `${JSON.stringify(normalizedProperties, null, 2)}\n`;
     try {
-      if (browserRoot) {
-        await writeBrowserFile(browserRoot, ".everend/properties.json", content);
-      } else {
-        const result = await invoke<WriteResult>("save_file", {
-          path: `${index.rootPath}/.everend/properties.json`,
-          content,
-          expectedModifiedMs: null,
-        });
-        if (!result.ok)
-          throw new Error(result.message ?? "Could not save properties configuration.");
-      }
+      await saveVaultFile(
+        vaultHandleFor(index.rootPath, browserRoot),
+        ".everend/properties.json",
+        content,
+        "Could not save properties configuration.",
+      );
       setIndex((current) =>
         current ? { ...current, propertiesConfig: normalizedProperties } : current,
       );
@@ -1539,17 +1442,14 @@ function App() {
       }
 
       try {
-        if (browserRoot) {
-          await writeBrowserFile(browserRoot, item.path, item.nextContent);
-        } else {
-          const result = await invoke<WriteResult>("save_file", {
-            path: `${index.rootPath}/${item.path}`,
-            content: item.nextContent,
-            expectedModifiedMs: item.modifiedMs ?? null,
-          });
-          if (!result.ok) {
-            throw new Error(result.message ?? `Could not normalize ${item.path}.`);
-          }
+        {
+          await saveVaultFile(
+            vaultHandleFor(index.rootPath, browserRoot),
+            item.path,
+            item.nextContent,
+            `Could not normalize ${item.path}.`,
+            item.modifiedMs ?? null,
+          );
         }
         applied += 1;
         appliedPaths.push(item.path);
@@ -1710,16 +1610,12 @@ function App() {
     const relativePath = `.everend/templates/${templateType}.md`;
     const content = `---\nid: {{id}}\ntype: ${templateType}\nname: {{name}}\nstatus: {{status}}\ntags: []\naliases: []\n---\n\n# {{name}}\n`;
     try {
-      if (browserRoot) {
-        await writeBrowserFile(browserRoot, relativePath, content);
-      } else {
-        const result = await invoke<WriteResult>("save_file", {
-          path: `${index.rootPath}/${relativePath}`,
-          content,
-          expectedModifiedMs: null,
-        });
-        if (!result.ok) throw new Error(result.message ?? "Could not create template.");
-      }
+      await saveVaultFile(
+        vaultHandleFor(index.rootPath, browserRoot),
+        relativePath,
+        content,
+        "Could not create template.",
+      );
       const nextIndex = await refreshUniverse(relativePath);
       selectPathAfterRefresh(relativePath, nextIndex);
       setTemplatesExpanded(true);
@@ -2505,16 +2401,12 @@ function App() {
     const content = `${contentFromTemplate(index, "concept", name)}\n`;
 
     try {
-      if (browserRoot) {
-        await writeBrowserFile(browserRoot, relativePath, content);
-      } else {
-        const result = await invoke<WriteResult>("save_file", {
-          path: `${index.rootPath}/${relativePath}`,
-          content,
-          expectedModifiedMs: null,
-        });
-        if (!result.ok) throw new Error(result.message ?? "Could not create note.");
-      }
+      await saveVaultFile(
+        vaultHandleFor(index.rootPath, browserRoot),
+        relativePath,
+        content,
+        "Could not create note.",
+      );
       const nextIndex = await refreshUniverse(relativePath);
       selectPathAfterRefresh(relativePath, nextIndex);
       showToast(`Created ${name}.`, "success");
