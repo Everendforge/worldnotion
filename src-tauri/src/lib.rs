@@ -403,7 +403,7 @@ fn reveal_in_system(path: &Path) -> Result<(), String> {
             .arg(format!("/select,{}", path.to_string_lossy()))
             .status()
             .map_err(|error| error.to_string())?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -437,7 +437,7 @@ fn open_in_system(path: &Path) -> Result<(), String> {
             .arg(path)
             .status()
             .map_err(|error| error.to_string())?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -486,11 +486,11 @@ fn move_to_system_trash(path: &Path) -> Result<(), String> {
             .arg(script)
             .status()
             .map_err(|error| error.to_string())?;
-        return if status.success() {
+        if status.success() {
             Ok(())
         } else {
             Err("Could not move item to Recycle Bin.".to_string())
-        };
+        }
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
