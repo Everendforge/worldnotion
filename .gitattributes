@@ -1,0 +1,19 @@
+# Normaliza line-endings: el repo guarda LF y los checkouts usan LF,
+# para que Prettier (endOfLine: lf) dé el mismo resultado en Windows y CI.
+* text=auto
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+
+# Binarios
+*.png binary
+*.ico binary
+*.icns binary
