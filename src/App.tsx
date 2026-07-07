@@ -1162,7 +1162,12 @@ function App() {
         await refreshUniverse(nextPath);
         showToast("Duplicated item.", "success");
       } else if (action === "move" && targetKind !== "empty") {
-        const targetFolder = prompt("Move to folder path:", dirname(targetPath));
+        // window.prompt es poco fiable en los webviews de Tauri (no-op en macOS).
+        const targetFolder = await promptUser(
+          "Move to folder path:",
+          "folder path",
+          dirname(targetPath),
+        );
         if (targetFolder === null) return;
         await moveExplorerPath(targetPath, targetFolder, targetKind);
       } else if (action === "toggleFavorite" && targetKind !== "empty") {
