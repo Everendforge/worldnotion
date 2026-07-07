@@ -117,10 +117,22 @@ export function TemplateDialog({
 
   return (
     <div className="template-dialog-overlay" onClick={onClose}>
-      <div className="template-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="template-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Property Templates"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            onClose();
+          }
+        }}
+      >
         <div className="template-dialog-header">
           <h2>Property Templates</h2>
-          <button className="close-btn" onClick={onClose}>
+          <button className="close-btn" aria-label="Close templates" onClick={onClose}>
             <X size={20} />
           </button>
         </div>

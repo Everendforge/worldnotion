@@ -48,7 +48,19 @@ export function InputDialog({
 
   return (
     <div className="modal-overlay" onClick={handleCancel}>
-      <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            handleCancel();
+          }
+        }}
+      >
         <div className="modal-header">
           <h2>{title}</h2>
         </div>

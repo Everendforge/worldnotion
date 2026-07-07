@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import "../App.css";
 
 export interface UnsavedChangesDialogProps {
@@ -17,15 +18,35 @@ export function UnsavedChangesDialog({
   onCancel,
   isSaving = false,
 }: UnsavedChangesDialogProps) {
+  const saveRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) saveRef.current?.focus();
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   async function handleSave() {
     await onSave();
   }
 
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape" && !isSaving) {
+      e.stopPropagation();
+      onCancel();
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal-dialog unsaved-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-dialog unsaved-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Cambios sin guardar"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
         <div className="modal-header">
           <h2>Cambios sin guardar</h2>
         </div>
@@ -52,6 +73,7 @@ export function UnsavedChangesDialog({
             Descartar
           </button>
           <button
+            ref={saveRef}
             onClick={handleSave}
             className="modal-button modal-button-confirm"
             disabled={isSaving}

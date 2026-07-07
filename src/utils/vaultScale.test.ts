@@ -61,8 +61,10 @@ function timed<T>(label: string, budgetMs: number, run: () => T): T {
   const result = run();
   const elapsed = performance.now() - start;
   console.info(`[vaultScale] ${label}: ${Math.round(elapsed)}ms (budget ${budgetMs}ms)`);
-  expect(elapsed, `${label} exceeded its ${budgetMs}ms budget (took ${Math.round(elapsed)}ms)`)
-    .toBeLessThan(budgetMs);
+  expect(
+    elapsed,
+    `${label} exceeded its ${budgetMs}ms budget (took ${Math.round(elapsed)}ms)`,
+  ).toBeLessThan(budgetMs);
   return result;
 }
 
