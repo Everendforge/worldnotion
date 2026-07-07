@@ -417,7 +417,7 @@ fn reveal_in_system(path: &Path) -> Result<(), String> {
             .arg(target)
             .status()
             .map_err(|error| error.to_string())?;
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -428,7 +428,7 @@ fn open_in_system(path: &Path) -> Result<(), String> {
             .arg(path)
             .status()
             .map_err(|error| error.to_string())?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(target_os = "windows")]
@@ -446,7 +446,7 @@ fn open_in_system(path: &Path) -> Result<(), String> {
             .arg(path)
             .status()
             .map_err(|error| error.to_string())?;
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -462,11 +462,11 @@ fn move_to_system_trash(path: &Path) -> Result<(), String> {
             .arg(script)
             .status()
             .map_err(|error| error.to_string())?;
-        return if status.success() {
+        if status.success() {
             Ok(())
         } else {
             Err("Could not move item to Trash.".to_string())
-        };
+        }
     }
 
     #[cfg(target_os = "windows")]
@@ -500,11 +500,11 @@ fn move_to_system_trash(path: &Path) -> Result<(), String> {
             .arg(path)
             .status()
             .map_err(|error| error.to_string())?;
-        return if status.success() {
+        if status.success() {
             Ok(())
         } else {
             Err("Could not move item to Trash.".to_string())
-        };
+        }
     }
 }
 
