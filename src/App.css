@@ -391,8 +391,11 @@ button:disabled {
   padding: 5px 0 0 5px;
   border: 1px solid color-mix(in srgb, var(--wn-accent) 46%, var(--wn-border));
   border-radius: 0 0 10px 0;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--wn-panel) 78%, var(--wn-accent) 22%), color-mix(in srgb, var(--wn-panel-2) 72%, var(--wn-accent) 28%));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--wn-panel) 78%, var(--wn-accent) 22%),
+    color-mix(in srgb, var(--wn-panel-2) 72%, var(--wn-accent) 28%)
+  );
   color: var(--wn-text);
   box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 32%, transparent);
   pointer-events: auto;
@@ -427,8 +430,11 @@ button:disabled {
 :root[data-theme="night-owl"] .forge-corner-button,
 :root[data-theme="material-palenight"] .forge-corner-button {
   border-color: color-mix(in srgb, var(--wn-accent) 58%, var(--wn-border));
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--wn-panel-2) 68%, var(--wn-accent) 32%), color-mix(in srgb, var(--wn-panel) 78%, #000 22%));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--wn-panel-2) 68%, var(--wn-accent) 32%),
+    color-mix(in srgb, var(--wn-panel) 78%, #000 22%)
+  );
   box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent);
 }
 
@@ -445,8 +451,11 @@ button:disabled {
 .forge-corner-button:hover,
 .forge-corner-button:focus-visible,
 .forge-corner-menu.open .forge-corner-button {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--wn-panel) 66%, var(--wn-accent) 34%), color-mix(in srgb, var(--wn-panel-2) 60%, var(--wn-accent) 40%));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--wn-panel) 66%, var(--wn-accent) 34%),
+    color-mix(in srgb, var(--wn-panel-2) 60%, var(--wn-accent) 40%)
+  );
   outline: 0;
 }
 
@@ -10772,4 +10781,112 @@ select.property-field-control {
   background: color-mix(in srgb, var(--wn-danger) 8%, transparent);
   color: var(--wn-danger);
   font-size: 0.82rem;
+}
+
+/* Manual cross-app Canon changes */
+.canon-changes-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, #000 46%, transparent);
+}
+.canon-changes-dialog {
+  width: min(960px, 100%);
+  max-height: min(720px, 92vh);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid var(--wn-border);
+  border-radius: 10px;
+  background: var(--wn-panel);
+  box-shadow: 0 20px 60px color-mix(in srgb, #000 36%, transparent);
+}
+.canon-changes-dialog header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.canon-changes-dialog h2,
+.canon-changes-dialog h3,
+.canon-changes-dialog p {
+  margin: 0;
+}
+.canon-changes-dialog header p {
+  margin-top: 4px;
+  color: var(--wn-muted);
+  font-size: 0.82rem;
+}
+.canon-changes-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.35fr) minmax(0, 1fr);
+  min-height: 0;
+  border: 1px solid var(--wn-border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.canon-change-list {
+  overflow: auto;
+  border-right: 1px solid var(--wn-border);
+}
+.canon-change-list button {
+  width: 100%;
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--wn-border);
+  background: transparent;
+  color: var(--wn-text);
+  text-align: left;
+}
+.canon-change-list button.active,
+.canon-change-list button:hover {
+  background: var(--wn-panel-hover);
+}
+.canon-change-list span,
+.canon-change-meta span {
+  color: var(--wn-muted);
+  font-size: 0.72rem;
+}
+.canon-change-detail {
+  min-width: 0;
+  overflow: auto;
+  padding: 14px;
+}
+.canon-change-detail h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 0 8px;
+  font-size: 0.9rem;
+}
+.canon-change-meta {
+  display: grid;
+  gap: 4px;
+}
+.canon-change-detail pre {
+  max-height: 360px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--wn-editor);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+}
+@media (max-width: 720px) {
+  .canon-changes-layout {
+    grid-template-columns: 1fr;
+  }
+  .canon-change-list {
+    max-height: 170px;
+    border-right: 0;
+    border-bottom: 1px solid var(--wn-border);
+  }
 }

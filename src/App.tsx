@@ -22,12 +22,14 @@ import {
   X,
   ExternalLink,
   Files,
+  GitPullRequest,
 } from "lucide-react";
 import "./App.css";
 import forgeLogoOnDark from "./assets/everend-forge-logo-on-dark.png";
 import forgeLogoOnLight from "./assets/everend-forge-logo-on-light.png";
 import worldnotionIcon from "./assets/worldnotion-icon.png";
 import { ContextMenu, type ContextMenuAction } from "./components/ContextMenu";
+import { CanonChangesDialog } from "./components/CanonChangesDialog";
 import { IconPicker, type IconName } from "./components/IconPicker";
 import { OutlineGuide } from "./components/OutlineGuide";
 import { FontSelector } from "./components/FontSelector";
@@ -171,6 +173,7 @@ import {
 import { editorCommandAction, nativeMenuEditorCommand } from "./utils/editorCommandActions";
 import { profileForRecent, rememberUniverse, universeDisplayName } from "./utils/universeSession";
 import { isTauriRuntime, platformLabels, shortcutMatches } from "./utils/appEnvironment";
+import { indexCanonChangeSets, type IndexedCanonChangeSet } from "./utils/canonChangeSets";
 
 const EVEREND_FORGE_GITHUB_URL = "https://github.com/Everendforge/everend-forge";
 const BUY_SUITE_URL = "https://everendforge.com/buy-suite";
@@ -178,8 +181,18 @@ const BUY_SUITE_URL = "https://everendforge.com/buy-suite";
 function ForgeCornerLogo() {
   return (
     <>
-      <img className="forge-logo forge-logo-on-light" src={forgeLogoOnLight} alt="" aria-hidden="true" />
-      <img className="forge-logo forge-logo-on-dark" src={forgeLogoOnDark} alt="" aria-hidden="true" />
+      <img
+        className="forge-logo forge-logo-on-light"
+        src={forgeLogoOnLight}
+        alt=""
+        aria-hidden="true"
+      />
+      <img
+        className="forge-logo forge-logo-on-dark"
+        src={forgeLogoOnDark}
+        alt=""
+        aria-hidden="true"
+      />
     </>
   );
 }
@@ -312,7 +325,9 @@ function pickImageFile(): Promise<File | null> {
       resolve(file);
     };
     input.onchange = () => done(input.files?.[0] ?? null);
-    window.addEventListener("focus", () => window.setTimeout(() => done(null), 400), { once: true });
+    window.addEventListener("focus", () => window.setTimeout(() => done(null), 400), {
+      once: true,
+    });
     input.click();
   });
 }
@@ -420,6 +435,7 @@ function App() {
   const { showToast } = useToast();
   const { confirmDialog } = useAppDialogs();
   const [pointerDragItem, setPointerDragItem] = useState<PointerDragItem>();
+  const [showCanonChanges, setShowCanonChanges] = useState(false);
   const [graphControlsPosition, setGraphControlsPosition] = useState({ x: 14, y: 14 });
   const suppressTreeClickRef = useRef(false);
 
@@ -475,6 +491,7 @@ function App() {
       });
   }, [index]);
   const labels = useMemo(() => platformLabels(), []);
+  const canonChangeSets = useMemo(() => (index ? indexCanonChangeSets(index.files) : []), [index]);
 
   useEffect(() => {
     setBrowserVaultRoot(browserRoot ?? null);
@@ -1440,6 +1457,75 @@ function App() {
     setSettings((current) =>
       rememberUniverse(current, readResult.rootPath, profileForRecent(nextIndex)),
     );
+  }
+
+  async function writeCanonChangeSet(
+    change: IndexedCanonChangeSet,
+    updates: Partial<IndexedCanonChangeSet>,
+  ) {
+    if (!index) return;
+    const next = { ...change, ...updates, updatedAt: new Date().toISOString() };
+    const { path, modifiedMs, ...portable } = next;
+    await saveVaultFile(
+      vaultHandleFor(index.rootPath, browserRoot),
+      path,
+      `${JSON.stringify(portable, null, 2)}\n`,
+      "Could not save Canon change set.",
+      modifiedMs ?? null,
+    );
+  }
+
+  async function applyCanonChangeSet(change: IndexedCanonChangeSet) {
+    if (!index || !canWrite) return;
+    if (!window.confirm(`Apply the proposal from ${change.sourceApp} to ${change.target.path}?`))
+      return;
+    const target = index.files.find((file) => file.relativePath === change.target.path);
+    try {
+      if (
+        !target ||
+        (change.base.modifiedMs !== undefined && target.modifiedMs !== change.base.modifiedMs)
+      ) {
+        await writeCanonChangeSet(change, { status: "conflicted" });
+        await reindexUniverseMetadata();
+        showToast(
+          "The Canon source changed or is missing; the proposal is now conflicted.",
+          "warning",
+        );
+        return;
+      }
+      await saveVaultFile(
+        vaultHandleFor(index.rootPath, browserRoot),
+        change.target.path,
+        change.proposed.content,
+        "Could not apply Canon change.",
+        target.modifiedMs ?? null,
+      );
+      await writeCanonChangeSet(change, {
+        status: "applied",
+        appliedAt: new Date().toISOString(),
+        appliedBy: "worldnotion",
+      });
+      await reindexUniverseMetadata();
+      showToast("Applied Canon change set.", "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Could not apply Canon change set.",
+        "error",
+      );
+    }
+  }
+
+  async function dismissCanonChangeSet(change: IndexedCanonChangeSet) {
+    try {
+      await writeCanonChangeSet(change, { status: "dismissed" });
+      await reindexUniverseMetadata();
+      showToast("Dismissed Canon change set.", "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Could not update Canon change set.",
+        "error",
+      );
+    }
   }
 
   function openDocument(nextIndex: VaultIndex, path: string) {
@@ -2918,7 +3004,9 @@ function App() {
                 readOnly={!canWrite}
                 resolveWikilink={resolveWikilink}
                 resolveImage={(rawPath) =>
-                  index ? resolveNoteImageUrl(index, documentTab.path, rawPath) : Promise.resolve(null)
+                  index
+                    ? resolveNoteImageUrl(index, documentTab.path, rawPath)
+                    : Promise.resolve(null)
                 }
                 onInsertImageFile={persistImageFile}
                 onRequestImage={requestImageInsertion}
@@ -3259,10 +3347,18 @@ function App() {
       <div className="dock-top-bar" aria-label="Workspace controls">
         <div ref={forgeMenuRef} className={`forge-corner-menu ${forgeMenuOpen ? "open" : ""}`}>
           <div className="forge-orbit-panel" aria-label="Everend menu">
-            <button type="button" onClick={() => void openUrl(EVEREND_FORGE_GITHUB_URL).then(() => setForgeMenuOpen(false))}>
+            <button
+              type="button"
+              onClick={() =>
+                void openUrl(EVEREND_FORGE_GITHUB_URL).then(() => setForgeMenuOpen(false))
+              }
+            >
               Github
             </button>
-            <button type="button" onClick={() => void openUrl(BUY_SUITE_URL).then(() => setForgeMenuOpen(false))}>
+            <button
+              type="button"
+              onClick={() => void openUrl(BUY_SUITE_URL).then(() => setForgeMenuOpen(false))}
+            >
               Buy Suite
             </button>
           </div>
@@ -3383,6 +3479,14 @@ function App() {
             >
               Flow Map
             </button>
+            <button
+              type="button"
+              className={showCanonChanges ? "active" : ""}
+              onClick={() => setShowCanonChanges(true)}
+              title="Review manual changes from other Everend apps"
+            >
+              <GitPullRequest size={14} /> Changes
+            </button>
           </div>
 
           <button
@@ -3430,6 +3534,14 @@ function App() {
             </button>
           </div>
         )}
+      />
+      <CanonChangesDialog
+        open={showCanonChanges}
+        changes={canonChangeSets}
+        onApply={(change) => void applyCanonChangeSet(change)}
+        onDismiss={(change) => void dismissCanonChangeSet(change)}
+        onRefresh={() => void reindexUniverseMetadata()}
+        onClose={() => setShowCanonChanges(false)}
       />
       {dockPanelContextMenu ? (
         <div
