@@ -372,6 +372,7 @@ function App() {
   const [, setPendingClosePaths] = useState<string[]>([]);
   const editorViewRef = useRef<EditorView | null>(null);
   const editorShellRef = useRef<HTMLDivElement | null>(null);
+  const forgeMenuRef = useRef<HTMLDivElement | null>(null);
   const inspectorSaveTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const propertiesOnboardingPromptedRef = useRef<Set<string>>(new Set());
   const ignoreFolderNoteMetadataBootstrappedRef = useRef(false);
@@ -428,6 +429,26 @@ function App() {
       inspectorSaveTimersRef.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (!forgeMenuOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (forgeMenuRef.current?.contains(event.target as Node)) return;
+      setForgeMenuOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setForgeMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [forgeMenuOpen]);
 
   const activeTab = tabs.find((tab) => tab.path === activeTabPath);
   const openTabPaths = useMemo(() => new Set(tabs.map((tab) => tab.path)), [tabs]);
@@ -3236,7 +3257,7 @@ function App() {
       style={{ "--dock-tab-scale": settings.editor.dockTabScale } as CSSProperties}
     >
       <div className="dock-top-bar" aria-label="Workspace controls">
-        <div className={`forge-corner-menu ${forgeMenuOpen ? "open" : ""}`}>
+        <div ref={forgeMenuRef} className={`forge-corner-menu ${forgeMenuOpen ? "open" : ""}`}>
           <div className="forge-orbit-panel" aria-label="Everend menu">
             <button type="button" onClick={() => void openUrl(EVEREND_FORGE_GITHUB_URL).then(() => setForgeMenuOpen(false))}>
               Github
