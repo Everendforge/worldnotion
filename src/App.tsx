@@ -4,7 +4,6 @@ import { listen } from "@tauri-apps/api/event";
 import { openUrl as openExternalUrl } from "@tauri-apps/plugin-opener";
 import type { EditorView } from "@codemirror/view";
 import {
-  BookOpen,
   Check,
   Circle,
   ChevronDown,
@@ -23,9 +22,11 @@ import {
   X,
   ExternalLink,
   Files,
-  Crown,
 } from "lucide-react";
 import "./App.css";
+import forgeLogoOnDark from "./assets/everend-forge-logo-on-dark.png";
+import forgeLogoOnLight from "./assets/everend-forge-logo-on-light.png";
+import worldnotionIcon from "./assets/worldnotion-icon.png";
 import { ContextMenu, type ContextMenuAction } from "./components/ContextMenu";
 import { IconPicker, type IconName } from "./components/IconPicker";
 import { OutlineGuide } from "./components/OutlineGuide";
@@ -170,6 +171,18 @@ import {
 import { editorCommandAction, nativeMenuEditorCommand } from "./utils/editorCommandActions";
 import { profileForRecent, rememberUniverse, universeDisplayName } from "./utils/universeSession";
 import { isTauriRuntime, platformLabels, shortcutMatches } from "./utils/appEnvironment";
+
+const EVEREND_FORGE_GITHUB_URL = "https://github.com/Everendforge/everend-forge";
+const BUY_SUITE_URL = "https://everendforge.com/buy-suite";
+
+function ForgeCornerLogo() {
+  return (
+    <>
+      <img className="forge-logo forge-logo-on-light" src={forgeLogoOnLight} alt="" aria-hidden="true" />
+      <img className="forge-logo forge-logo-on-dark" src={forgeLogoOnDark} alt="" aria-hidden="true" />
+    </>
+  );
+}
 import { pickBrowserDirectory } from "./utils/browserDirectoryPicker";
 import {
   expandedPathsToDepth,
@@ -2513,9 +2526,9 @@ function App() {
         <main className="home-shell">
           <header className="home-topbar">
             <div className="brand">
-              <BookOpen size={22} />
+              <img className="app-brand-icon" src={worldnotionIcon} alt="" aria-hidden="true" />
               <div>
-                <h1>WorldNotion</h1>
+                <h1>Worldnotion</h1>
                 <p>Universe-first Markdown workspace</p>
               </div>
             </div>
@@ -2531,7 +2544,7 @@ function App() {
                 <h2>Choose a universe</h2>
                 <p>
                   Open any local folder as a universe. Markdown stays readable, `.everend` keeps the
-                  portable metadata, and WorldNotion remembers where you were working.
+                  portable metadata, and Worldnotion remembers where you were working.
                 </p>
               </div>
 
@@ -3224,18 +3237,23 @@ function App() {
     >
       <div className="dock-top-bar" aria-label="Workspace controls">
         <div className={`forge-corner-menu ${forgeMenuOpen ? "open" : ""}`}>
-          <div className="forge-orbit-panel" aria-label="Everend Forge app selector">
-            <button type="button">Worldnotion</button>
-            <button type="button">Pathbranching</button>
+          <div className="forge-orbit-panel" aria-label="Everend menu">
+            <button type="button" onClick={() => void openUrl(EVEREND_FORGE_GITHUB_URL).then(() => setForgeMenuOpen(false))}>
+              Github
+            </button>
+            <button type="button" onClick={() => void openUrl(BUY_SUITE_URL).then(() => setForgeMenuOpen(false))}>
+              Buy Suite
+            </button>
           </div>
           <button
             type="button"
             className="forge-corner-button"
             onClick={() => setForgeMenuOpen((open) => !open)}
             aria-expanded={forgeMenuOpen}
-            title="Everend Forge"
+            aria-label="Open Everend menu"
+            title="Everend menu"
           >
-            <Crown size={16} />
+            <ForgeCornerLogo />
           </button>
         </div>
 

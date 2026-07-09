@@ -1,0 +1,31 @@
+{
+  "storageVersion": "0.2",
+  "storyId": "branching-story",
+  "canvas": {
+    "activeSequenceId": "sequence:new-sequence",
+    "nodes": {
+      "start:sequence:new-sequence": {
+        "position": {
+          "x": 80,
+          "y": 80
+        }
+      },
+      "event:sequence:new-sequence:entry": {
+        "position": {
+          "x": 358.5014590639433,
+          "y": 60.518967831263396
+        }
+      },
+      "event:sequence:new-sequence:normal": {
+        "position": {
+          "x": 677.1945967032773,
+          "y": 87.3593409809426
+        }
+      }
+    }
+  },
+  "panels": {
+    "canonOpen": true,
+    "filesOpen": true
+  }
+}

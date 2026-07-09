@@ -1,0 +1,13 @@
+{
+  "storageVersion": "0.2",
+  "storyId": "branching-story",
+  "sequence": {
+    "id": "sequence:new-sequence",
+    "name": "New Sequence",
+    "entryEventId": "event:sequence:new-sequence:entry",
+    "eventIds": [
+      "event:sequence:new-sequence:entry"
+    ],
+    "branchIds": []
+  }
+}

@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Everend WorldNotion",
+  "productName": "Worldnotion",
+  "mainBinaryName": "Worldnotion",
   "version": "0.2.0",
   "identifier": "com.everendforge.worldnotion",
   "build": {
@@ -12,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "Everend WorldNotion",
+        "title": "Worldnotion",
         "width": 1200,
         "height": 800,
         "fullscreen": false,
@@ -33,7 +34,7 @@
     "targets": "all",
     "publisher": "Everendforge",
     "shortDescription": "Desktop worldbuilding vault for the Everend Forge suite",
-    "longDescription": "Everend WorldNotion is a desktop worldbuilding vault app. Markdown files remain the source of truth; the app adds an entity index, properties, wikilinks, and a relationship graph on top.",
+    "longDescription": "Worldnotion is a desktop worldbuilding vault app. Markdown files remain the source of truth; the app adds an entity index, properties, wikilinks, and a relationship graph on top.",
     "copyright": "Copyright © 2026 Everendforge",
     "category": "Productivity",
     "windows": {

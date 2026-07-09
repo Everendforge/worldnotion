@@ -373,8 +373,8 @@ button:disabled {
   left: 0;
   top: 0;
   z-index: 95;
-  width: 192px;
-  height: 192px;
+  width: 42px;
+  height: 42px;
   pointer-events: none;
 }
 
@@ -383,61 +383,104 @@ button:disabled {
   left: 0;
   top: 0;
   z-index: 2;
-  display: grid;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
   width: 42px;
   height: 42px;
-  place-items: start;
-  padding: 7px 0 0 7px;
-  border: 0;
-  border-radius: 0 0 42px 0;
-  background: color-mix(in srgb, var(--wn-accent) 84%, var(--wn-panel));
+  padding: 5px 0 0 5px;
+  border: 1px solid color-mix(in srgb, var(--wn-accent) 46%, var(--wn-border));
+  border-radius: 0 0 10px 0;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--wn-panel) 78%, var(--wn-accent) 22%), color-mix(in srgb, var(--wn-panel-2) 72%, var(--wn-accent) 28%));
   color: var(--wn-text);
-  box-shadow: 0 3px 10px color-mix(in srgb, #000 14%, transparent);
+  box-shadow:
+    0 5px 16px color-mix(in srgb, #000 20%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 32%, transparent);
   pointer-events: auto;
+}
+
+.forge-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.forge-logo-on-dark {
+  display: none;
+}
+
+:root[data-theme="worldnotion-dark"] .forge-logo-on-light,
+:root[data-theme="dark"] .forge-logo-on-light,
+:root[data-theme="github-dark"] .forge-logo-on-light,
+:root[data-theme="one-dark-pro"] .forge-logo-on-light,
+:root[data-theme="dracula"] .forge-logo-on-light,
+:root[data-theme="night-owl"] .forge-logo-on-light,
+:root[data-theme="material-palenight"] .forge-logo-on-light {
+  display: none;
+}
+
+:root[data-theme="worldnotion-dark"] .forge-corner-button,
+:root[data-theme="dark"] .forge-corner-button,
+:root[data-theme="github-dark"] .forge-corner-button,
+:root[data-theme="one-dark-pro"] .forge-corner-button,
+:root[data-theme="dracula"] .forge-corner-button,
+:root[data-theme="night-owl"] .forge-corner-button,
+:root[data-theme="material-palenight"] .forge-corner-button {
+  border-color: color-mix(in srgb, var(--wn-accent) 58%, var(--wn-border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--wn-panel-2) 68%, var(--wn-accent) 32%), color-mix(in srgb, var(--wn-panel) 78%, #000 22%));
+  box-shadow:
+    0 6px 18px color-mix(in srgb, #000 34%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent);
+}
+
+:root[data-theme="worldnotion-dark"] .forge-logo-on-dark,
+:root[data-theme="dark"] .forge-logo-on-dark,
+:root[data-theme="github-dark"] .forge-logo-on-dark,
+:root[data-theme="one-dark-pro"] .forge-logo-on-dark,
+:root[data-theme="dracula"] .forge-logo-on-dark,
+:root[data-theme="night-owl"] .forge-logo-on-dark,
+:root[data-theme="material-palenight"] .forge-logo-on-dark {
+  display: block;
 }
 
 .forge-corner-button:hover,
 .forge-corner-button:focus-visible,
 .forge-corner-menu.open .forge-corner-button {
-  background: color-mix(in srgb, var(--wn-accent) 70%, var(--wn-panel));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--wn-panel) 66%, var(--wn-accent) 34%), color-mix(in srgb, var(--wn-panel-2) 60%, var(--wn-accent) 40%));
   outline: 0;
 }
 
 .forge-orbit-panel {
   position: absolute;
-  left: 0;
-  top: 0;
+  left: 6px;
+  top: 46px;
   display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: 6px;
-  width: 192px;
-  height: 192px;
-  padding: 46px 22px 26px 8px;
+  gap: 5px;
+  min-width: 150px;
+  padding: 6px;
   border: 1px solid color-mix(in srgb, var(--wn-border) 82%, transparent);
-  border-left: 0;
-  border-top: 0;
-  border-radius: 0 0 192px 0;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--wn-panel) 96%, transparent);
-  box-shadow: 0 24px 48px color-mix(in srgb, #000 18%, transparent);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 74%, transparent 100%);
+  box-shadow: 0 18px 42px color-mix(in srgb, #000 18%, transparent);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-112%) rotate(-68deg) scale(0.92);
-  transform-origin: 0 0;
+  transform: translateY(-4px);
   transition:
-    transform 220ms cubic-bezier(0.2, 0.82, 0.2, 1),
-    opacity 160ms ease;
+    transform 160ms ease,
+    opacity 140ms ease;
 }
 
 .forge-corner-menu.open .forge-orbit-panel {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0) rotate(0deg) scale(1);
+  transform: translateY(0);
 }
 
 .forge-orbit-panel button {
-  min-width: 124px;
   min-height: 28px;
   padding: 4px 9px;
   border-radius: 5px;
@@ -1699,6 +1742,14 @@ button:disabled {
   align-items: center;
   gap: 10px;
   padding-bottom: 12px;
+}
+
+.app-brand-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
 .universe-button {
@@ -5609,10 +5660,11 @@ button:hover:not(:disabled),
   right: 0;
   transform: translateY(-50%);
   width: 180px;
+  box-sizing: border-box;
   max-height: 70vh;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 0;
+  padding: 8px 0 8px 20px;
   z-index: 100;
   opacity: 0.3;
   transition: opacity 0.2s ease;
@@ -5691,6 +5743,7 @@ button:hover:not(:disabled),
   .outline-guide-notion {
     width: 140px;
     right: 0;
+    padding-left: 16px;
   }
 
   .outline-item {

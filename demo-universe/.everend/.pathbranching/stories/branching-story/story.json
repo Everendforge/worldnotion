@@ -1,0 +1,1060 @@
+{
+  "storageVersion": "0.2",
+  "specVersion": "0.1",
+  "projectId": "pathbranching:branching-story",
+  "storyId": "branching-story",
+  "universeRootPath": "/Users/uci/Documents/GitHub/EverendForge/worldnotion/demo-universe",
+  "name": "Branching Story",
+  "sourceVault": {
+    "kind": "worldnotion",
+    "relativePath": "."
+  },
+  "dataClasses": [
+    {
+      "id": "class:KnowledgeEntry",
+      "label": "Knowledge Entry",
+      "category": "canonProjection",
+      "roles": [
+        "knowledge",
+        "unlockable",
+        "runtime"
+      ],
+      "fields": [
+        {
+          "name": "title",
+          "type": "text",
+          "label": "Title",
+          "required": true
+        },
+        {
+          "name": "body",
+          "type": "text",
+          "label": "Body"
+        },
+        {
+          "name": "sourceRef",
+          "type": "canonRef",
+          "label": "Canon Source"
+        },
+        {
+          "name": "unlockedByDefault",
+          "type": "boolean",
+          "label": "Unlocked By Default",
+          "defaultValue": false
+        }
+      ]
+    },
+    {
+      "id": "class:Speaker",
+      "label": "Speaker",
+      "category": "narrative",
+      "roles": [
+        "speaker",
+        "presentation"
+      ],
+      "fields": [
+        {
+          "name": "displayName",
+          "type": "text",
+          "label": "Display Name",
+          "required": true
+        },
+        {
+          "name": "canonRef",
+          "type": "canonRef",
+          "label": "Canon Source"
+        },
+        {
+          "name": "voice",
+          "type": "text",
+          "label": "Voice"
+        }
+      ]
+    },
+    {
+      "id": "class:RuntimeItem",
+      "label": "Runtime Item",
+      "category": "runtime",
+      "roles": [
+        "condition",
+        "inventory",
+        "runtime"
+      ],
+      "fields": [
+        {
+          "name": "displayName",
+          "type": "text",
+          "label": "Display Name",
+          "required": true
+        },
+        {
+          "name": "itemId",
+          "type": "text",
+          "label": "Runtime Item ID",
+          "required": true
+        },
+        {
+          "name": "startsOwned",
+          "type": "boolean",
+          "label": "Starts Owned",
+          "defaultValue": false
+        }
+      ]
+    },
+    {
+      "id": "class:SceneSetting",
+      "label": "Scene Setting",
+      "category": "narrative",
+      "roles": [
+        "scene",
+        "presentation"
+      ],
+      "fields": [
+        {
+          "name": "title",
+          "type": "text",
+          "label": "Title",
+          "required": true
+        },
+        {
+          "name": "canonRef",
+          "type": "canonRef",
+          "label": "Canon Source"
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "label": "Description"
+        }
+      ]
+    },
+    {
+      "id": "class:QuestFlag",
+      "label": "Quest Flag",
+      "category": "runtime",
+      "roles": [
+        "condition",
+        "state",
+        "runtime"
+      ],
+      "fields": [
+        {
+          "name": "flag",
+          "type": "text",
+          "label": "Flag",
+          "required": true
+        },
+        {
+          "name": "initialValue",
+          "type": "boolean",
+          "label": "Initial Value",
+          "defaultValue": false
+        }
+      ]
+    }
+  ],
+  "projectDataObjects": [],
+  "canonEditSuggestions": [],
+  "projectionRules": [],
+  "graphModules": [],
+  "entrySequenceId": "sequence:new-sequence",
+  "eventCategories": [
+    {
+      "id": "normal",
+      "label": "Event",
+      "terminal": false
+    },
+    {
+      "id": "final",
+      "label": "Final",
+      "terminal": true
+    }
+  ],
+  "canonRefs": [
+    {
+      "id": "characters-folder",
+      "kind": "folder-description",
+      "label": "Characters",
+      "preview": "# Characters\n\nCast notes, viewpoint characters, factions-as-people, and recurring figures.a\n\nCameelo\ndasdasdasddsadasd",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "characters-folder",
+        "type": "folder-description",
+        "name": "Characters",
+        "status": "draft",
+        "folder": "Characters"
+      },
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Characters.md"
+    },
+    {
+      "id": "kellan-or",
+      "kind": "character",
+      "label": "Kellan Or",
+      "preview": "# Kellan Or\n\nKellan Or is a cistern scout who sells route rumors to anyone willing to cross the [[Old Roads]].\n\nHe once carried the [[Glass Key]] for the [[Ashen Choir]], but he claims the key changed hands before [[Mara Voss]] arrived at [[Ash Gate]].\n\n## Playable Pressure\n\n- Kellan can become an ally if Mara shares the truth of the [[Iron Meridian]].\n- He withholds cistern access unless the player has the [[Cinder Lantern]] or a favor from the [[Glass Cartographers]].",
+      "tags": [
+        "scout",
+        "rival"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "Kellan"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "homeLocation": "ember-cistern",
+        "role": "rival"
+      },
+      "frontmatter": {
+        "id": "kellan-or",
+        "type": "character",
+        "name": "Kellan Or",
+        "status": "draft",
+        "tags": [
+          "scout",
+          "rival"
+        ],
+        "aliases": [
+          "Kellan"
+        ],
+        "homeLocation": "ember-cistern",
+        "role": "rival"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Characters/Kellan-Or.md"
+    },
+    {
+      "id": "mara-voss",
+      "kind": "character",
+      "label": "Mara Voss",
+      "preview": "# Mara Voss\n\nMara is a cartographer tracking the old roads beneath [[Ash Gate]] for the [[Glass Cartographers]].\nShe believes the [[Iron Meridian]] is not a myth but a broken navigation system.\ndsadasd\n\n## Current Thread\n\n- Follow the signal from the [[Iron Meridian]].\n- Decide whether the [[First Road]] is a route, a ritual, or a memory.\n- dasdasdasd",
+      "tags": [],
+      "status": "canon",
+      "favorite": false,
+      "aliases": [
+        "Mara"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "homeLocation": "ash-gate",
+        "role": "protagonist"
+      },
+      "frontmatter": {
+        "id": "mara-voss",
+        "type": "character",
+        "name": "Mara Voss",
+        "status": "canon",
+        "aliases": [
+          "Mara"
+        ],
+        "homeLocation": "ash-gate",
+        "role": "protagonist",
+        "folder": "Locations"
+      },
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Characters/Mara-Voss.md"
+    },
+    {
+      "id": "sera-nym",
+      "kind": "character",
+      "label": "Sera Nym",
+      "preview": "# Sera Nym\n\nSera Nym is a silent archivist embedded inside the [[Glass Cartographers]] on behalf of the [[Ashen Choir]].\n\nShe believes the [[First Road]] should stay buried because every opened route demands a [[Resonance Debt]] from the traveler who names it.\n\n## Branch Use\n\nSera is the pressure point for routes that trade knowledge for safety.",
+      "tags": [
+        "archivist",
+        "choir"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "Sera"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "homeLocation": "ash-gate",
+        "role": "antagonist"
+      },
+      "frontmatter": {
+        "id": "sera-nym",
+        "type": "character",
+        "name": "Sera Nym",
+        "status": "draft",
+        "tags": [
+          "archivist",
+          "choir"
+        ],
+        "aliases": [
+          "Sera"
+        ],
+        "homeLocation": "ash-gate",
+        "role": "antagonist"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Characters/Sera-Nym.md"
+    },
+    {
+      "id": "concepts-folder",
+      "kind": "folder-description",
+      "label": "Concepts",
+      "preview": "# Concepts\n\nDescription of this folder's contents.",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "concepts-folder",
+        "type": "folder-description",
+        "name": "Concepts",
+        "status": "draft",
+        "folder": "Concepts"
+      },
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Concepts.md"
+    },
+    {
+      "id": "first-road",
+      "kind": "concept",
+      "label": "First Road",
+      "preview": "# First Road\n\nThe First Road is the original decision-route beneath [[Ash Gate]].\n\nUnlike the [[Old Roads]], it does not connect places. It connects a person to the version of themselves that made a different promise.\n\nThe [[Iron Meridian]] can locate it only after the player resolves who owns the [[Glass Key]].",
+      "tags": [
+        "myth",
+        "threshold"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "The First Road"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "relatedEntities": [
+          "old-roads",
+          "iron-meridian",
+          "ember-cistern"
+        ]
+      },
+      "frontmatter": {
+        "id": "first-road",
+        "type": "concept",
+        "name": "First Road",
+        "status": "draft",
+        "tags": [
+          "myth",
+          "threshold"
+        ],
+        "aliases": [
+          "The First Road"
+        ],
+        "relatedEntities": [
+          "old-roads",
+          "iron-meridian",
+          "ember-cistern"
+        ]
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Concepts/First-Road.md"
+    },
+    {
+      "id": "old-roads",
+      "kind": "concept",
+      "label": "Old Roads",
+      "preview": "# Old Roads\n\nThe Old Roads are buried routes that connect decisions instead of places.\n\nThe [[Iron Meridian]] can sense them, and the [[Glass Cartographers]] keep partial surveys below [[Ash Gate]].",
+      "tags": [
+        "myth",
+        "travel"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "Roads Below"
+      ],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "old-roads",
+        "type": "concept",
+        "name": "Old Roads",
+        "status": "draft",
+        "tags": [
+          "myth",
+          "travel"
+        ],
+        "aliases": [
+          "Roads Below"
+        ]
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Concepts/Old-Roads.md"
+    },
+    {
+      "id": "resonance-debt",
+      "kind": "concept",
+      "label": "Resonance Debt",
+      "preview": "# Resonance Debt\n\nResonance Debt is the price paid when a traveler forces an [[Old Roads]] route to remember them.\n\nThe debt can be paid with memory, an oath, or a carried flame from the [[Cinder Lantern]].\n\nThe [[Ashen Choir]] calls it justice. [[Mara Voss]] calls it blackmail.",
+      "tags": [
+        "cost",
+        "magic"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "Road Debt"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "relatedEntities": [
+          "first-road",
+          "ashen-choir",
+          "cinder-lantern"
+        ]
+      },
+      "frontmatter": {
+        "id": "resonance-debt",
+        "type": "concept",
+        "name": "Resonance Debt",
+        "status": "draft",
+        "tags": [
+          "cost",
+          "magic"
+        ],
+        "aliases": [
+          "Road Debt"
+        ],
+        "relatedEntities": [
+          "first-road",
+          "ashen-choir",
+          "cinder-lantern"
+        ]
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Concepts/Resonance-Debt.md"
+    },
+    {
+      "id": "items-folder",
+      "kind": "folder-description",
+      "label": "Items",
+      "preview": "# Items\n\nDescription of this folder's content",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "items-folder",
+        "type": "folder-description",
+        "name": "Items",
+        "status": "draft",
+        "folder": "Items"
+      },
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Items.md"
+    },
+    {
+      "id": "cinder-lantern",
+      "kind": "item",
+      "label": "Cinder Lantern",
+      "preview": "# Cinder Lantern\n\nThe Cinder Lantern is a miner's lamp modified by the [[Glass Cartographers]] to reveal false passages.\n\nIts blue flame exposes ash-thread traps inside the [[Ember Cistern]].\n\nWhen carried onto the [[First Road]], it can absorb one [[Resonance Debt]] before going dark.",
+      "tags": [
+        "tool",
+        "light"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "Blue Lantern"
+      ],
+      "parentId": "ember-cistern",
+      "childrenIds": [],
+      "properties": {
+        "rarity": "rare",
+        "relatedCharacters": [
+          "mara-voss"
+        ]
+      },
+      "frontmatter": {
+        "id": "cinder-lantern",
+        "type": "item",
+        "name": "Cinder Lantern",
+        "status": "draft",
+        "tags": [
+          "tool",
+          "light"
+        ],
+        "aliases": [
+          "Blue Lantern"
+        ],
+        "rarity": "rare",
+        "relatedCharacters": [
+          "mara-voss"
+        ],
+        "parentId": "ember-cistern"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Items/Cinder-Lantern.md"
+    },
+    {
+      "id": "glass-key",
+      "kind": "item",
+      "label": "Glass Key",
+      "preview": "# Glass Key\n\nThe Glass Key is a brittle charm that opens cartographic locks in the lower archive.\n\nIt belonged to [[Kellan Or]] before [[Sera Nym]] claimed it for the [[Ashen Choir]].\n\nIt can tune the [[Iron Meridian]] toward the [[First Road]] or shatter to erase one [[Resonance Debt]].",
+      "tags": [
+        "key",
+        "ritual"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "Choir Key"
+      ],
+      "parentId": "first-road",
+      "childrenIds": [],
+      "properties": {
+        "rarity": "rare",
+        "relatedCharacters": [
+          "kellan-or",
+          "sera-nym"
+        ]
+      },
+      "frontmatter": {
+        "id": "glass-key",
+        "type": "item",
+        "name": "Glass Key",
+        "status": "draft",
+        "tags": [
+          "key",
+          "ritual"
+        ],
+        "aliases": [
+          "Choir Key"
+        ],
+        "rarity": "rare",
+        "relatedCharacters": [
+          "kellan-or",
+          "sera-nym"
+        ],
+        "parentId": "first-road"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Items/Glass-Key.md"
+    },
+    {
+      "id": "iron-meridian",
+      "kind": "item",
+      "label": "Iron Meridian",
+      "preview": "# Iron Meridian\n\nThe Iron Meridian is a relic compass that points toward decisions instead of north.\n\nIt last activated below [[Ash Gate]], where [[Mara Voss]] found a route marker for the [[First Road]].",
+      "tags": [
+        "artifact"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "Meridian Needle"
+      ],
+      "parentId": "first-road",
+      "childrenIds": [],
+      "properties": {
+        "rarity": "legendary",
+        "relatedCharacters": [
+          "mara-voss"
+        ]
+      },
+      "frontmatter": {
+        "id": "iron-meridian",
+        "type": "item",
+        "name": "Iron Meridian",
+        "status": "draft",
+        "tags": [
+          "artifact"
+        ],
+        "aliases": [
+          "Meridian Needle"
+        ],
+        "rarity": "legendary",
+        "relatedCharacters": [
+          "mara-voss"
+        ],
+        "parentId": "first-road"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Items/Iron-Meridian.md"
+    },
+    {
+      "id": "locations-folder",
+      "kind": "folder-description",
+      "label": "Locations",
+      "preview": "# Locations\n\nPlaces, routes, settlements, regions, and sites used by the active universe.",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "locations-folder",
+        "type": "folder-description",
+        "name": "Locations",
+        "status": "draft",
+        "folder": "Locations"
+      },
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Locations.md"
+    },
+    {
+      "id": "ash-gate",
+      "kind": "location",
+      "label": "Ash Gate",
+      "preview": "# Ash Gate\n\nAsh Gate is a trade city built against black basalt cliffs.\n\nMara Voss begins her search here after receiving the [[Iron Meridian]].\n\nThe city archive is managed by the [[Glass Cartographers]].\n\nAs it began",
+      "tags": [
+        "city",
+        "frontier"
+      ],
+      "status": "canon",
+      "favorite": false,
+      "aliases": [
+        "The Gate"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "climate": "dry volcanic basin",
+        "governingOrganization": "glass-cartographers"
+      },
+      "frontmatter": {
+        "id": "ash-gate",
+        "type": "location",
+        "name": "Ash Gate",
+        "status": "canon",
+        "tags": [
+          "city",
+          "frontier"
+        ],
+        "aliases": [
+          "The Gate"
+        ],
+        "climate": "dry volcanic basin",
+        "governingOrganization": "glass-cartographers"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Locations/Ash-Gate.md"
+    },
+    {
+      "id": "ember-cistern",
+      "kind": "location",
+      "label": "Ember Cistern",
+      "preview": "# Ember Cistern\n\nThe Ember Cistern sits below [[Ash Gate]], where hot springs keep the old tunnels breathing.\n\nIts sluice gates hide a marker for the [[First Road]], but the [[Ashen Choir]] marks every trespass with ash-thread.\n\nThe [[Cinder Lantern]] burns blue when the cistern is lying.",
+      "tags": [
+        "underground",
+        "waterworks"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "The Cistern"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "climate": "warm mineral fog",
+        "governingOrganization": "ashen-choir"
+      },
+      "frontmatter": {
+        "id": "ember-cistern",
+        "type": "location",
+        "name": "Ember Cistern",
+        "status": "draft",
+        "tags": [
+          "underground",
+          "waterworks"
+        ],
+        "aliases": [
+          "The Cistern"
+        ],
+        "climate": "warm mineral fog",
+        "governingOrganization": "ashen-choir"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Locations/Ember-Cistern.md"
+    },
+    {
+      "id": "organizations-folder",
+      "kind": "folder-description",
+      "label": "Organizations",
+      "preview": "# Organizations\n\nDescription of this folder's contents.",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "organizations-folder",
+        "type": "folder-description",
+        "name": "Organizations",
+        "status": "draft",
+        "folder": "Organizations"
+      },
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Organizations.md"
+    },
+    {
+      "id": "ashen-choir",
+      "kind": "organization",
+      "label": "Ashen Choir",
+      "preview": "# Ashen Choir\n\nThe Ashen Choir guards the thresholds below [[Ash Gate]] and teaches that every road has a voice.\n\nThey cooperate with the [[Glass Cartographers]] in public, but privately they steal surveys that mention the [[Old Roads]].\n\nTheir oldest rite requires the [[Glass Key]] and a traveler willing to accept a [[Resonance Debt]].",
+      "tags": [
+        "cult",
+        "custodians"
+      ],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [
+        "The Choir"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "headquarters": "ember-cistern",
+        "relatedCharacters": [
+          "sera-nym",
+          "kellan-or"
+        ]
+      },
+      "frontmatter": {
+        "id": "ashen-choir",
+        "type": "organization",
+        "name": "Ashen Choir",
+        "status": "draft",
+        "tags": [
+          "cult",
+          "custodians"
+        ],
+        "aliases": [
+          "The Choir"
+        ],
+        "headquarters": "ember-cistern",
+        "relatedCharacters": [
+          "sera-nym",
+          "kellan-or"
+        ]
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Organizations/Ashen-Choir.md"
+    },
+    {
+      "id": "glass-cartographers",
+      "kind": "organization",
+      "label": "Glass Cartographers",
+      "preview": "# Glass Cartographers\n\nThe Glass Cartographers maintain the civic maps of [[Ash Gate]] and suppress records of the [[First Road]].\n\nThey trained [[Mara Voss]], but no longer trust what she found in the [[Iron Meridian]].",
+      "tags": [
+        "guild",
+        "archive"
+      ],
+      "status": "canon",
+      "favorite": false,
+      "aliases": [
+        "The Glass Guild"
+      ],
+      "childrenIds": [],
+      "properties": {
+        "headquarters": "ash-gate",
+        "relatedCharacters": [
+          "mara-voss"
+        ]
+      },
+      "frontmatter": {
+        "id": "glass-cartographers",
+        "type": "organization",
+        "name": "Glass Cartographers",
+        "status": "canon",
+        "tags": [
+          "guild",
+          "archive"
+        ],
+        "aliases": [
+          "The Glass Guild"
+        ],
+        "headquarters": "ash-gate",
+        "relatedCharacters": [
+          "mara-voss"
+        ]
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Organizations/Glass-Cartographers.md"
+    },
+    {
+      "id": "stories-folder",
+      "kind": "folder-description",
+      "label": "Stories",
+      "preview": "# Stories\nDescription of this folder's contents.",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "stories-folder",
+        "type": "folder-description",
+        "name": "Stories",
+        "status": "draft",
+        "folder": "Stories"
+      },
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Stories.md"
+    },
+    {
+      "id": "first-road-story",
+      "kind": "story",
+      "label": "First Road",
+      "preview": "# First Road\n\nMara Voss follows the [[Iron Meridian]] from the lower archive of [[Ash Gate]] into the [[Ember Cistern]].\n\nThe path splits around three questions: who holds the [[Glass Key]], whether the [[Ashen Choir]] can be trusted, and what kind of [[Resonance Debt]] Mara is willing to carry.",
+      "tags": [
+        "act-one"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "aliases": [
+        "The First Road Story"
+      ],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "first-road-story",
+        "type": "story",
+        "name": "First Road",
+        "status": "outline",
+        "tags": [
+          "act-one"
+        ],
+        "aliases": [
+          "The First Road Story"
+        ]
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Stories/First-Road.md"
+    },
+    {
+      "id": "scenes-folder",
+      "kind": "folder-description",
+      "label": "Scenes",
+      "preview": "# Scenes\n\nDescription of this folder's contents.\ndasdas",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "scenes-folder",
+        "type": "folder-description",
+        "name": "Scenes",
+        "status": "draft",
+        "folder": "Scenes"
+      },
+      "folderDescription": true,
+      "source": "worldnotion",
+      "canonSourcePath": "Stories/Scenes.md"
+    },
+    {
+      "id": "cistern-threshold-scene",
+      "kind": "scene",
+      "label": "Cistern Threshold",
+      "preview": "# Cistern Threshold\n\nAt the sealed sluice below [[Ash Gate]], [[Mara Voss]] must decide whether to burn the [[Cinder Lantern]], bargain with [[Sera Nym]], or trust [[Kellan Or]] with the route.\n\nThis scene is a branch hub for inventory, trust, and knowledge conditions.",
+      "tags": [
+        "act-one",
+        "branch"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "aliases": [],
+      "parentId": "first-road-story",
+      "childrenIds": [],
+      "properties": {
+        "location": "ember-cistern",
+        "viewpointCharacter": "mara-voss",
+        "draftStatus": "outline"
+      },
+      "frontmatter": {
+        "id": "cistern-threshold-scene",
+        "type": "scene",
+        "name": "Cistern Threshold",
+        "status": "outline",
+        "tags": [
+          "act-one",
+          "branch"
+        ],
+        "aliases": [],
+        "parentId": "first-road-story",
+        "location": "ember-cistern",
+        "viewpointCharacter": "mara-voss",
+        "draftStatus": "outline"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Stories/Scenes/Cistern-Threshold.md"
+    },
+    {
+      "id": "market-interference-scene",
+      "kind": "scene",
+      "label": "Market Interference",
+      "preview": "# Market Interference\n\n[[Mara Voss]] follows a false needle-reading through the ash market and discovers [[Kellan Or]] bargaining with a courier from the [[Ashen Choir]].\n\nThe scene can reveal the [[Glass Key]], expose [[Sera Nym]], or force Mara to chase Kellan into the [[Ember Cistern]] without preparation.",
+      "tags": [
+        "act-one",
+        "branch"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "aliases": [],
+      "parentId": "first-road-story",
+      "childrenIds": [],
+      "properties": {
+        "location": "ash-gate",
+        "viewpointCharacter": "mara-voss",
+        "draftStatus": "outline"
+      },
+      "frontmatter": {
+        "id": "market-interference-scene",
+        "type": "scene",
+        "name": "Market Interference",
+        "status": "outline",
+        "tags": [
+          "act-one",
+          "branch"
+        ],
+        "aliases": [],
+        "parentId": "first-road-story",
+        "location": "ash-gate",
+        "viewpointCharacter": "mara-voss",
+        "draftStatus": "outline"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Stories/Scenes/Market-Interference.md"
+    },
+    {
+      "id": "road-under-ash-scene",
+      "kind": "scene",
+      "label": "Road Under Ash",
+      "preview": "# Road Under Ash\n\nThe [[First Road]] opens beneath the [[Ember Cistern]] and asks [[Mara Voss]] which promise she wants to preserve.\n\nThe ending depends on whether the player carries the [[Glass Key]], the [[Cinder Lantern]], or an unpaid [[Resonance Debt]].",
+      "tags": [
+        "act-one",
+        "finale"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "aliases": [],
+      "parentId": "first-road-story",
+      "childrenIds": [],
+      "properties": {
+        "location": "ember-cistern",
+        "viewpointCharacter": "mara-voss",
+        "draftStatus": "outline"
+      },
+      "frontmatter": {
+        "id": "road-under-ash-scene",
+        "type": "scene",
+        "name": "Road Under Ash",
+        "status": "outline",
+        "tags": [
+          "act-one",
+          "finale"
+        ],
+        "aliases": [],
+        "parentId": "first-road-story",
+        "location": "ember-cistern",
+        "viewpointCharacter": "mara-voss",
+        "draftStatus": "outline"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Stories/Scenes/Road-Under-Ash.md"
+    },
+    {
+      "id": "basalt-archive-scene",
+      "kind": "scene",
+      "label": "The Basalt Archive",
+      "preview": "# The Basalt Archive\n\n[[Mara Voss]] breaks into the lower archive of [[Ash Gate]] and finds a sealed survey from the [[Glass Cartographers]].\n\nThe survey points to the [[Old Roads]] but contradicts the pull of the [[Iron Meridian]].",
+      "tags": [
+        "act-one"
+      ],
+      "status": "outline",
+      "favorite": false,
+      "aliases": [],
+      "parentId": "first-road",
+      "childrenIds": [],
+      "properties": {
+        "location": "ash-gate",
+        "viewpointCharacter": "mara-voss",
+        "draftStatus": "outline"
+      },
+      "frontmatter": {
+        "id": "basalt-archive-scene",
+        "type": "scene",
+        "name": "The Basalt Archive",
+        "status": "outline",
+        "tags": [
+          "act-one"
+        ],
+        "aliases": [],
+        "parentId": "first-road",
+        "location": "ash-gate",
+        "viewpointCharacter": "mara-voss",
+        "draftStatus": "outline"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "Stories/Scenes/The-Basalt-Archive.md"
+    },
+    {
+      "id": "demo-universe",
+      "kind": "universe",
+      "label": "demo-universe",
+      "preview": "# demo-universe\nHola este universo es god dasdadasd",
+      "tags": [],
+      "status": "draft",
+      "favorite": false,
+      "aliases": [],
+      "childrenIds": [],
+      "properties": {},
+      "frontmatter": {
+        "id": "demo-universe",
+        "type": "universe",
+        "name": "demo-universe",
+        "status": "draft"
+      },
+      "folderDescription": false,
+      "source": "worldnotion",
+      "canonSourcePath": "demo-universe.md"
+    }
+  ],
+  "scripts": [],
+  "externalFunctions": [],
+  "variables": {},
+  "sequenceIds": [
+    "sequence:new-sequence"
+  ]
+}

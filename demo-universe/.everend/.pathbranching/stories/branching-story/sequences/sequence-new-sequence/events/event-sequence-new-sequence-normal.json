@@ -1,0 +1,16 @@
+{
+  "storageVersion": "0.2",
+  "storyId": "branching-story",
+  "sequenceId": "sequence:new-sequence",
+  "event": {
+    "id": "event:sequence:new-sequence:normal",
+    "name": "New Event",
+    "type": "normal",
+    "text": {
+      "format": "plain",
+      "content": ""
+    },
+    "canonRefs": [],
+    "transitions": []
+  }
+}
