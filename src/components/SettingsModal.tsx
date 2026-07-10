@@ -32,7 +32,7 @@ import type { UniverseProfile } from "../domain";
 import { createDefaultTaxonomyConfig } from "../domain";
 import { applyPropertyTemplate, WORLDBUILDING_TEMPLATE } from "../utils/propertyTemplates";
 import type { FrontmatterNormalizationItem } from "../utils/frontmatterNormalizer";
-import { themeById } from "../themes";
+import { THEMES, themeById } from "../themes";
 import { PropertiesManager } from "./TaxonomyManager";
 import {
   getPluginDefinitions,
@@ -70,6 +70,12 @@ type SettingsModalProps = {
   revealUniverseLabel?: string;
   initialSection?: SettingsSection;
   initialPropertiesMode?: "template" | "blank";
+  suiteSettings?: {
+    primaryFont: string;
+    onPrimaryFontChange: (font: string) => void;
+    style: string;
+    onStyleChange: (style: string) => void;
+  };
 };
 
 function createStarterPropertiesConfig(mode: "template" | "blank" = "template") {
@@ -146,7 +152,13 @@ function readImageFile(file: File) {
 }
 
 type SettingsSection =
-  "overview" | "tags" | "utils" | "editor" | "shortcuts" | "tabs" | "explorer" | "plugins";
+  "suite" | "overview" | "tags" | "utils" | "editor" | "shortcuts" | "tabs" | "explorer" | "plugins";
+
+const primaryFontOptions = [
+  ["sans", "Sans serif"],
+  ["serif", "Serif editorial"],
+  ["humanist", "Humanist"],
+] as const;
 
 export function SettingsModal({
   settings,
@@ -163,6 +175,7 @@ export function SettingsModal({
   revealUniverseLabel = "Reveal universe folder",
   initialSection,
   initialPropertiesMode = "template",
+  suiteSettings,
 }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>(
     initialSection ?? (universe ? "overview" : "editor"),
@@ -296,6 +309,19 @@ export function SettingsModal({
 
         <div className="settings-body">
           <nav className="settings-nav">
+            {suiteSettings ? (
+              <div className="settings-nav-group">
+                <p>Forge</p>
+                <button
+                  className={activeSection === "suite" ? "active" : ""}
+                  onClick={() => setActiveSection("suite")}
+                  type="button"
+                >
+                  <Settings size={14} />
+                  Suite
+                </button>
+              </div>
+            ) : null}
             {universe ? (
               <div className="settings-nav-group">
                 <p>Universe</p>
@@ -372,6 +398,42 @@ export function SettingsModal({
           </nav>
 
           <section className="settings-section">
+            {activeSection === "suite" && suiteSettings ? (
+              <div className="settings-panel">
+                <div className="settings-page-title">
+                  <h3>Everend Forge Suite</h3>
+                  <p>Shared preferences applied to every app in this Suite.</p>
+                </div>
+                <div className="settings-grid">
+                  <label>
+                    <span>Style</span>
+                    <select
+                      value={suiteSettings.style}
+                      onChange={(event) => suiteSettings.onStyleChange(event.target.value)}
+                    >
+                      {THEMES.map((theme) => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Primary typeface</span>
+                    <select
+                      value={suiteSettings.primaryFont}
+                      onChange={(event) => suiteSettings.onPrimaryFontChange(event.target.value)}
+                    >
+                      {primaryFontOptions.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ) : null}
             {activeSection === "overview" && universe ? (
               <div className="settings-panel">
                 <div className="universe-profile-editor">

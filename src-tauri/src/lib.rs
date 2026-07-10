@@ -586,7 +586,10 @@ fn walk_vault(
             Ok(entry) => {
                 let path = entry.path();
                 let file_name = entry.file_name();
-                if file_name.to_string_lossy().starts_with('.') && file_name != ".everend" {
+                if file_name.to_string_lossy().starts_with('.')
+                    && file_name != ".everend"
+                    && file_name != ".pathbranching"
+                {
                     continue;
                 }
 

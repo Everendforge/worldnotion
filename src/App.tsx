@@ -506,9 +506,9 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   const isGraphPanelOpen = layoutHasPanel(workspaceLayout, "graph");
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.theme;
+    document.documentElement.dataset.theme = suiteChrome?.suiteSettings?.style ?? settings.theme;
     saveSettings(settings);
-  }, [settings]);
+  }, [settings, suiteChrome?.suiteSettings?.style]);
 
   useEffect(() => {
     document.body.style.setProperty("zoom", String(appZoom));
@@ -1371,6 +1371,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   }
 
   function toggleBuiltinTheme() {
+    if (suiteChrome?.suiteSettings) {
+      suiteChrome.suiteSettings.onToggleStyleMode();
+      return;
+    }
     setThemeById(toggledThemeMode(settings.theme));
   }
 
@@ -3645,6 +3649,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
             }}
             onOpenUniverseNote={openUniverseNote}
             revealUniverseLabel={labels.revealUniverse}
+            suiteSettings={suiteChrome?.suiteSettings}
           />
         </Suspense>
       ) : null}
