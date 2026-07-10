@@ -12,7 +12,10 @@ function splitExtension(fileName: string): { base: string; ext: string } {
 /** Sanitizes a file name into a safe, lowercase vault segment. */
 export function sanitizeAttachmentName(fileName: string, fallback = "image"): string {
   const { base, ext } = splitExtension(fileName.trim());
-  const safeBase = base.replace(UNSAFE_CHARS, "-").replace(/^-+|-+$/g, "").toLowerCase();
+  const safeBase = base
+    .replace(UNSAFE_CHARS, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
   const safeExt = ext.replace(UNSAFE_CHARS, "").toLowerCase();
   return `${safeBase || fallback}${safeExt}`;
 }

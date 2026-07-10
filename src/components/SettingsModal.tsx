@@ -152,7 +152,15 @@ function readImageFile(file: File) {
 }
 
 type SettingsSection =
-  "suite" | "overview" | "tags" | "utils" | "editor" | "shortcuts" | "tabs" | "explorer" | "plugins";
+  | "suite"
+  | "overview"
+  | "tags"
+  | "utils"
+  | "editor"
+  | "shortcuts"
+  | "tabs"
+  | "explorer"
+  | "plugins";
 
 const primaryFontOptions = [
   ["sans", "Sans serif"],
