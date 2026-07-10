@@ -56,7 +56,7 @@ A deliberately empty placeholder vault lives in [examples/demo-vault](examples/d
 ## Related Repositories
 
 - [Everend Forge portal](https://github.com/Everendforge/everend-forge)
-- [Everend Spec](https://github.com/Everendforge/spec)
+- [Everend Spec](https://github.com/Everendforge/specs)
 
 ## License
 

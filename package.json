@@ -69,10 +69,10 @@
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Everendforge/worldnotion.git"
+    "url": "git+https://github.com/Everendforge/ef-worldnotion.git"
   },
   "bugs": {
-    "url": "https://github.com/Everendforge/worldnotion/issues"
+    "url": "https://github.com/Everendforge/ef-worldnotion/issues"
   },
-  "homepage": "https://github.com/Everendforge/worldnotion#readme"
+  "homepage": "https://github.com/Everendforge/ef-worldnotion#readme"
 }
