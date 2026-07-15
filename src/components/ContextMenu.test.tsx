@@ -42,3 +42,25 @@ describe("ContextMenu folder notes", () => {
     expect(screen.queryByRole("button", { name: "Delete Folder Note" })).toBeNull();
   });
 });
+
+describe("ContextMenu image actions", () => {
+  it("offers a preview action for image files", () => {
+    const onAction = vi.fn();
+    render(
+      <ContextMenu
+        x={20}
+        y={20}
+        targetPath="attachments/hero.png"
+        targetKind="file"
+        templates={[]}
+        isImage
+        onAction={onAction}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    expect(onAction).toHaveBeenCalledWith("preview", "attachments/hero.png", "file", undefined);
+  });
+});

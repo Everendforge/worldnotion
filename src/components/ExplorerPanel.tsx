@@ -17,6 +17,7 @@ import {
   Folder,
   FolderOpen,
   Hash,
+  Image,
   Plus,
   Search,
   Star,
@@ -26,6 +27,7 @@ import type { Entity, VaultIndex } from "../domain";
 import type { ExplorerSection, ExplorerFavorite } from "../editorTypes";
 import type { VisibleExplorerRow } from "../utils/explorerSelectors";
 import { getIconComponent } from "./IconPicker";
+import { isImagePath } from "../utils/vaultImages";
 
 export type ExplorerTreeAction =
   "collapseAll" | "expandSelected" | "expandDepth1" | "expandDepth2" | "expandDepth3";
@@ -261,7 +263,13 @@ export function ExplorerPanel({
                     onClick={() => favorite.kind === "file" && onSelectPath(favorite.path)}
                     onContextMenu={(event) => onContextMenu(event, favorite.path, favorite.kind)}
                   >
-                    {favorite.kind === "folder" ? <Folder size={14} /> : <FileText size={14} />}
+                    {favorite.kind === "folder" ? (
+                      <Folder size={14} />
+                    ) : isImagePath(favorite.path) ? (
+                      <Image size={14} />
+                    ) : (
+                      <FileText size={14} />
+                    )}
                     {favorite.label}
                   </button>
                 ))
@@ -591,6 +599,8 @@ const ExplorerTreeRow = memo(function ExplorerTreeRow({
           ) : (
             <Folder size={14} />
           )
+        ) : isImagePath(row.path) ? (
+          <Image size={14} />
         ) : (
           <FileText size={14} />
         )}

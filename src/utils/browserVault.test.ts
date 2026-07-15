@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   browserPathParts,
+  copyBrowserDirectory,
   readBrowserUniverse,
   validateBrowserPathSegment,
   type BrowserDirectoryHandle,
@@ -110,5 +111,40 @@ describe("readBrowserUniverse", () => {
       { relativePath: "attachments/hero.png", content: "", binary: true, modifiedMs: 20 },
       { relativePath: "Mara.md", content: "# Mara", binary: undefined, modifiedMs: 10 },
     ]);
+  });
+});
+
+describe("copyBrowserDirectory", () => {
+  it("preserves binary files instead of decoding them as text", async () => {
+    const image = {
+      lastModified: 20,
+      text: async () => {
+        throw new Error("Image binary content was decoded as text.");
+      },
+    } as unknown as File;
+    const written: unknown[] = [];
+    const source = browserDirectory("attachments", [
+      [
+        "hero.png",
+        {
+          getFile: async () => image,
+          createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+        },
+      ],
+    ]);
+    const target = browserDirectory("copy", []);
+    target.getFileHandle = async () => ({
+      getFile: async () => image,
+      createWritable: async () => ({
+        write: async (value) => {
+          written.push(value);
+        },
+        close: async () => {},
+      }),
+    });
+
+    await copyBrowserDirectory(source, target);
+
+    expect(written).toEqual([image]);
   });
 });

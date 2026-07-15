@@ -140,7 +140,12 @@ export function useWorkspaceState({
   }, [rootPath]);
 
   useEffect(() => {
-    const path = activeTabPath ?? (selectedPath?.endsWith(".md") ? selectedPath : undefined);
+    // The explorer can select a folder while a document remains open in the
+    // editor. In that state, following `activeTabPath` would immediately
+    // re-expand the folder the user just collapsed. The selected document is
+    // already kept in sync when a tab is activated, so it is the only path
+    // that should drive automatic ancestor expansion here.
+    const path = selectedPath?.endsWith(".md") ? selectedPath : undefined;
     if (!path) return;
     const ancestors = explorerAncestorsForPath(path);
     if (!ancestors.length) return;
@@ -150,7 +155,7 @@ export function useWorkspaceState({
       ancestors.forEach((ancestor) => next.add(ancestor));
       return next;
     });
-  }, [activeTabPath, selectedPath]);
+  }, [selectedPath]);
 
   return {
     tabs,

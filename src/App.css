@@ -5497,6 +5497,66 @@ button:hover:not(:disabled),
   cursor: not-allowed;
 }
 
+.image-preview-dialog {
+  width: min(900px, calc(100vw - 32px));
+  max-width: 900px;
+}
+
+.image-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.image-preview-header p {
+  margin: 4px 0 0;
+  color: var(--wn-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.image-preview-close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--wn-muted);
+  cursor: pointer;
+}
+
+.image-preview-close:hover,
+.image-preview-close:focus-visible {
+  border-color: var(--wn-border);
+  background: var(--wn-panel-2);
+  color: var(--wn-text);
+}
+
+.image-preview-body {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  max-height: min(70vh, 680px);
+  padding: 16px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--wn-editor-bg) 72%, black);
+}
+
+.image-preview-body img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(min(70vh, 680px) - 32px);
+  object-fit: contain;
+}
+
+.image-preview-error {
+  color: var(--wn-danger);
+}
+
 .unsaved-dialog .modal-footer {
   display: flex;
   gap: 12px;
@@ -10068,9 +10128,15 @@ select.property-field-control {
   backdrop-filter: blur(10px);
 }
 
+.graph-floating-controls.collapsed {
+  width: min(180px, calc(100% - 24px));
+  max-height: none;
+}
+
 .graph-floating-controls-handle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   min-height: 28px;
   padding: 0 0.65rem;
   border-bottom: 1px solid var(--wn-border);
@@ -10080,6 +10146,26 @@ select.property-field-control {
   font-size: 0.72rem;
   font-weight: 600;
   user-select: none;
+}
+
+.graph-floating-controls-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 -0.35rem 0 0.35rem;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--wn-muted);
+  cursor: pointer;
+}
+
+.graph-floating-controls-toggle:hover {
+  background: var(--wn-panel);
+  color: var(--wn-text);
 }
 
 .graph-floating-controls-handle:active {

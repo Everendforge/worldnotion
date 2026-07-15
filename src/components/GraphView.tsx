@@ -64,6 +64,7 @@ export function GraphView({
   const positionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const transformRef = useRef<ViewTransform>({ x: 0, y: 0, k: 1 });
   const dragStateRef = useRef<DragState | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | undefined>();
   const hoveredNodeIdRef = useRef<string | undefined>(undefined);
   const [measuredSize, setMeasuredSize] = useState({ width: width ?? 800, height: height ?? 600 });
@@ -100,22 +101,25 @@ export function GraphView({
     if (width && height) return;
     const container = containerRef.current;
     if (!container) return;
+    const observedContainer = container;
 
     function updateSize() {
       setMeasuredSize({
-        width: Math.max(320, Math.floor(container?.clientWidth || 800)),
-        height: Math.max(260, Math.floor(container?.clientHeight || 600)),
+        width: Math.max(1, Math.floor(observedContainer.clientWidth || 800)),
+        height: Math.max(1, Math.floor(observedContainer.clientHeight || 600)),
       });
     }
 
     updateSize();
     const observer = new ResizeObserver(updateSize);
-    observer.observe(container);
+    observer.observe(observedContainer);
     return () => observer.disconnect();
   }, [width, height]);
 
   useEffect(() => {
     if (!graphData.nodes.length) {
+      simulationRef.current?.stop();
+      simulationRef.current = null;
       nodesRef.current = [];
       linksRef.current = [];
       renderGraph();
@@ -178,6 +182,7 @@ export function GraphView({
     simulationRef.current = simulation;
     return () => {
       simulation.stop();
+      if (simulationRef.current === simulation) simulationRef.current = null;
     };
   }, [
     canvasHeight,
@@ -210,7 +215,8 @@ export function GraphView({
 
   useEffect(() => {
     if (!contextMenu) return;
-    function closeMenu() {
+    function closeMenu(event: Event) {
+      if (contextMenuRef.current?.contains(event.target as Node)) return;
       setContextMenu(null);
     }
     document.addEventListener("mousedown", closeMenu);
@@ -221,16 +227,17 @@ export function GraphView({
     };
   }, [contextMenu]);
 
-  const handleMouseMove = useCallback(
-    (event: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const dragState = dragStateRef.current;
       if (dragState?.kind === "pan") {
+        const pointer = canvasPoint(event.clientX, event.clientY);
         transformRef.current = {
           ...dragState.origin,
-          x: dragState.origin.x + event.clientX - dragState.startX,
-          y: dragState.origin.y + event.clientY - dragState.startY,
+          x: dragState.origin.x + pointer.x - dragState.startX,
+          y: dragState.origin.y + pointer.y - dragState.startY,
         };
         renderGraph();
         return;
@@ -238,8 +245,8 @@ export function GraphView({
 
       const worldPoint = screenToWorld(event.clientX, event.clientY);
       if (dragState?.kind === "node") {
-        const moved =
-          Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) > 3;
+        const pointer = canvasPoint(event.clientX, event.clientY);
+        const moved = Math.hypot(pointer.x - dragState.startX, pointer.y - dragState.startY) > 3;
         dragState.moved = dragState.moved || moved;
         dragState.node.fx = worldPoint.x;
         dragState.node.fy = worldPoint.y;
@@ -260,16 +267,18 @@ export function GraphView({
     [onNodeHover],
   );
 
-  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const pointer = canvasPoint(event.clientX, event.clientY);
     const hitPoint = screenToWorld(event.clientX, event.clientY);
     const hitNode = findNodeAt(hitPoint.x, hitPoint.y);
     if (hitNode) {
       dragStateRef.current = {
         kind: "node",
         node: hitNode,
-        startX: event.clientX,
-        startY: event.clientY,
+        startX: pointer.x,
+        startY: pointer.y,
         moved: false,
       };
       hitNode.fx = hitNode.x;
@@ -278,21 +287,37 @@ export function GraphView({
     } else {
       dragStateRef.current = {
         kind: "pan",
-        startX: event.clientX,
-        startY: event.clientY,
+        startX: pointer.x,
+        startY: pointer.y,
         origin: { ...transformRef.current },
       };
     }
   }, []);
 
-  const handleMouseUp = useCallback(() => {
-    const dragState = dragStateRef.current;
-    dragStateRef.current = null;
-    simulationRef.current?.alphaTarget(0);
-    if (dragState?.kind === "node" && !dragState.moved && dragState.node.path) {
-      onNodeClick(dragState.node.path);
-    }
-  }, [onNodeClick]);
+  const finishPointerDrag = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>, activateNode: boolean) => {
+      const dragState = dragStateRef.current;
+      dragStateRef.current = null;
+      simulationRef.current?.alphaTarget(0);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      if (activateNode && dragState?.kind === "node" && !dragState.moved && dragState.node.path) {
+        onNodeClick(dragState.node.path);
+      }
+    },
+    [onNodeClick],
+  );
+
+  const handlePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => finishPointerDrag(event, true),
+    [finishPointerDrag],
+  );
+
+  const handlePointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => finishPointerDrag(event, false),
+    [finishPointerDrag],
+  );
 
   const handleMouseLeave = useCallback(() => {
     if (!dragStateRef.current) {
@@ -309,8 +334,9 @@ export function GraphView({
     const scaleFactor = event.deltaY > 0 ? 0.9 : 1.1;
     const current = transformRef.current;
     const nextScale = clamp(current.k * scaleFactor, 0.18, 4);
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    const pointer = canvasPoint(event.clientX, event.clientY);
+    const mouseX = pointer.x;
+    const mouseY = pointer.y;
     const worldX = (mouseX - current.x) / current.k;
     const worldY = (mouseY - current.y) / current.k;
     transformRef.current = {
@@ -357,14 +383,20 @@ export function GraphView({
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    context.clearRect(0, 0, canvasWidth, canvasHeight);
+    // Always start from the bitmap's native coordinate system. This prevents
+    // stale transforms or drawing state from leaving a ghost frame after zoom.
+    context.save();
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.globalAlpha = 1;
+    context.globalCompositeOperation = "source-over";
+    context.setLineDash([]);
+    context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle =
       getComputedStyle(document.documentElement).getPropertyValue("--wn-editor-bg").trim() ||
       "#ffffff";
-    context.fillRect(0, 0, canvasWidth, canvasHeight);
+    context.fillRect(0, 0, canvas.width, canvas.height);
 
     const transform = transformRef.current;
-    context.save();
     context.translate(transform.x, transform.y);
     context.scale(transform.k, transform.k);
 
@@ -388,7 +420,7 @@ export function GraphView({
       context.stroke();
       context.setLineDash([]);
       if (settings.showArrows && link.directed)
-        drawArrow(context, sourceNode, targetNode, linkColor, transform.k);
+        drawArrow(context, sourceNode, targetNode, linkColor, transform.k, nodeRadius(targetNode));
       context.globalAlpha = 1;
     });
 
@@ -452,12 +484,22 @@ export function GraphView({
     context.globalAlpha = 1;
   }
 
-  function screenToWorld(clientX: number, clientY: number) {
+  function canvasPoint(clientX: number, clientY: number) {
     const rect = canvasRef.current?.getBoundingClientRect();
+    const scaleX = rect?.width ? canvasWidth / rect.width : 1;
+    const scaleY = rect?.height ? canvasHeight / rect.height : 1;
+    return {
+      x: (clientX - (rect?.left ?? 0)) * scaleX,
+      y: (clientY - (rect?.top ?? 0)) * scaleY,
+    };
+  }
+
+  function screenToWorld(clientX: number, clientY: number) {
+    const pointer = canvasPoint(clientX, clientY);
     const transform = transformRef.current;
     return {
-      x: (clientX - (rect?.left ?? 0) - transform.x) / transform.k,
-      y: (clientY - (rect?.top ?? 0) - transform.y) / transform.k,
+      x: (pointer.x - transform.x) / transform.k,
+      y: (pointer.y - transform.y) / transform.k,
     };
   }
 
@@ -535,10 +577,11 @@ export function GraphView({
         width={canvasWidth}
         height={canvasHeight}
         className="graph-canvas"
-        onMouseMove={handleMouseMove}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
+        onPointerMove={handlePointerMove}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onPointerLeave={handleMouseLeave}
         onWheel={handleWheel}
         onContextMenu={handleContextMenu}
       />
@@ -549,7 +592,11 @@ export function GraphView({
         </div>
       ) : null}
       {contextMenu ? (
-        <div className="graph-node-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+        <div
+          ref={contextMenuRef}
+          className="graph-node-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
           <strong>{contextMenu.node.label}</strong>
           <button
             type="button"
@@ -597,9 +644,9 @@ function drawArrow(
   target: D3Node,
   color: string,
   scale: number,
+  targetRadius: number,
 ) {
   const angle = Math.atan2(target.y - source.y, target.x - source.x);
-  const targetRadius = 8;
   const arrowLength = 8 / scale;
   const arrowWidth = 5 / scale;
   const x = target.x - Math.cos(angle) * targetRadius;

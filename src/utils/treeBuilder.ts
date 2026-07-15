@@ -27,10 +27,9 @@ export function buildTree(
   hiddenRootFile?: string,
   ignoreFolderDescriptions = false,
 ): VaultTreeNode[] {
-  // Binary attachments are indexed so they can be resolved by Markdown and
-  // property pickers, but they are not editor documents and must not be
-  // exposed as blank, writable note tabs in the explorer.
-  const visibleFiles = files.filter((file) => !file.binary);
+  // Image attachments are first-class explorer items: they can be selected,
+  // previewed, moved, and deleted. Other binary file kinds are not indexed.
+  const visibleFiles = files;
   const roots: VaultTreeNode[] = [];
   const folders = new Map<string, VaultTreeNode>();
   const descriptionFiles = new Set<string>();

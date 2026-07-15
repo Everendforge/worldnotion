@@ -70,4 +70,19 @@ describe("tree builder", () => {
     expect(isHiddenMetadata(".everend/universe.json")).toBe(true);
     expect(isHiddenMetadata("World/.everend-note.md")).toBe(false);
   });
+
+  it("renders indexed images so they can be managed from the explorer", () => {
+    const tree = buildTree(
+      [
+        { relativePath: "attachments/hero.png", content: "", binary: true },
+        { relativePath: "attachments/cover.webp", content: "", binary: true },
+      ],
+      ["attachments"],
+    );
+
+    expect(tree[0]?.children.map((node) => node.path)).toEqual([
+      "attachments/cover.webp",
+      "attachments/hero.png",
+    ]);
+  });
 });

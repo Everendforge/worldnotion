@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Copy,
   Edit3,
+  Eye,
   ExternalLink,
   FilePlus,
   FileText,
@@ -17,6 +18,7 @@ import "../App.css";
 export type ContextMenuAction =
   | "open"
   | "openInNewTab"
+  | "preview"
   | "newBlankPage"
   | "newPageFromTemplate"
   | "newFolder"
@@ -41,6 +43,7 @@ export interface ContextMenuProps {
   targetKind: ContextMenuTargetKind;
   templates: string[];
   isFavorite?: boolean;
+  isImage?: boolean;
   canReveal?: boolean;
   revealLabel?: string;
   revealUniverseLabel?: string;
@@ -62,6 +65,7 @@ export function ContextMenu({
   targetKind,
   templates,
   isFavorite = false,
+  isImage = false,
   canReveal = true,
   revealLabel = "Reveal in Finder",
   revealUniverseLabel = "Reveal Universe",
@@ -129,6 +133,12 @@ export function ContextMenu({
     >
       {targetKind !== "empty" ? (
         <>
+          {isImage ? (
+            <button type="button" onClick={() => run("preview")} className="context-menu-item">
+              <Eye size={16} />
+              <span>Preview</span>
+            </button>
+          ) : null}
           <button type="button" onClick={() => run("open")} className="context-menu-item">
             <FileText size={16} />
             <span>Open</span>

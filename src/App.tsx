@@ -43,6 +43,7 @@ import { useWorkspaceState } from "./hooks/useWorkspaceState";
 import { SaveStatusIndicator } from "./components/SaveStatusIndicator";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { ExplorerPanel, type ExplorerTreeAction } from "./components/ExplorerPanel";
+import { ImagePreviewDialog } from "./components/ImagePreviewDialog";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { JsonReader } from "./components/JsonReader";
 import { LazyPanelFallback } from "./components/LazyPanelFallback";
@@ -102,7 +103,7 @@ import {
   trashVaultPath,
   vaultHandleFor,
 } from "./utils/vaultFileOps";
-import { resolveNoteImageUrl, setBrowserVaultRoot } from "./utils/vaultImages";
+import { isImagePath, resolveNoteImageUrl, setBrowserVaultRoot } from "./utils/vaultImages";
 import { getEntityTypeDefinition, getPresentationRoleValue } from "./utils/entityPresentation";
 import {
   buildCommandResults,
@@ -361,6 +362,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     path: string;
     kind: "file" | "folder";
   }>();
+  const [imagePreviewPath, setImagePreviewPath] = useState<string>();
   const [query, setQuery] = useState("");
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -457,6 +459,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   const [pointerDragItem, setPointerDragItem] = useState<PointerDragItem>();
   const [showCanonChanges, setShowCanonChanges] = useState(false);
   const [graphControlsPosition, setGraphControlsPosition] = useState({ x: 14, y: 14 });
+  const [graphControlsCollapsed, setGraphControlsCollapsed] = useState(true);
   const suppressTreeClickRef = useRef(false);
 
   useEffect(() => {
@@ -893,6 +896,11 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     if (pathIsAffectedByChanges(selectedPath, change) && selectedPath) {
       setSelectedPath(pathAfterChanges(selectedPath, change));
     }
+    setImagePreviewPath((current) =>
+      current && pathIsAffectedByChanges(current, change)
+        ? pathAfterChanges(current, change)
+        : current,
+    );
     setSelectedExplorerTarget((current) =>
       current && pathIsAffectedByChanges(current.path, change)
         ? { ...current, path: pathAfterChanges(current.path, change) }
@@ -937,8 +945,14 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         }
       } else if (action === "openInNewTab") {
         if (targetKind !== "folder" && targetKind !== "empty") {
-          openDocument(index, targetPath);
+          if (isImagePath(targetPath)) {
+            selectPath(targetPath);
+          } else {
+            openDocument(index, targetPath);
+          }
         }
+      } else if (action === "preview" && targetKind === "file" && isImagePath(targetPath)) {
+        selectPath(targetPath);
       } else if (action === "newBlankPage") {
         const name = await promptUser("Enter page name:");
         if (!name || name.trim() === "") {
@@ -1166,6 +1180,9 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     if (selectedPath === path || selectedPath?.startsWith(`${path}/`)) {
       setSelectedPath(undefined);
       setActiveTabPath(undefined);
+    }
+    if (imagePreviewPath === path || imagePreviewPath?.startsWith(`${path}/`)) {
+      setImagePreviewPath(undefined);
     }
     updateExplorer({
       favorites: favoritesOutsideTree(settings.explorer.favorites, path),
@@ -1916,6 +1933,11 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   function selectPath(path: string) {
     if (!index) return;
     setSelectedExplorerTarget({ path, kind: "file" });
+    if (isImagePath(path)) {
+      setSelectedPath(path);
+      setImagePreviewPath(path);
+      return;
+    }
     openOrCreateTab(path, index);
   }
 
@@ -3571,7 +3593,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
           />
         </div>
         <div
-          className="graph-floating-controls"
+          className={`graph-floating-controls ${graphControlsCollapsed ? "collapsed" : ""}`}
           style={{
             transform: `translate(${graphControlsPosition.x}px, ${graphControlsPosition.y}px)`,
           }}
@@ -3581,17 +3603,29 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
             onPointerDown={handleGraphControlsPointerDown}
           >
             <span>Graph Controls</span>
+            <button
+              type="button"
+              className="graph-floating-controls-toggle"
+              aria-label={graphControlsCollapsed ? "Show graph controls" : "Hide graph controls"}
+              aria-expanded={!graphControlsCollapsed}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setGraphControlsCollapsed((current) => !current)}
+            >
+              {graphControlsCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+            </button>
           </div>
-          <GraphControls
-            settings={graphSettings}
-            availableTypes={availableTypes}
-            availableTags={availableTags}
-            nodeCount={graphData.nodes.length}
-            linkCount={graphData.links.length}
-            hasActiveNote={Boolean(activeGraphPath)}
-            onSettingsChange={setGraphSettings}
-            onResetView={() => setGraphResetSignal((current) => current + 1)}
-          />
+          {!graphControlsCollapsed ? (
+            <GraphControls
+              settings={graphSettings}
+              availableTypes={availableTypes}
+              availableTags={availableTags}
+              nodeCount={graphData.nodes.length}
+              linkCount={graphData.links.length}
+              hasActiveNote={Boolean(activeGraphPath)}
+              onSettingsChange={setGraphSettings}
+              onResetView={() => setGraphResetSignal((current) => current + 1)}
+            />
+          ) : null}
         </div>
       </Suspense>
     </aside>
@@ -4098,6 +4132,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
           targetKind={contextMenu.targetKind}
           templates={index?.templates.map((t) => t.type) || []}
           isFavorite={favoritePaths.has(contextMenu.targetPath)}
+          isImage={isImagePath(contextMenu.targetPath)}
           canReveal={!browserRoot}
           revealLabel={labels.revealItem}
           revealUniverseLabel={labels.revealUniverse}
@@ -4111,6 +4146,14 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      {imagePreviewPath && index ? (
+        <ImagePreviewDialog
+          index={index}
+          path={imagePreviewPath}
+          onClose={() => setImagePreviewPath(undefined)}
+        />
+      ) : null}
 
       {iconPickerState && (
         <IconPicker

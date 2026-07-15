@@ -97,6 +97,30 @@ describe("useWorkspaceState", () => {
     expect(result.current.expandedPaths.has("Characters/Guild")).toBe(true);
   });
 
+  it("does not re-expand a folder when selecting it to collapse it", () => {
+    const harness = createSettingsHarness();
+    const { rerender, result } = renderHook(
+      ({ selectedPath }: { selectedPath: string | undefined }) =>
+        useWorkspaceState({
+          rootPath: "C:/vault",
+          persistTabs: false,
+          selectedPath,
+          sessions: harness.current().sessions,
+          setSettings: harness.setSettings,
+        }),
+      { initialProps: { selectedPath: "Characters/Guild/Mara.md" as string | undefined } },
+    );
+
+    act(() => {
+      result.current.setActiveTabPath("Characters/Guild/Mara.md");
+      // Simulate the explorer click that removes the parent from the expanded set.
+      result.current.setExpandedPaths(new Set(["Characters/Guild"]));
+    });
+    rerender({ selectedPath: "Characters" });
+
+    expect(result.current.expandedPaths.has("Characters")).toBe(false);
+  });
+
   it("keeps the dock layout free of outline tabs", () => {
     const harness = createSettingsHarness();
     const { result } = renderHook(() =>

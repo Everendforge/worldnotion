@@ -261,7 +261,9 @@ export async function copyBrowserDirectory(
       const file = await maybeFile.getFile();
       const targetFile = await target.getFileHandle(name, { create: true });
       const writable = await targetFile.createWritable();
-      await writable.write(await file.text());
+      // Write the File itself, rather than its decoded text, so moving a
+      // folder never corrupts images or other binary attachments.
+      await writable.write(file);
       await writable.close();
     }
   }
@@ -277,7 +279,7 @@ export async function copyBrowserPath(
   if (kind === "file") {
     const source = await getBrowserFile(root, fromPath);
     const file = await source.getFile();
-    await writeBrowserFile(root, toPath, await file.text());
+    await writeBrowserBinaryFile(root, toPath, file);
     return;
   }
 
