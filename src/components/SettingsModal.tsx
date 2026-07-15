@@ -12,6 +12,7 @@ import {
   PanelLeft,
   Plug,
   Plus,
+  RefreshCw,
   Settings,
   Sparkles,
   TextCursorInput,
@@ -40,6 +41,7 @@ import type { PropertyStructureMigrationPlan } from "../utils/propertyStructureM
 import { THEMES, themeById } from "../themes";
 import { normalizeAiProviderUrl } from "../utils/aiProviders";
 import { PropertiesManager } from "./TaxonomyManager";
+import type { SuiteSettings } from "../suiteChrome";
 import {
   getPluginDefinitions,
   isPluginEnabled,
@@ -95,12 +97,7 @@ type SettingsModalProps = {
   revealUniverseLabel?: string;
   initialSection?: SettingsSection;
   initialPropertiesMode?: "template" | "blank";
-  suiteSettings?: {
-    primaryFont: string;
-    onPrimaryFontChange: (font: string) => void;
-    style: string;
-    onStyleChange: (style: string) => void;
-  };
+  suiteSettings?: SuiteSettings;
 };
 
 function createStarterPropertiesConfig(mode: "template" | "blank" = "template") {
@@ -285,6 +282,7 @@ function readImageFile(file: File) {
 
 type SettingsSection =
   | "suite"
+  | "update"
   | "overview"
   | "tags"
   | "utils"
@@ -590,6 +588,14 @@ export function SettingsModal({
                   <Settings size={14} />
                   Suite
                 </button>
+                <button
+                  className={activeSection === "update" ? "active" : ""}
+                  onClick={() => setActiveSection("update")}
+                  type="button"
+                >
+                  <RefreshCw size={14} />
+                  Update
+                </button>
               </div>
             ) : null}
             {universe ? (
@@ -710,6 +716,111 @@ export function SettingsModal({
                     </select>
                   </label>
                 </div>
+              </div>
+            ) : null}
+            {activeSection === "update" && suiteSettings?.update ? (
+              <div className="settings-panel forge-update-panel">
+                <div className="settings-page-title">
+                  <h3>Everend Forge Update</h3>
+                  <p>Check, download, and install signed updates for the Suite.</p>
+                </div>
+
+                <div className="forge-update-details">
+                  <div>
+                    <span>Installed version</span>
+                    <strong>{suiteSettings.update.currentVersion}</strong>
+                  </div>
+                  <div>
+                    <span>Platform</span>
+                    <strong>{suiteSettings.update.platform}</strong>
+                  </div>
+                  <div>
+                    <span>Application ID</span>
+                    <code>{suiteSettings.update.identifier}</code>
+                  </div>
+                  <div>
+                    <span>Update channel</span>
+                    <strong>Everend Forge releases</strong>
+                  </div>
+                </div>
+
+                <div className={`forge-update-status ${suiteSettings.update.status}`} role="status">
+                  <RefreshCw size={18} className={suiteSettings.update.status === "checking" || suiteSettings.update.status === "downloading" ? "spinning" : ""} />
+                  <div>
+                    <strong>
+                      {suiteSettings.update.status === "checking"
+                        ? "Checking for updates..."
+                        : suiteSettings.update.status === "available"
+                          ? `Version ${suiteSettings.update.availableVersion} is ready`
+                          : suiteSettings.update.status === "downloading"
+                            ? `Installing Everend Forge ${suiteSettings.update.availableVersion}...`
+                            : suiteSettings.update.status === "up-to-date"
+                              ? "You are up to date"
+                              : suiteSettings.update.status === "error"
+                                ? "Update check failed"
+                                : "Ready to check for updates"}
+                    </strong>
+                    <p>
+                      {suiteSettings.update.status === "available"
+                        ? "Download the signed package when you are ready. The Suite will relaunch after installation."
+                        : suiteSettings.update.status === "downloading"
+                          ? "Keep the Suite open while the update is downloaded and verified."
+                          : suiteSettings.update.status === "up-to-date"
+                            ? "No newer signed release is available for this installation."
+                            : suiteSettings.update.error ?? "The updater is ready to contact the release server."}
+                    </p>
+                  </div>
+                </div>
+
+                {suiteSettings.update.status === "downloading" ? (
+                  <div className="forge-update-progress" aria-label="Update download progress">
+                    <div className="forge-update-progress-header">
+                      <span>Download progress</span>
+                      <strong>
+                        {suiteSettings.update.progress === undefined ? "Preparing..." : `${suiteSettings.update.progress}%`}
+                      </strong>
+                    </div>
+                    <div className="forge-update-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={suiteSettings.update.progress}>
+                      <span style={{ width: `${suiteSettings.update.progress ?? 8}%` }} />
+                    </div>
+                    {suiteSettings.update.contentLength ? (
+                      <small>
+                        {(suiteSettings.update.downloadedBytes ?? 0) / 1024 / 1024 >= 0.1
+                          ? `${((suiteSettings.update.downloadedBytes ?? 0) / 1024 / 1024).toFixed(1)} MB of ${(suiteSettings.update.contentLength / 1024 / 1024).toFixed(1)} MB`
+                          : "Starting download..."}
+                      </small>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {suiteSettings.update.releaseNotes ? (
+                  <div className="forge-update-notes">
+                    <span>Release notes</span>
+                    <p>{suiteSettings.update.releaseNotes}</p>
+                  </div>
+                ) : null}
+
+                <div className="forge-update-actions">
+                  <button
+                    type="button"
+                    onClick={suiteSettings.update.onCheck}
+                    disabled={suiteSettings.update.status === "checking" || suiteSettings.update.status === "downloading"}
+                  >
+                    <RefreshCw size={14} />
+                    Check for updates
+                  </button>
+                  {suiteSettings.update.status === "available" ? (
+                    <button type="button" className="primary-action" onClick={suiteSettings.update.onInstall}>
+                      Download and install
+                    </button>
+                  ) : null}
+                </div>
+
+                {suiteSettings.update.lastCheckedAt ? (
+                  <p className="forge-update-last-checked">
+                    Last checked {new Date(suiteSettings.update.lastCheckedAt).toLocaleString()}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             {activeSection === "overview" && universe ? (

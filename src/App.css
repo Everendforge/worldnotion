@@ -4666,6 +4666,154 @@ button:hover:not(:disabled),
   .ai-provider-config-actions {
     justify-content: space-between;
   }
+.forge-update-panel {
+  max-width: 640px;
+}
+
+.forge-update-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.forge-update-details div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--wn-border);
+  border-radius: 7px;
+  background: var(--wn-panel-2);
+}
+
+.forge-update-details span,
+.forge-update-notes > span,
+.forge-update-progress-header span {
+  color: var(--wn-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.forge-update-details strong,
+.forge-update-details code {
+  overflow: hidden;
+  color: var(--wn-text);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forge-update-details code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.forge-update-status {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--wn-accent) 34%, var(--wn-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--wn-accent) 8%, var(--wn-panel));
+  color: var(--wn-accent);
+}
+
+.forge-update-status.available {
+  border-color: color-mix(in srgb, var(--wn-warning) 42%, var(--wn-border));
+  background: color-mix(in srgb, var(--wn-warning) 9%, var(--wn-panel));
+  color: var(--wn-warning);
+}
+
+.forge-update-status.error {
+  border-color: color-mix(in srgb, var(--wn-danger) 34%, var(--wn-border));
+  background: color-mix(in srgb, var(--wn-danger) 8%, var(--wn-panel));
+  color: var(--wn-danger);
+}
+
+.forge-update-status > div {
+  display: grid;
+  gap: 4px;
+}
+
+.forge-update-status strong {
+  color: var(--wn-text);
+  font-size: 0.85rem;
+}
+
+.forge-update-status p,
+.forge-update-notes p,
+.forge-update-last-checked {
+  margin: 0;
+  color: var(--wn-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.forge-update-progress {
+  display: grid;
+  gap: 7px;
+}
+
+.forge-update-progress-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.forge-update-progress-header strong {
+  font-size: 0.76rem;
+}
+
+.forge-update-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--wn-panel-2);
+}
+
+.forge-update-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--wn-accent);
+  transition: width 0.15s ease;
+}
+
+.forge-update-progress small {
+  color: var(--wn-muted);
+  font-size: 0.72rem;
+}
+
+.forge-update-notes {
+  display: grid;
+  gap: 5px;
+  padding-top: 4px;
+}
+
+.forge-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.forge-update-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.forge-update-last-checked {
+  font-size: 0.7rem;
+}
+
+.spinning {
+  animation: forge-update-spin 1s linear infinite;
+}
+
+@keyframes forge-update-spin {
+  to { transform: rotate(360deg); }
 }
 
 .settings-panel:has(.ecosystem-manager) {
