@@ -35,6 +35,7 @@ import { imageMarkdown } from "../utils/attachments";
 import { isImagePath } from "../utils/vaultImages";
 import { tableInsertion } from "../utils/markdownEditing";
 import { structureAt, type StructuredElement } from "../utils/structuredMarkdown";
+import { paragraphSpacingExtension } from "../utils/paragraphSpacing";
 
 function imageFilesFromTransfer(data: DataTransfer | null): File[] {
   if (!data) return [];
@@ -814,6 +815,7 @@ export function CodeMirrorEditor({
             ? [tablePlugin()]
             : []),
           ...(processedWriting ? [markdownSyntaxPlugin] : []),
+          ...(mode === "write" ? [paragraphSpacingExtension()] : []),
           ...(processedWriting && isPluginEnabled(pluginSettings, "font-family-rendering")
             ? [fontFamilyPlugin]
             : []),

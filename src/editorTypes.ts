@@ -680,6 +680,8 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
   { id: "closeTab", label: "Close Tab", group: "workspace", defaultShortcut: "Mod+W" },
   { id: "nextTab", label: "Next Tab", group: "workspace", defaultShortcut: "Mod+Shift+]" },
   { id: "previousTab", label: "Previous Tab", group: "workspace", defaultShortcut: "Mod+Shift+[" },
+  { id: "spaceBefore", label: "Space Before Paragraph", group: "format" },
+  { id: "spaceAfter", label: "Space After Paragraph", group: "format" },
 ];
 
 export const DEFAULT_KEYBINDINGS: Keybinding[] = EDITOR_COMMANDS.filter(

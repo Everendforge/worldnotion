@@ -273,6 +273,7 @@ import {
 } from "./utils/workspaceLayout";
 import { isPluginEnabled } from "./utils/pluginRegistry";
 import { DocumentPresentation } from "./components/DocumentPresentation";
+import { paragraphLinePositions, paragraphSpacingEffect } from "./utils/paragraphSpacing";
 
 const CommandPalette = lazy(() =>
   import("./components/CommandPalette").then((module) => ({ default: module.CommandPalette })),
@@ -3127,8 +3128,19 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         activateAdjacentTab(action.direction);
         break;
       case "paragraphSpacing":
-        // Visual spacing only - no actual content modification
-        // The spacing is handled through editor visual separation
+        if (editorViewRef.current) {
+          const view = editorViewRef.current;
+          const position = paragraphLinePositions(view.state.doc, view.state.selection.main.head);
+          if (position) {
+            view.dispatch({
+              effects: paragraphSpacingEffect.of({
+                position: position[action.position],
+                spacing: action.position,
+              }),
+            });
+            view.focus();
+          }
+        }
         break;
     }
   }
