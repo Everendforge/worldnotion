@@ -591,6 +591,8 @@ fn is_image_file(path: &Path) -> bool {
                 || extension.eq_ignore_ascii_case("gif")
                 || extension.eq_ignore_ascii_case("webp")
                 || extension.eq_ignore_ascii_case("svg")
+                || extension.eq_ignore_ascii_case("bmp")
+                || extension.eq_ignore_ascii_case("avif")
         })
         .unwrap_or(false)
 }

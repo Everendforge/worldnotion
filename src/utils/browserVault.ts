@@ -30,7 +30,7 @@ function isIndexedTextFile(relativePath: string) {
 }
 
 function isVaultImageFile(relativePath: string) {
-  return /\.(png|jpe?g|gif|webp|svg)$/i.test(relativePath);
+  return /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(relativePath);
 }
 
 export function browserPathParts(relativePath: string, options: { allowRoot?: boolean } = {}) {

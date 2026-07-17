@@ -5,7 +5,16 @@ import { dirname } from "../domain";
 import { isTauriRuntime } from "./appEnvironment";
 import { getBrowserFile, type BrowserDirectoryHandle } from "./browserVault";
 
-export const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
+export const IMAGE_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "svg",
+  "bmp",
+  "avif",
+]);
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: "image/png",
@@ -14,37 +23,87 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   gif: "image/gif",
   webp: "image/webp",
   svg: "image/svg+xml",
+  bmp: "image/bmp",
+  avif: "image/avif",
 };
 
 export function isImagePath(relativePath: string): boolean {
-  const extension = relativePath.split(".").pop()?.toLowerCase() ?? "";
+  const extension = relativePath.split(/[?#]/, 1)[0].split(".").pop()?.toLowerCase() ?? "";
   return IMAGE_EXTENSIONS.has(extension);
+}
+
+/** Normalizes vault paths before they reach either the Tauri or browser reader. */
+export function normalizeVaultImagePath(rawPath: string): string | null {
+  let path = rawPath.trim().replace(/\\/g, "/");
+  if (
+    !path ||
+    path.startsWith("/") ||
+    /^[a-zA-Z]:\//.test(path) ||
+    path.includes(":") ||
+    path.includes("\0")
+  ) {
+    return null;
+  }
+  try {
+    path = decodeURI(path);
+  } catch {
+    // Keep the original path when a note contains malformed percent encoding.
+  }
+  if (
+    !path ||
+    path.startsWith("/") ||
+    /^[a-zA-Z]:\//.test(path) ||
+    path.includes(":") ||
+    path.includes("\0")
+  ) {
+    return null;
+  }
+
+  const segments: string[] = [];
+  for (const segment of path.split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      if (!segments.length) return null;
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.length ? segments.join("/") : null;
 }
 
 // In browser mode the directory handle only lives in App state; App registers
 // it here so leaf components (image previews) can read binary files without
 // threading the handle through every layer.
 let browserVaultRoot: BrowserDirectoryHandle | null = null;
+let browserVaultGeneration = 0;
 
 export function setBrowserVaultRoot(root: BrowserDirectoryHandle | null) {
+  if (root === browserVaultRoot) return;
+  for (const url of imageUrlCache.values()) {
+    if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+  }
+  imageUrlCache.clear();
+  browserVaultGeneration += 1;
   browserVaultRoot = root;
 }
 
 async function loadVaultImage(index: VaultIndex, relativePath: string): Promise<string | null> {
-  if (!relativePath || !isImagePath(relativePath)) return null;
+  const normalizedPath = normalizeVaultImagePath(relativePath);
+  if (!normalizedPath || !isImagePath(normalizedPath)) return null;
 
   if (isTauriRuntime()) {
     const base64 = await invoke<string>("read_file_base64", {
       vaultPath: index.rootPath,
-      relativePath,
+      relativePath: normalizedPath,
     });
-    const extension = relativePath.split(".").pop()?.toLowerCase() ?? "";
+    const extension = normalizedPath.split(".").pop()?.toLowerCase() ?? "";
     const mime = MIME_BY_EXTENSION[extension] ?? "application/octet-stream";
     return `data:${mime};base64,${base64}`;
   }
 
   if (!browserVaultRoot) return null;
-  const handle = await getBrowserFile(browserVaultRoot, relativePath);
+  const handle = await getBrowserFile(browserVaultRoot, normalizedPath);
   const file = await handle.getFile();
   return URL.createObjectURL(file);
 }
@@ -56,7 +115,7 @@ const imageUrlCache = new Map<string, string>();
 const inFlight = new Map<string, Promise<string | null>>();
 
 function cacheKey(rootPath: string, relativePath: string) {
-  return `${rootPath}::${relativePath}`;
+  return `${browserVaultGeneration}:${rootPath}::${relativePath}`;
 }
 
 /**
@@ -68,16 +127,23 @@ export async function resolveVaultImageUrl(
   index: VaultIndex,
   relativePath: string,
 ): Promise<string | null> {
-  if (!relativePath || !isImagePath(relativePath)) return null;
-  const key = cacheKey(index.rootPath, relativePath);
+  const normalizedPath = normalizeVaultImagePath(relativePath);
+  if (!normalizedPath || !isImagePath(normalizedPath)) return null;
+  const key = cacheKey(index.rootPath, normalizedPath);
   const cached = imageUrlCache.get(key);
   if (cached) return cached;
   const pending = inFlight.get(key);
   if (pending) return pending;
 
-  const promise = loadVaultImage(index, relativePath)
+  const generation = browserVaultGeneration;
+  const promise = loadVaultImage(index, normalizedPath)
     .then((url) => {
-      if (url) imageUrlCache.set(key, url);
+      if (!url) return url;
+      if (generation !== browserVaultGeneration) {
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+        return null;
+      }
+      imageUrlCache.set(key, url);
       return url;
     })
     .finally(() => {
@@ -88,7 +154,7 @@ export async function resolveVaultImageUrl(
 }
 
 export function isExternalUrl(rawPath: string): boolean {
-  return /^(https?:|data:)/i.test(rawPath);
+  return /^(https?:|data:|blob:)/i.test(rawPath);
 }
 
 /**
@@ -105,25 +171,33 @@ export function resolveNoteImagePath(
   const trimmed = rawPath.trim();
   if (!trimmed || isExternalUrl(trimmed)) return null;
 
-  let decoded: string;
-  try {
-    decoded = decodeURI(trimmed);
-  } catch {
-    decoded = trimmed;
+  const known = new Set(
+    index.files
+      .map((file) => normalizeVaultImagePath(file.relativePath))
+      .filter((path): path is string => Boolean(path)),
+  );
+  const noteDir = normalizeVaultImagePath(dirname(notePath.replace(/\\/g, "/"))) ?? "";
+  const candidates = [
+    normalizeVaultImagePath(trimmed),
+    normalizeVaultImagePath(noteDir ? `${noteDir}/${trimmed}` : trimmed),
+  ];
+  for (const candidate of candidates) {
+    if (candidate && known.has(candidate)) return candidate;
   }
 
-  const known = new Set(index.files.map((file) => file.relativePath));
-  const noteDir = dirname(notePath);
-  const candidates = [decoded, noteDir ? `${noteDir}/${decoded}` : decoded];
-  for (const candidate of candidates) {
-    const normalized = candidate.replace(/^\.\//, "").replace(/\/+/g, "/").replace(/^\/+/, "");
-    if (known.has(normalized)) return normalized;
+  let decoded = trimmed.replace(/\\/g, "/");
+  try {
+    decoded = decodeURI(decoded);
+  } catch {
+    // Fall back to the raw filename for malformed note links.
   }
 
   const basename = decoded.split("/").pop();
   if (basename) {
-    const match = index.files.find((file) => file.relativePath.split("/").pop() === basename);
-    if (match) return match.relativePath;
+    const match = index.files.find(
+      (file) => normalizeVaultImagePath(file.relativePath)?.split("/").pop() === basename,
+    );
+    if (match) return normalizeVaultImagePath(match.relativePath);
   }
 
   return null;
@@ -147,7 +221,9 @@ export async function resolveNoteImageUrl(
 
 /** Drops a cached URL so the next resolve re-reads from disk (after rename/edit). */
 export function invalidateVaultImage(rootPath: string, relativePath: string) {
-  const key = cacheKey(rootPath, relativePath);
+  const normalizedPath = normalizeVaultImagePath(relativePath);
+  if (!normalizedPath) return;
+  const key = cacheKey(rootPath, normalizedPath);
   const url = imageUrlCache.get(key);
   if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
   imageUrlCache.delete(key);
