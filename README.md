@@ -17,9 +17,9 @@
 
 ---
 
-This repository contains the Tauri + React + TypeScript app scaffold and the public MVP documentation.
+WorldNotion is a Tauri + React + TypeScript desktop app for local-first worldbuilding.
 
-## MVP Goals
+## Current capabilities
 
 - Open local vaults.
 - Browse Markdown file trees.
@@ -30,6 +30,8 @@ This repository contains the Tauri + React + TypeScript app scaffold and the pub
 - Search files and entities.
 - Report broken links and missing required metadata.
 - Edit and save Markdown files.
+- Organize entities, properties, tags, images, tables, and live references without moving the vault out of local storage.
+- Keep appearance preferences per universe and use the same vault from the standalone app or Everend Forge Suite.
 
 ## Development
 
@@ -60,9 +62,9 @@ Architecture and quality expectations are documented in [docs/ENGINEERING-PRINCI
 
 ## Everend Forge Suite Compatibility
 
-WorldNotion remains a standalone app and the owner of the canon Markdown vault experience. Future Everend Forge suite work should mount WorldNotion as the World workspace page through a public app export, while preserving the standalone desktop shell.
+WorldNotion remains a standalone app and the owner of the canon Markdown vault experience. Everend Forge Suite mounts it as the World workspace while preserving the standalone desktop shell.
 
-Suite integration should treat the vault files, frontmatter, wikilinks, taxonomy data, and `.everend` metadata as the durable contract. It should not depend on private React state or force WorldNotion to become the branching narrative editor.
+Suite integration treats vault files, frontmatter, wikilinks, taxonomy data, and `.everend` metadata as the durable contract. It does not depend on private React state or turn WorldNotion into the branching narrative editor.
 
 ## Fixture Vault
 
