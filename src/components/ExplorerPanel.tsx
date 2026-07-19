@@ -120,6 +120,7 @@ export type ExplorerPanelProps = {
   onToggleExpand: (path: string) => void;
   onTreeAction: (action: ExplorerTreeAction) => void;
   onContextMenu: (event: MouseEvent, path: string, kind: "file" | "folder" | "empty") => void;
+  onOpenCreateMenu?: (x: number, y: number) => void;
   onToggleFavorite: (path: string, kind: "file" | "folder") => void;
   onToggleFolderFocus: (path: string) => void;
   onOpenFolderDescription: (folderPath: string, descriptionPath?: string) => void;
@@ -164,6 +165,7 @@ export function ExplorerPanel({
   onToggleExpand,
   onTreeAction,
   onContextMenu,
+  onOpenCreateMenu,
   onToggleFavorite,
   onToggleFolderFocus,
   onOpenFolderDescription,
@@ -312,6 +314,7 @@ export function ExplorerPanel({
         <label className="search-box">
           <Search size={15} />
           <input
+            data-onboarding-target="worldnotion.search-files"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search files"
@@ -646,60 +649,78 @@ export function ExplorerPanel({
           <section className="sidebar-section">
             {activeSection === "images" ? <h2>Images</h2> : null}
             <div
-              className={`tree-list ${pointerDragActive ? "is-pointer-dragging" : ""}`}
-              data-tree-root-drop="true"
-              onContextMenu={(event) => onContextMenu(event, "", "empty")}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const fromPath = event.dataTransfer.getData("text/plain");
-                const fromKind = event.dataTransfer.getData("application/worldnotion-kind") as
-                  "file" | "folder" | "";
-                if (fromPath) onDragMove(fromPath, "", fromKind || undefined);
-              }}
+              className={`explorer-tree-surface ${visibleRows.length ? "has-items" : "is-empty"}`}
             >
-              {visibleRows.length ? (
-                <>
-                  {virtualWindow.before > 0 ? (
-                    <div style={{ height: virtualWindow.before }} />
-                  ) : null}
-                  {virtualWindow.rows.map((row) => (
-                    <ExplorerTreeRow
-                      key={row.path}
-                      row={row}
-                      selectedPath={selectedPath}
-                      multiSelectedPaths={multiSelectedPaths}
-                      pointerDragTargetPath={pointerDragTargetPath}
-                      openTabPaths={openTabPaths}
-                      dirtyTabPaths={dirtyTabPaths}
-                      favoritePaths={favoritePaths}
-                      focusedFolderPath={focusedFolderPath}
-                      folderNotesEnabled={folderNotesEnabled}
-                      onSelectPath={onSelectPath}
-                      onSelectFolder={onSelectFolder}
-                      onToggleMultiSelection={onToggleMultiSelection}
-                      onToggleExpand={onToggleExpand}
-                      onContextMenu={onContextMenu}
-                      onToggleFavorite={onToggleFavorite}
-                      onToggleFolderFocus={onToggleFolderFocus}
-                      onOpenFolderDescription={onOpenFolderDescription}
-                      onDragMove={onDragMove}
-                      onPointerDragStart={onPointerDragStart}
-                      isPointerClickSuppressed={isPointerClickSuppressed}
-                      entityTagColors={entityTagColors}
-                      customIcons={customIcons}
-                    />
-                  ))}
-                  {virtualWindow.after > 0 ? <div style={{ height: virtualWindow.after }} /> : null}
-                </>
-              ) : (
-                <p className="muted">
-                  {activeSection === "images" ? "No images yet." : "No files yet."}
-                </p>
-              )}
+              {activeSection === "allFiles" && !visibleRows.length ? (
+                <button
+                  type="button"
+                  className="explorer-create-item-button"
+                  aria-label="Create a folder or note"
+                  title="Create a folder or note"
+                  onClick={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    onOpenCreateMenu?.(rect.left, rect.bottom + 4);
+                  }}
+                >
+                  <Plus size={14} />
+                </button>
+              ) : null}
+              <div
+                className={`tree-list ${pointerDragActive ? "is-pointer-dragging" : ""}`}
+                data-tree-root-drop="true"
+                onContextMenu={(event) => onContextMenu(event, "", "empty")}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const fromPath = event.dataTransfer.getData("text/plain");
+                  const fromKind = event.dataTransfer.getData("application/worldnotion-kind") as
+                    "file" | "folder" | "";
+                  if (fromPath) onDragMove(fromPath, "", fromKind || undefined);
+                }}
+              >
+                {visibleRows.length ? (
+                  <>
+                    {virtualWindow.before > 0 ? (
+                      <div style={{ height: virtualWindow.before }} />
+                    ) : null}
+                    {virtualWindow.rows.map((row) => (
+                      <ExplorerTreeRow
+                        key={row.path}
+                        row={row}
+                        selectedPath={selectedPath}
+                        multiSelectedPaths={multiSelectedPaths}
+                        pointerDragTargetPath={pointerDragTargetPath}
+                        openTabPaths={openTabPaths}
+                        dirtyTabPaths={dirtyTabPaths}
+                        favoritePaths={favoritePaths}
+                        focusedFolderPath={focusedFolderPath}
+                        folderNotesEnabled={folderNotesEnabled}
+                        onSelectPath={onSelectPath}
+                        onSelectFolder={onSelectFolder}
+                        onToggleMultiSelection={onToggleMultiSelection}
+                        onToggleExpand={onToggleExpand}
+                        onContextMenu={onContextMenu}
+                        onToggleFavorite={onToggleFavorite}
+                        onToggleFolderFocus={onToggleFolderFocus}
+                        onOpenFolderDescription={onOpenFolderDescription}
+                        onDragMove={onDragMove}
+                        onPointerDragStart={onPointerDragStart}
+                        isPointerClickSuppressed={isPointerClickSuppressed}
+                        entityTagColors={entityTagColors}
+                        customIcons={customIcons}
+                      />
+                    ))}
+                    {virtualWindow.after > 0 ? <div style={{ height: virtualWindow.after }} /> : null}
+                  </>
+                ) : (
+                  <p className="explorer-empty-state">
+                    {activeSection === "images" ? "No images yet." : "Crea tu carpeta o nota"}
+                  </p>
+                )}
+              </div>
             </div>
           </section>
         ) : null}
@@ -944,7 +965,6 @@ const ExplorerTreeRow = memo(function ExplorerTreeRow({
         )}
         <span className="tree-label">{row.name}</span>
         {isDirty ? <strong className="tree-dirty">*</strong> : null}
-        {isFavorite ? <Star size={12} className="tree-favorite" /> : null}
         <div className="tree-node-buttons">
           {row.kind === "folder" ? (
             <button

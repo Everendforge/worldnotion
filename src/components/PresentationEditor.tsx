@@ -13,6 +13,7 @@ import {
 } from "../utils/entityPresentation";
 import { parseFrontmatterRaw } from "../utils/propertiesConfig";
 import { ImageField } from "./properties/fields/ImageField";
+import { useWorldnotionUi } from "../i18n";
 import {
   BASE_VARIANT_ID,
   resolveVariantFrontmatter,
@@ -31,18 +32,11 @@ type PresentationEditorProps = {
   activeVariantId?: string;
 };
 
-const ROLE_COPY: Record<
-  PresentationRole,
-  { label: string; description: string; Icon: typeof UserRound }
-> = {
+const ROLE_ICONS: Record<PresentationRole, { Icon: typeof UserRound }> = {
   portrait: {
-    label: "Portrait",
-    description: "A vertical image beside the note title.",
     Icon: UserRound,
   },
   cover: {
-    label: "Cover",
-    description: "A panoramic image above the note.",
     Icon: PanelTop,
   },
 };
@@ -57,6 +51,7 @@ export function PresentationEditor({
   onRequestImage,
   activeVariantId = BASE_VARIANT_ID,
 }: PresentationEditorProps) {
+  const ui = useWorldnotionUi();
   const type = getEntityTypeDefinition(config, entity.type);
   const imageProperties = useMemo(
     () => listPresentationImageProperties(config, entity.type),
@@ -72,9 +67,9 @@ export function PresentationEditor({
     return (
       <div className="presentation-empty-state">
         <PanelTop size={20} aria-hidden="true" />
-        <strong>Presentation is unavailable</strong>
+        <strong>{ui.presentationUnavailable}</strong>
         <p>
-          This note uses the custom type “{entity.type}”, which is not defined in this universe.
+          {ui.customTypeUnavailable.replace("{{type}}", entity.type)}
         </p>
       </div>
     );
@@ -107,22 +102,24 @@ export function PresentationEditor({
       <header className="presentation-editor-heading">
         <div>
           <span className="presentation-editor-eyebrow">{type.label}</span>
-          <h3>Presentation{activeVariantId !== BASE_VARIANT_ID ? " variant" : ""}</h3>
+          <h3>{activeVariantId !== BASE_VARIANT_ID ? ui.presentationVariant : ui.presentation}</h3>
         </div>
         <p>
-          Configure the visual roles for every {type.label} note, then assign this note’s images.
+          {ui.presentationDescription.replace("{{type}}", type.label)}
         </p>
       </header>
 
       {imageProperties.length === 0 ? (
         <div className="presentation-empty-state">
           <ImagePlus size={20} aria-hidden="true" />
-          <strong>Enable an image property first</strong>
-          <p>Create an Image property in Properties and make it available to {type.label}.</p>
+          <strong>{ui.enableImageProperty}</strong>
+          <p>{ui.imagePropertyHint.replace("{{type}}", type.label)}</p>
         </div>
       ) : (
         (["portrait", "cover"] as PresentationRole[]).map((role) => {
-          const { Icon, label, description } = ROLE_COPY[role];
+          const Icon = ROLE_ICONS[role].Icon;
+          const label = role === "portrait" ? ui.portrait : ui.cover;
+          const description = role === "portrait" ? ui.portraitDescription : ui.coverDescription;
           const propertyId = getPresentationRolePropertyId(config, type.id, role);
           const value = getPresentationRoleValue(config, type.id, frontmatter, role) ?? "";
           return (
@@ -135,13 +132,13 @@ export function PresentationEditor({
                 </div>
               </div>
               <label className="presentation-role-select">
-                <span>Image property</span>
+                <span>{ui.imageProperty}</span>
                 <select
                   value={propertyId ?? ""}
                   onChange={(event) => setRoleProperty(role, event.target.value)}
                   disabled={!onUpdatePropertiesConfig}
                 >
-                  <option value="">Not enabled</option>
+                  <option value="">{ui.notEnabled}</option>
                   {imageProperties.map((property) => (
                     <option key={property.id} value={property.id}>
                       {property.label ?? property.id}

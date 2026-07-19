@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import "../App.css";
+import { useWorldnotionUi } from "../i18n";
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -18,14 +19,15 @@ export interface ConfirmDialogProps {
  */
 export function ConfirmDialog({
   isOpen,
-  title = "Confirm",
+  title,
   message,
-  confirmLabel = "OK",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   destructive = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const ui = useWorldnotionUi();
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -47,26 +49,26 @@ export function ConfirmDialog({
         className="modal-dialog"
         role="alertdialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={title ?? ui.confirm}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         <div className="modal-header">
-          <h2>{title}</h2>
+          <h2>{title ?? ui.confirm}</h2>
         </div>
         <div className="modal-body">
           <p className="modal-message">{message}</p>
         </div>
         <div className="modal-footer">
           <button onClick={onCancel} className="modal-button modal-button-cancel">
-            {cancelLabel}
+            {cancelLabel ?? ui.cancel}
           </button>
           <button
             ref={confirmRef}
             onClick={onConfirm}
             className={`modal-button modal-button-confirm${destructive ? " modal-button-destructive" : ""}`}
           >
-            {confirmLabel}
+            {confirmLabel ?? ui.confirm}
           </button>
         </div>
       </div>

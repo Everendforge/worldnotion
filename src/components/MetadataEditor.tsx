@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useWorldnotionUi } from "../i18n";
 import {
   AlertCircle,
   ChevronDown,
@@ -118,6 +119,7 @@ export function MetadataEditor({
   onRequestImage,
   activeVariantId = BASE_VARIANT_ID,
 }: MetadataEditorProps) {
+  const ui = useWorldnotionUi();
   const { confirmDialog } = useAppDialogs();
   // The app reindexes after saving properties.json. Keep the draft schema in
   // the Inspector until that asynchronous round-trip returns it as a prop.
@@ -375,7 +377,7 @@ export function MetadataEditor({
       presentationRoles.length
         ? `Delete this property from universe properties? It will also disable ${presentationRoles.join(", ")}. Existing note values will stay until removed from frontmatter.`
         : "Delete this property from universe properties? Existing note values will stay until removed from frontmatter.",
-      { title: "Delete property", confirmLabel: "Delete", destructive: true },
+      { title: ui.deleteProperty, confirmLabel: ui.delete, destructive: true },
     );
     if (!confirmed) return;
     saveConfig(removeInspectorProperty(propertiesConfig, propertyId));
@@ -924,19 +926,19 @@ export function MetadataEditor({
         {renderPropertyContextMenu()}
         <div className="metadata-fields">
           <div className="metadata-inspector-toolbar">
-            <span>Properties</span>
+            <span>{ui.properties}</span>
             <button
               type="button"
               onClick={() => setShowHiddenProperties((current) => !current)}
               title={
                 showHiddenProperties
-                  ? "Hide hidden and conditional properties"
-                  : "Show hidden and conditional properties"
+                  ? ui.hideConditionalProperties
+                  : ui.showConditionalProperties
               }
               aria-pressed={showHiddenProperties}
             >
               {showHiddenProperties ? <EyeOff size={13} /> : <Eye size={13} />}
-              {showHiddenProperties ? "Hide hidden" : "Show hidden"}
+              {showHiddenProperties ? ui.hideHidden : ui.showHidden}
             </button>
           </div>
           {renderPropertySections()}
@@ -952,19 +954,19 @@ export function MetadataEditor({
             <div className="metadata-orphaned-fields">
               <div className="metadata-section-divider metadata-section-divider-error">
                 <AlertCircle size={16} />
-                <span>Schema issues ({orphanedFields.length})</span>
+                <span>{ui.schemaIssues.replace("{{count}}", String(orphanedFields.length))}</span>
               </div>
               <p className="field-hint">
-                Your metadata does not match the universe schema. Review and fix these issues.
+                {ui.metadataSchemaMismatch}
               </p>
 
               {/* Extra fields */}
               {extraFields.length > 0 && (
                 <div className="metadata-issue-group">
                   <h4 className="metadata-issue-group-title metadata-issue-extra">
-                    <AlertCircle size={14} /> Extra fields ({extraFields.length})
+                    <AlertCircle size={14} /> {ui.extraFields.replace("{{count}}", String(extraFields.length))}
                   </h4>
-                  <p className="field-hint">Fields not defined in the universe schema.</p>
+                  <p className="field-hint">{ui.fieldsNotInSchema}</p>
                   {extraFields.map((field) => (
                     <div
                       key={field.fieldName}
@@ -988,10 +990,10 @@ export function MetadataEditor({
                           onClick={() => {
                             onConserveField?.(field.fieldName, field.value);
                           }}
-                          title="Add to universe schema"
+                          title={ui.addToSchema}
                         >
                           <Plus size={13} />
-                          Conserve
+                          {ui.conserve}
                         </button>
                         {field.fieldName !== "folder" && (
                           <button
@@ -1005,10 +1007,10 @@ export function MetadataEditor({
                                 );
                               }
                             }}
-                            title="Remove from this note"
+                            title={ui.removeFromNote}
                           >
                             <Trash2 size={13} />
-                            Delete
+                          {ui.delete}
                           </button>
                         )}
                       </div>
@@ -1022,20 +1024,20 @@ export function MetadataEditor({
                 <div className="metadata-issue-group">
                   <div className="metadata-issue-header">
                     <h4 className="metadata-issue-group-title metadata-issue-missing">
-                      <AlertCircle size={14} /> Missing fields ({missingFields.length})
+                      <AlertCircle size={14} /> {ui.missingFields.replace("{{count}}", String(missingFields.length))}
                     </h4>
                     <button
                       type="button"
                       className="metadata-action-primary"
                       onClick={() => addMissingFields(missingFields.map((f) => f.fieldName))}
-                      title="Add every missing field with a default value"
+                      title={ui.addEveryMissingField}
                     >
                       <Plus size={13} />
-                      Add all
+                      {ui.addAll}
                     </button>
                   </div>
                   <p className="field-hint">
-                    Required or important fields defined in schema are not present.
+                    {ui.missingFieldsHint}
                   </p>
                   {missingFields.map((field) => (
                     <div
@@ -1055,10 +1057,10 @@ export function MetadataEditor({
                           type="button"
                           className="metadata-action-primary"
                           onClick={() => addMissingFields([field.fieldName])}
-                          title="Add this field with a default value"
+                          title={ui.addWithDefault}
                         >
                           <Plus size={13} />
-                          Add
+                          {ui.add}
                         </button>
                       </div>
                     </div>
@@ -1071,10 +1073,10 @@ export function MetadataEditor({
           {unconfiguredProperties.length > 0 ? (
             <div className="metadata-unconfigured">
               <div className="metadata-section-divider">
-                <span>Unconfigured properties</span>
+                <span>{ui.unconfiguredProperties}</span>
               </div>
               <p className="field-hint">
-                These keys exist in this note but are not declared in universe properties.
+                {ui.unconfiguredPropertiesHint}
               </p>
               {unconfiguredProperties.map((property) => (
                 <div key={property.key} className="metadata-unconfigured-item">
@@ -1090,10 +1092,10 @@ export function MetadataEditor({
                         const nextProperty = inferPropertyDefinition(property.key, property.value);
                         savePropertyDefinition(nextProperty);
                       }}
-                      title="Declare this key in the universe schema"
+                      title={ui.declareKey}
                     >
                       <Plus size={13} />
-                      Add to schema
+                      {ui.addToSchema}
                     </button>
                     <label>
                       <select
@@ -1105,7 +1107,7 @@ export function MetadataEditor({
                           }))
                         }
                       >
-                        <option value="">Adapt to...</option>
+                        <option value="">{ui.adaptTo}</option>
                         {configuredProperties
                           .filter((candidate) => candidate.id !== property.key)
                           .map((candidate) => (
@@ -1119,19 +1121,19 @@ export function MetadataEditor({
                       type="button"
                       onClick={() => adaptUnconfiguredProperty(property.key)}
                       disabled={!adaptTargets[property.key]}
-                      title="Move value to selected property"
+                      title={ui.moveValueToProperty}
                     >
                       <Wand2 size={13} />
-                      Adapt
+                      {ui.adapt}
                     </button>
                     <button
                       type="button"
                       className="danger"
                       onClick={() => removeUnconfiguredProperty(property.key)}
-                      title="Remove this key from the note"
+                      title={ui.removeFromNote}
                     >
                       <Trash2 size={13} />
-                      Remove
+                      {ui.remove}
                     </button>
                   </div>
                 </div>

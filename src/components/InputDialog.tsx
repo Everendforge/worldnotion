@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import "../App.css";
+import { useWorldnotionUi } from "../i18n";
 
 export interface InputDialogProps {
   isOpen: boolean;
@@ -13,11 +14,12 @@ export interface InputDialogProps {
 export function InputDialog({
   isOpen,
   title,
-  placeholder = "Enter value",
+  placeholder,
   defaultValue = "",
   onConfirm,
   onCancel,
 }: InputDialogProps) {
+  const ui = useWorldnotionUi();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -68,7 +70,7 @@ export function InputDialog({
           <input
             ref={inputRef}
             type="text"
-            placeholder={placeholder}
+            placeholder={placeholder ?? ui.enterValue}
             defaultValue={defaultValue}
             onKeyDown={handleKeyDown}
             className="modal-input"
@@ -76,7 +78,7 @@ export function InputDialog({
         </div>
         <div className="modal-footer">
           <button onClick={handleCancel} className="modal-button modal-button-cancel">
-            Cancel
+            {ui.cancel}
           </button>
           <button onClick={handleConfirm} className="modal-button modal-button-confirm">
             OK

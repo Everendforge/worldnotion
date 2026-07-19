@@ -9,6 +9,7 @@ import {
 import { normalizeThemeId } from "./themes";
 import { DEFAULT_AI_ADVISOR_SETTINGS, normalizeAiAdvisorSettings } from "./utils/aiProviders";
 import { normalizePluginSettings } from "./utils/pluginRegistry";
+import { normalizeLocalePreference } from "./i18n";
 
 export const SETTINGS_KEY = "worldnotion.settings.v4";
 export const LEGACY_SETTINGS_KEY = "worldnotion.settings.v3";
@@ -64,6 +65,7 @@ export function loadSettings(): AppSettingsV4 {
           : "processed";
 
     return {
+      localePreference: normalizeLocalePreference(parsed.localePreference),
       theme: normalizeThemeId(parsed.theme),
       recentUniverse: parsed.recentUniverse,
       recentUniverses,
@@ -84,6 +86,7 @@ export function loadSettings(): AppSettingsV4 {
     };
   } catch {
     return {
+      localePreference: "system",
       theme: "worldnotion-light",
       recentUniverses: [],
       recentUniverseProfiles: {},

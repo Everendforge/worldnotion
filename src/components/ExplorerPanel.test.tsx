@@ -71,6 +71,27 @@ describe("ExplorerPanel virtualization", () => {
     expect(onSectionChange).toHaveBeenCalledWith("images");
   });
 
+  it("opens the create menu from the explorer surface", () => {
+    const onOpenCreateMenu = vi.fn();
+    renderPanel([], "", { onOpenCreateMenu });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create a folder or note" }));
+
+    expect(onOpenCreateMenu).toHaveBeenCalledOnce();
+    expect(onOpenCreateMenu.mock.calls[0]).toHaveLength(2);
+  });
+
+  it("uses the favorite button as the only favorite indicator", () => {
+    const row = makeRows(1)[0];
+    const { container } = renderPanel([row], "", {
+      favoritePaths: new Set([row.path]),
+    });
+
+    expect(container.querySelector(".tree-favorite")).toBeNull();
+    expect(container.querySelector(".folder-favorite-button.active")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Create a folder or note" })).toBeNull();
+  });
+
   it("renders every row for small trees", () => {
     const { container } = renderPanel(makeRows(50));
     expect(container.querySelectorAll(".tree-node").length).toBe(50);

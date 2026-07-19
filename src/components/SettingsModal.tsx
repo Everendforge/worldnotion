@@ -58,6 +58,7 @@ import {
   normalizeLocaleNames,
 } from "../utils/localization";
 import "../App.css";
+import { interfaceLocaleCopy, resolveInterfaceLocale, worldnotionSettingsCopy } from "../i18n";
 
 
 type SettingsModalProps = {
@@ -96,6 +97,7 @@ type SettingsModalProps = {
   onClose: () => void;
   onRevealUniverse?: () => void;
   onOpenUniverseNote?: () => void;
+  onResetOnboarding?: () => void;
   revealUniverseLabel?: string;
   initialSection?: SettingsSection;
   initialPropertiesMode?: "template" | "blank";
@@ -439,7 +441,8 @@ type SettingsSection =
   | "tabs"
   | "explorer"
   | "plugins"
-  | "ai-advisor";
+  | "ai-advisor"
+  | "tutorials";
 
 const primaryFontOptions = [
   ["sans", "Sans serif"],
@@ -463,6 +466,7 @@ export function SettingsModal({
   onClose,
   onRevealUniverse,
   onOpenUniverseNote,
+  onResetOnboarding,
   revealUniverseLabel = "Reveal universe folder",
   initialSection,
   initialPropertiesMode = "template",
@@ -470,6 +474,12 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>(
     initialSection ?? (universe ? "overview" : "editor"),
+  );
+  const interfaceCopy = interfaceLocaleCopy(
+    resolveInterfaceLocale(suiteSettings?.localePreference ?? settings.localePreference ?? "system"),
+  );
+  const settingsText = worldnotionSettingsCopy(
+    resolveInterfaceLocale(suiteSettings?.localePreference ?? settings.localePreference ?? "system"),
   );
   const [conflictMessage, setConflictMessage] = useState("");
   const [profileDraft, setProfileDraft] = useState<UniverseProfile>(() => ({
@@ -724,14 +734,14 @@ export function SettingsModal({
           <nav className="settings-nav">
             {suiteSettings ? (
               <div className="settings-nav-group">
-                <p>Forge</p>
+                <p>{settingsText.forge}</p>
                 <button
                   className={activeSection === "suite" ? "active" : ""}
                   onClick={() => setActiveSection("suite")}
                   type="button"
                 >
                   <Settings size={14} />
-                  Suite
+                  {settingsText.suite}
                 </button>
                 <button
                   className={activeSection === "update" ? "active" : ""}
@@ -739,7 +749,7 @@ export function SettingsModal({
                   type="button"
                 >
                   <RefreshCw size={14} />
-                  Update
+                  {settingsText.update}
                 </button>
                 <button
                   className={activeSection === "license" ? "active" : ""}
@@ -753,14 +763,14 @@ export function SettingsModal({
             ) : null}
             {universe ? (
               <div className="settings-nav-group">
-                <p>Universe</p>
+              <p>{settingsText.universe}</p>
                 <button
                   className={activeSection === "overview" ? "active" : ""}
                   onClick={() => setActiveSection("overview")}
                   type="button"
                 >
                   <Settings size={14} />
-                  Overview
+                  {settingsText.overview}
                 </button>
                 <button
                   className={activeSection === "tags" ? "active" : ""}
@@ -768,7 +778,7 @@ export function SettingsModal({
                   type="button"
                 >
                   <Hash size={14} />
-                  Tags
+                  {settingsText.tags}
                 </button>
                 <button
                   className={activeSection === "utils" ? "active" : ""}
@@ -776,20 +786,20 @@ export function SettingsModal({
                   type="button"
                 >
                   <Wrench size={14} />
-                  Utils
+                  {settingsText.utils}
                 </button>
               </div>
             ) : null}
 
             <div className="settings-nav-group app-settings-group">
-              <p>Application</p>
+              <p>{settingsText.application}</p>
               <button
                 className={activeSection === "editor" ? "active" : ""}
                 onClick={() => setActiveSection("editor")}
                 type="button"
               >
                 <TextCursorInput size={14} />
-                Editor
+                {settingsText.editor}
               </button>
               <button
                 className={activeSection === "shortcuts" ? "active" : ""}
@@ -797,7 +807,7 @@ export function SettingsModal({
                 type="button"
               >
                 <Keyboard size={14} />
-                Shortcuts
+                {settingsText.shortcuts}
               </button>
               <button
                 className={activeSection === "tabs" ? "active" : ""}
@@ -805,7 +815,7 @@ export function SettingsModal({
                 type="button"
               >
                 <PanelLeft size={14} />
-                Tabs
+                {settingsText.tabs}
               </button>
               <button
                 className={activeSection === "explorer" ? "active" : ""}
@@ -813,7 +823,7 @@ export function SettingsModal({
                 type="button"
               >
                 <Folder size={14} />
-                Explorer
+                {settingsText.explorer}
               </button>
               <button
                 className={activeSection === "plugins" ? "active" : ""}
@@ -821,7 +831,7 @@ export function SettingsModal({
                 type="button"
               >
                 <Plug size={14} />
-                Plugins
+                {settingsText.plugins}
               </button>
               <button
                 className={activeSection === "ai-advisor" ? "active" : ""}
@@ -829,7 +839,15 @@ export function SettingsModal({
                 type="button"
               >
                 <Sparkles size={14} />
-                AI Advisor
+                {settingsText.advisor}
+              </button>
+              <button
+                className={activeSection === "tutorials" ? "active" : ""}
+                onClick={() => setActiveSection("tutorials")}
+                type="button"
+              >
+                <RefreshCw size={14} />
+                {settingsText.tutorials}
               </button>
             </div>
           </nav>
@@ -838,12 +856,23 @@ export function SettingsModal({
             {activeSection === "suite" && suiteSettings ? (
               <div className="settings-panel">
                 <div className="settings-page-title">
-                  <h3>Everend Forge Suite</h3>
-                  <p>Shared preferences applied to every app in this Suite.</p>
+                  <h3>{settingsText.suiteTitle}</h3>
+                  <p>{settingsText.suiteDescription}</p>
                 </div>
                 <div className="settings-grid">
                   <label>
-                    <span>Style</span>
+                    <span>{interfaceCopy.interfaceLanguage}</span>
+                    <select
+                      value={suiteSettings.localePreference}
+                      onChange={(event) => suiteSettings.onLocalePreferenceChange(event.target.value as "system" | "en" | "es")}
+                    >
+                      <option value="system">{interfaceCopy.system}</option>
+                      <option value="en">English</option>
+                      <option value="es">Español</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>{settingsText.style}</span>
                     <select
                       value={suiteSettings.style}
                       onChange={(event) => suiteSettings.onStyleChange(event.target.value)}
@@ -856,7 +885,7 @@ export function SettingsModal({
                     </select>
                   </label>
                   <label>
-                    <span>Primary typeface</span>
+                    <span>{settingsText.typeface}</span>
                     <select
                       value={suiteSettings.primaryFont}
                       onChange={(event) => suiteSettings.onPrimaryFontChange(event.target.value)}
@@ -874,26 +903,26 @@ export function SettingsModal({
             {activeSection === "update" && suiteSettings?.update ? (
               <div className="settings-panel forge-update-panel">
                 <div className="settings-page-title">
-                  <h3>Everend Forge Update</h3>
-                  <p>Check, download, and install signed updates for the Suite.</p>
+                  <h3>{settingsText.updateTitle}</h3>
+                  <p>{settingsText.updateDescription}</p>
                 </div>
 
                 <div className="forge-update-details">
                   <div>
-                    <span>Installed version</span>
+                    <span>{settingsText.installedVersion}</span>
                     <strong>{suiteSettings.update.currentVersion}</strong>
                   </div>
                   <div>
-                    <span>Platform</span>
+                    <span>{settingsText.platform}</span>
                     <strong>{suiteSettings.update.platform}</strong>
                   </div>
                   <div>
-                    <span>Application ID</span>
+                    <span>{settingsText.applicationId}</span>
                     <code>{suiteSettings.update.identifier}</code>
                   </div>
                   <div>
-                    <span>Update channel</span>
-                    <strong>Everend Forge releases</strong>
+                    <span>{settingsText.channel}</span>
+                    <strong>{settingsText.releases}</strong>
                   </div>
                 </div>
 
@@ -1154,12 +1183,27 @@ export function SettingsModal({
             {activeSection === "editor" ? (
               <>
                 <div className="settings-grid">
+                  {!suiteSettings ? (
+                    <label>
+                      <span>{interfaceCopy.interfaceLanguage}</span>
+                      <select
+                        value={settings.localePreference ?? "system"}
+                        onChange={(event) =>
+                          onChange({ ...settings, localePreference: event.target.value as "system" | "en" | "es" })
+                        }
+                      >
+                        <option value="system">{interfaceCopy.system}</option>
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                      </select>
+                    </label>
+                  ) : null}
                   <label>
-                    <span>Active style</span>
+                    <span>{settingsText.activeStyle}</span>
                     <input value={themeById(settings.theme).label} readOnly />
                   </label>
                   <label>
-                    <span>Page style</span>
+                    <span>{settingsText.pageStyle}</span>
                     <select
                       value={settings.editor.pageStyle}
                       onChange={(event) =>
@@ -1168,15 +1212,15 @@ export function SettingsModal({
                         })
                       }
                     >
-                      <option value="theme">Theme</option>
-                      <option value="white">White page</option>
-                      <option value="warm-paper">Warm paper</option>
-                      <option value="system">System surface</option>
-                      <option value="custom">Custom color</option>
+                      <option value="theme">{settingsText.theme}</option>
+                      <option value="white">{settingsText.whitePage}</option>
+                      <option value="warm-paper">{settingsText.warmPaper}</option>
+                      <option value="system">{settingsText.systemSurface}</option>
+                      <option value="custom">{settingsText.customColor}</option>
                     </select>
                   </label>
                   <label>
-                    <span>Custom page color</span>
+                    <span>{settingsText.customPageColor}</span>
                     <input
                       type="color"
                       value={settings.editor.customPageColor}
@@ -1185,7 +1229,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Paper shadow (Write mode)</span>
+                    <span>{settingsText.paperShadow}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.showPaperShadow}
@@ -1193,7 +1237,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Line numbers</span>
+                    <span>{settingsText.lineNumbers}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.lineNumbers}
@@ -1201,7 +1245,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Line wrap</span>
+                    <span>{settingsText.lineWrap}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.lineWrap}
@@ -1209,7 +1253,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Active line</span>
+                    <span>{settingsText.activeLine}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.activeLine}
@@ -1217,7 +1261,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Writing structures</span>
+                    <span>{settingsText.writingStructures}</span>
                     <select
                       value={settings.editor.writeStructureMode}
                       onChange={(event) =>
@@ -1227,12 +1271,12 @@ export function SettingsModal({
                         })
                       }
                     >
-                      <option value="processed">Processed — no raw Markdown</option>
-                      <option value="visible">Show Markdown structures</option>
+                      <option value="processed">{settingsText.processed}</option>
+                      <option value="visible">{settingsText.visibleStructures}</option>
                     </select>
                   </label>
                   <label>
-                    <span>Font size</span>
+                    <span>{settingsText.fontSize}</span>
                     <input
                       type="number"
                       min={11}
@@ -1242,21 +1286,21 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Write font</span>
+                    <span>{settingsText.writeFont}</span>
                     <input
                       value={settings.editor.writeFontFamily}
                       onChange={(event) => updateEditor({ writeFontFamily: event.target.value })}
                     />
                   </label>
                   <label>
-                    <span>Source font</span>
+                    <span>{settingsText.sourceFont}</span>
                     <input
                       value={settings.editor.sourceFontFamily}
                       onChange={(event) => updateEditor({ sourceFontFamily: event.target.value })}
                     />
                   </label>
                   <label>
-                    <span>Tab size</span>
+                    <span>{settingsText.tabSize}</span>
                     <input
                       type="number"
                       min={2}
@@ -1266,7 +1310,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Default mode</span>
+                    <span>{settingsText.defaultMode}</span>
                     <select
                       value={settings.editor.defaultMode}
                       onChange={(event) =>
@@ -1275,8 +1319,8 @@ export function SettingsModal({
                         })
                       }
                     >
-                      <option value="write">Write</option>
-                      <option value="source">Source</option>
+                      <option value="write">{settingsText.write}</option>
+                      <option value="source">{settingsText.source}</option>
                     </select>
                   </label>
                 </div>
@@ -1290,11 +1334,11 @@ export function SettingsModal({
                     color: "var(--wn-muted)",
                   }}
                 >
-                  Navigation
+                  {settingsText.navigation}
                 </h3>
                 <div className="settings-grid">
                   <label>
-                    <span>Command Palette (Cmd+P)</span>
+                    <span>{settingsText.commandPalette}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.commandPaletteEnabled}
@@ -1304,7 +1348,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Quick Switcher (Cmd+Alt+O)</span>
+                    <span>{settingsText.quickSwitcher}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.quickSwitcherEnabled}
@@ -1314,7 +1358,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Find & Replace (Cmd+F)</span>
+                    <span>{settingsText.findReplace}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.searchPanelEnabled}
@@ -1334,11 +1378,11 @@ export function SettingsModal({
                     color: "var(--wn-muted)",
                   }}
                 >
-                  Visualization
+                  {settingsText.visualization}
                 </h3>
                 <div className="settings-grid">
                   <label>
-                    <span>Outline Guide (Cmd+Shift+O)</span>
+                    <span>{settingsText.outlineGuide}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.outlineGuideEnabled}
@@ -1349,20 +1393,20 @@ export function SettingsModal({
                   </label>
                   {settings.editor.outlineGuideEnabled && (
                     <label>
-                      <span>Outline Position</span>
+                      <span>{settingsText.outlinePosition}</span>
                       <select
                         value={settings.editor.outlinePosition}
                         onChange={(event) =>
                           updateEditor({ outlinePosition: event.target.value as "left" | "right" })
                         }
                       >
-                        <option value="left">Left</option>
-                        <option value="right">Right</option>
+                        <option value="left">{settingsText.left}</option>
+                        <option value="right">{settingsText.right}</option>
                       </select>
                     </label>
                   )}
                   <label>
-                    <span>Breadcrumbs</span>
+                    <span>{settingsText.breadcrumbs}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.breadcrumbsEnabled}
@@ -1372,7 +1416,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Code Folding</span>
+                    <span>{settingsText.codeFolding}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.codeFoldingEnabled}
@@ -1382,7 +1426,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Floating Toolbar</span>
+                    <span>{settingsText.floatingToolbar}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.floatingToolbarEnabled}
@@ -1392,7 +1436,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Document Header</span>
+                    <span>{settingsText.documentHeader}</span>
                     <input
                       type="checkbox"
                       checked={settings.editor.documentHeaderEnabled}
@@ -1404,7 +1448,7 @@ export function SettingsModal({
                     />
                   </label>
                   <label>
-                    <span>Show Project Name in Header</span>
+                    <span>{settingsText.showProjectName}</span>
                     <input
                       type="checkbox"
                       disabled={!settings.editor.documentHeaderEnabled}
@@ -1831,7 +1875,7 @@ export function SettingsModal({
             {activeSection === "explorer" ? (
               <div className="settings-grid">
                 <label>
-                  <span>Confirm Explorer moves</span>
+                  <span>{settingsText.confirmMoves}</span>
                   <input
                     type="checkbox"
                     checked={settings.explorer.confirmDragMove}
@@ -1844,7 +1888,7 @@ export function SettingsModal({
                   />
                 </label>
                 <label>
-                  <span>Show hidden `.everend`</span>
+                  <span>{settingsText.showHidden}</span>
                   <input
                     type="checkbox"
                     checked={settings.explorer.showHiddenEverend}
@@ -1857,7 +1901,7 @@ export function SettingsModal({
                   />
                 </label>
                 <label>
-                  <span>Enable folder notes</span>
+                  <span>{settingsText.folderNotes}</span>
                   <input
                     type="checkbox"
                     checked={settings.explorer.folderNotesEnabled}
@@ -1873,7 +1917,7 @@ export function SettingsModal({
                   />
                 </label>
                 <label>
-                  <span>Show images in All Files</span>
+                  <span>{settingsText.showImages}</span>
                   <input
                     type="checkbox"
                     checked={settings.explorer.showImagesInAllFiles}
@@ -2095,6 +2139,19 @@ export function SettingsModal({
                     <small className="settings-inline-error">{aiProviderError}</small>
                   ) : null}
                 </div>
+              </div>
+            ) : null}
+
+            {activeSection === "tutorials" ? (
+              <div className="settings-panel">
+                <div className="settings-page-title">
+                  <h3>Tutoriales</h3>
+                  <p>Vuelve a mostrar la guía básica de WorldNotion para este universo.</p>
+                </div>
+                <button type="button" onClick={onResetOnboarding} disabled={!onResetOnboarding}>
+                  <RefreshCw size={15} />
+                  Reiniciar tutorial
+                </button>
               </div>
             ) : null}
           </section>

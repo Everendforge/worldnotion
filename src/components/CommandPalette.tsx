@@ -23,6 +23,7 @@ import {
   TaxonomyConfig,
 } from "../editorTypes";
 import { getFileFrequencyScore } from "../utils/fileAccessStats";
+import { useWorldnotionUi } from "../i18n";
 
 export interface CommandPaletteProps {
   isOpen: boolean;
@@ -108,6 +109,7 @@ export function CommandPalette({
   onSelectHeader,
   onSelectTag,
 }: CommandPaletteProps) {
+  const ui = useWorldnotionUi();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeMode, setActiveMode] = useState<CommandPaletteMode>(mode);
@@ -366,19 +368,19 @@ export function CommandPalette({
             autoFocus
             placeholder={
               activeMode === "files"
-                ? "Search files... (@ for headers, # for tags, > for commands)"
+                ? ui.searchFiles
                 : activeMode === "headers"
-                  ? "Search headers in current file..."
+                  ? ui.searchHeaders
                   : activeMode === "tags"
-                    ? "Search tags..."
-                    : "Search commands..."
+                    ? ui.searchTags
+                    : ui.searchCommands
             }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
           />
           {query && (
-            <button className="clear-button" onClick={() => setQuery("")} aria-label="Clear search">
+            <button className="clear-button" onClick={() => setQuery("")} aria-label={ui.clearSearch}>
               <X size={16} />
             </button>
           )}
@@ -388,8 +390,8 @@ export function CommandPalette({
               <button
                 className="filter-toggle-button"
                 onClick={() => setShowFilters(!showFilters)}
-                aria-label="Toggle filters"
-                title="Filter by type or status"
+                aria-label={ui.toggleFilters}
+                title={ui.filterByTypeOrStatus}
               >
                 <Filter size={16} />
               </button>
@@ -401,12 +403,12 @@ export function CommandPalette({
           <div className="command-palette-filters">
             {entityTypes.length > 0 && (
               <div className="filter-group">
-                <label>Type:</label>
+                <label>{ui.type}</label>
                 <select
                   value={filterEntityType || ""}
                   onChange={(e) => setFilterEntityType(e.target.value || null)}
                 >
-                  <option value="">All types</option>
+                  <option value="">{ui.allTypes}</option>
                   {entityTypes.map((type) => (
                     <option key={type.id} value={type.id}>
                       {type.label}
@@ -417,12 +419,12 @@ export function CommandPalette({
             )}
             {statuses.length > 0 && (
               <div className="filter-group">
-                <label>Status:</label>
+                <label>{ui.status}</label>
                 <select
                   value={filterStatus || ""}
                   onChange={(e) => setFilterStatus(e.target.value || null)}
                 >
-                  <option value="">All statuses</option>
+                  <option value="">{ui.allStatuses}</option>
                   {statuses.map((status) => (
                     <option key={status.id} value={status.id}>
                       {status.label}
@@ -439,7 +441,7 @@ export function CommandPalette({
                   setFilterStatus(null);
                 }}
               >
-                Clear filters
+                {ui.clearFilters}
               </button>
             )}
           </div>
@@ -448,10 +450,10 @@ export function CommandPalette({
         <div className="command-palette-results" ref={resultsRef}>
           {results.length === 0 ? (
             <div className="no-results">
-              No results found
+              {ui.noResults}
               {activeMode === "files" && query && (
                 <div className="no-results-hint">
-                  Try @ for headers, # for tags, or &gt; for commands
+                  {ui.searchHint}
                 </div>
               )}
             </div>
@@ -525,13 +527,13 @@ export function CommandPalette({
 
         <div className="command-palette-footer">
           <div className="palette-mode-indicator">
-            {activeMode === "files" && <span>📄 Files</span>}
-            {activeMode === "headers" && <span>📑 Headers</span>}
-            {activeMode === "tags" && <span>🏷️ Tags</span>}
-            {activeMode === "commands" && <span>⌘ Commands</span>}
+            {activeMode === "files" && <span>📄 {ui.files}</span>}
+            {activeMode === "headers" && <span>📑 {ui.headers}</span>}
+            {activeMode === "tags" && <span>🏷️ {ui.tags}</span>}
+            {activeMode === "commands" && <span>⌘ {ui.commands}</span>}
           </div>
           <div className="palette-hints">
-            <kbd>↑</kbd> <kbd>↓</kbd> to navigate • <kbd>↵</kbd> to select • <kbd>esc</kbd> to close
+            {ui.navigateSelectClose}
           </div>
         </div>
       </div>

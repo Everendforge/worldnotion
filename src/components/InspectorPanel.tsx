@@ -6,6 +6,7 @@ import { rawToEditorParts } from "../utils/contentTemplates";
 import { LazyPanelFallback } from "./LazyPanelFallback";
 import { InspectorOnboarding } from "./properties/InspectorOnboarding";
 import { VariantSelector } from "./VariantSelector";
+import { useWorldnotionUi } from "../i18n";
 
 function noteFileName(path: string) {
   return path.split("/").pop()?.replace(/\.md$/i, "") || "untitled";
@@ -64,13 +65,14 @@ export function InspectorPanel({
   explorerSelection = [],
   onMoveExplorerSelection,
 }: InspectorPanelProps) {
+  const ui = useWorldnotionUi();
   const [activeView, setActiveView] = useState<"properties" | "presentation">("properties");
   const [moveTarget, setMoveTarget] = useState("");
   if (!index) {
     return (
       <aside className="inspector">
-        <h2>Inspector</h2>
-        <p className="muted">Open a universe to inspect metadata.</p>
+        <h2>{ui.inspector}</h2>
+        <p className="muted">{ui.openUniverseToInspect}</p>
       </aside>
     );
   }
@@ -78,16 +80,16 @@ export function InspectorPanel({
   if (explorerSelection.length > 1) {
     return (
       <aside className="inspector">
-        <h2>Bulk selection</h2>
+        <h2>{ui.bulkSelection}</h2>
         <p className="muted">
-          {explorerSelection.length} items selected. Use Ctrl/⌘-click to adjust.
+          {ui.itemsSelected.replace("{{count}}", String(explorerSelection.length))}
         </p>
         <label className="field-label">
-          Move to folder path
+          {ui.moveToFolderPath}
           <input
             value={moveTarget}
             onChange={(event) => setMoveTarget(event.target.value)}
-            placeholder="Root"
+            placeholder={ui.root}
           />
         </label>
         <button
@@ -95,7 +97,7 @@ export function InspectorPanel({
           className="btn btn-primary"
           onClick={() => void onMoveExplorerSelection?.(moveTarget)}
         >
-          Move {explorerSelection.length} items
+          {ui.moveItems.replace("{{count}}", String(explorerSelection.length))}
         </button>
       </aside>
     );
@@ -104,9 +106,9 @@ export function InspectorPanel({
   if (template) {
     return (
       <aside className="inspector">
-        <h2>Template</h2>
+        <h2>{ui.template}</h2>
         <p className="path-line">{template.path}</p>
-        <p className="muted">Templates are Markdown files with placeholders.</p>
+        <p className="muted">{ui.templateDescription}</p>
       </aside>
     );
   }
@@ -128,9 +130,9 @@ export function InspectorPanel({
               />
             ) : (
               <div className="no-frontmatter-notice">
-                <p className="muted">This note has no frontmatter.</p>
+                <p className="muted">{ui.noFrontmatter}</p>
                 <button className="btn btn-primary" onClick={onAddFrontmatter}>
-                  Add WorldNotion frontmatter
+                  {ui.addFrontmatter}
                 </button>
               </div>
             )}
@@ -143,8 +145,8 @@ export function InspectorPanel({
   if (!entity) {
     return (
       <aside className="inspector">
-        <h2>Inspector</h2>
-        <p className="muted">Select a note or template.</p>
+        <h2>{ui.inspector}</h2>
+        <p className="muted">{ui.selectNoteOrTemplate}</p>
       </aside>
     );
   }
@@ -163,10 +165,9 @@ export function InspectorPanel({
               <Sparkles size={18} />
             </div>
             <div>
-              <h3>Set up properties</h3>
+              <h3>{ui.setupProperties}</h3>
               <p>
-                This universe does not have `.everend/properties.json` yet. Apply a starter template
-                here, then shape properties directly from the inspector.
+                {ui.propertiesSetupDescription}
               </p>
             </div>
             <div className="inspector-setup-actions">
@@ -176,11 +177,11 @@ export function InspectorPanel({
                 onClick={() => void onApplyPropertiesTemplate?.()}
               >
                 <Sparkles size={14} />
-                Apply template
+                {ui.applyTemplate}
               </button>
               <button type="button" className="btn" onClick={onOpenPropertiesSettings}>
                 <SlidersHorizontal size={14} />
-                Open utils
+                {ui.openTools}
               </button>
             </div>
           </div>
@@ -203,9 +204,9 @@ export function InspectorPanel({
                 />
               ) : (
                 <div className="no-frontmatter-notice">
-                  <p className="muted">This note has no frontmatter.</p>
+                  <p className="muted">{ui.noFrontmatter}</p>
                   <button className="btn btn-primary" onClick={onAddFrontmatter}>
-                    Add WorldNotion frontmatter
+                    {ui.addFrontmatter}
                   </button>
                 </div>
               )
@@ -223,7 +224,7 @@ export function InspectorPanel({
                     onDeleteVariant={onDeleteVariant}
                   />
                 </div>
-                <div className="inspector-subviews" role="tablist" aria-label="Note inspector">
+                <div className="inspector-subviews" role="tablist" aria-label={ui.noteInspector}>
                   <button
                     type="button"
                     role="tab"
@@ -231,7 +232,7 @@ export function InspectorPanel({
                     className={activeView === "properties" ? "active" : ""}
                     onClick={() => setActiveView("properties")}
                   >
-                    Properties
+                    {ui.properties}
                   </button>
                   <button
                     type="button"
@@ -241,10 +242,10 @@ export function InspectorPanel({
                     onClick={() => setActiveView("presentation")}
                   >
                     <PanelsTopLeft size={13} aria-hidden="true" />
-                    Presentation
+                    {ui.presentation}
                   </button>
                 </div>
-                <Suspense fallback={<LazyPanelFallback label="Loading inspector..." />}>
+                <Suspense fallback={<LazyPanelFallback label={ui.loadingInspector} />}>
                   {activeView === "properties" ? (
                     <MetadataEditor
                       entity={entity}
@@ -279,7 +280,7 @@ export function InspectorPanel({
           </>
         ) : (
           <>
-            <p className="muted">Open this note in a tab to edit its metadata.</p>
+            <p className="muted">{ui.openNoteToEditMetadata}</p>
           </>
         )}
       </section>

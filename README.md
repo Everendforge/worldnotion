@@ -19,6 +19,10 @@
 
 This repository contains the Tauri + React + TypeScript app scaffold and the public MVP documentation.
 
+## Product direction
+
+WorldNotion is the canon and worldbuilding foundation of Everend Forge. Its longer-term direction covers connected story creation for video games, roleplaying, and literature, alongside PathBranching and Compendium. See [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md) for the milestones and WorldNotion's role in each one.
+
 ## MVP Goals
 
 - Open local vaults.

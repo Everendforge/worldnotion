@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import "../App.css";
+import { useWorldnotionUi } from "../i18n";
 
 export type ContextMenuAction =
   | "open"
@@ -83,6 +84,7 @@ export function ContextMenu({
   onAction,
   onClose,
 }: ContextMenuProps) {
+  const ui = useWorldnotionUi();
   const menuRef = useRef<HTMLDivElement>(null);
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -145,16 +147,16 @@ export function ContextMenu({
           {isImage ? (
             <button type="button" onClick={() => run("preview")} className="context-menu-item">
               <Eye size={16} />
-              <span>Preview</span>
+              <span>{ui.preview}</span>
             </button>
           ) : null}
           <button type="button" onClick={() => run("open")} className="context-menu-item">
             <FileText size={16} />
-            <span>Open</span>
+            <span>{ui.open}</span>
           </button>
           <button type="button" onClick={() => run("openInNewTab")} className="context-menu-item">
             <FilePlus size={16} />
-            <span>Open in New Tab</span>
+            <span>{ui.openInNewTab}</span>
           </button>
           <div className="context-menu-separator" />
         </>
@@ -162,7 +164,7 @@ export function ContextMenu({
 
       <button type="button" onClick={() => run("newBlankPage")} className="context-menu-item">
         <FileText size={16} />
-        <span>New Blank Page</span>
+        <span>{ui.newBlankPage}</span>
       </button>
 
       {templates.length > 0 ? (
@@ -186,7 +188,7 @@ export function ContextMenu({
               }}
             >
               <FileText size={16} />
-              <span>New Page from Template</span>
+              <span>{ui.newPageFromTemplate}</span>
               <ChevronRight size={14} className="context-menu-submenu-icon" />
             </button>
             <div className="context-menu-submenu-panel" role="menu">
@@ -211,7 +213,7 @@ export function ContextMenu({
 
       <button type="button" onClick={() => run("newFolder")} className="context-menu-item">
         <FolderPlus size={16} />
-        <span>New Folder</span>
+        <span>{ui.newFolder}</span>
       </button>
 
       {targetKind !== "empty" ? (
@@ -219,15 +221,15 @@ export function ContextMenu({
           <div className="context-menu-separator" />
           <button type="button" onClick={() => run("rename")} className="context-menu-item">
             <Edit3 size={16} />
-            <span>Rename</span>
+            <span>{ui.rename}</span>
           </button>
           <button type="button" onClick={() => run("duplicate")} className="context-menu-item">
             <Copy size={16} />
-            <span>Duplicate</span>
+            <span>{ui.duplicate}</span>
           </button>
           <button type="button" onClick={() => run("move")} className="context-menu-item">
             <FolderInput size={16} />
-            <span>Move to Folder</span>
+            <span>{ui.moveToFolder}</span>
           </button>
           {targetKind === "folder" && folderNotesEnabled ? (
             <>
@@ -237,7 +239,7 @@ export function ContextMenu({
                 className="context-menu-item"
               >
                 <FileText size={16} />
-                <span>{hasFolderDescription ? "Edit Folder Note" : "Create Folder Note"}</span>
+                <span>{hasFolderDescription ? ui.editFolderNote : ui.createFolderNote}</span>
               </button>
               {hasFolderDescription ? (
                 <button
@@ -246,7 +248,7 @@ export function ContextMenu({
                   className="context-menu-item danger"
                 >
                   <Trash2 size={16} />
-                  <span>Delete Folder Note</span>
+                  <span>{ui.deleteFolderNote}</span>
                 </button>
               ) : null}
             </>
@@ -258,7 +260,7 @@ export function ContextMenu({
               className="context-menu-item"
             >
               <FileMinus size={16} />
-              <span>Convert Folder Note to Normal Note</span>
+              <span>{ui.convertFolderNote}</span>
             </button>
           ) : null}
           {targetKind === "file" && canPromoteToFolderNote ? (
@@ -268,16 +270,16 @@ export function ContextMenu({
               className="context-menu-item"
             >
               <CornerLeftUp size={16} />
-              <span>Convert to Folder Note of Parent</span>
+              <span>{ui.convertToParentFolderNote}</span>
             </button>
           ) : null}
           <button type="button" onClick={() => run("toggleFavorite")} className="context-menu-item">
             <Star size={16} />
-            <span>{isFavorite ? "Remove Favorite" : "Add Favorite"}</span>
+            <span>{isFavorite ? ui.removeFavorite : ui.addFavorite}</span>
           </button>
           <button type="button" onClick={() => run("changeIcon")} className="context-menu-item">
             <Palette size={16} />
-            <span>Change Icon</span>
+            <span>{ui.changeIcon}</span>
           </button>
           <button
             type="button"
@@ -290,7 +292,7 @@ export function ContextMenu({
           </button>
           <button type="button" onClick={() => run("trash")} className="context-menu-item danger">
             <Trash2 size={16} />
-            <span>{targetKind === "folder" ? "Delete Empty Folder" : trashLabel}</span>
+            <span>{targetKind === "folder" ? ui.deleteEmptyFolder : trashLabel}</span>
           </button>
         </>
       ) : (
@@ -307,11 +309,11 @@ export function ContextMenu({
           </button>
           <button type="button" onClick={() => run("refresh")} className="context-menu-item">
             <FileText size={16} />
-            <span>Refresh</span>
+            <span>{ui.refresh}</span>
           </button>
           <button type="button" onClick={() => run("collapseAll")} className="context-menu-item">
             <FolderInput size={16} />
-            <span>Collapse All</span>
+            <span>{ui.collapseAll}</span>
           </button>
         </>
       )}

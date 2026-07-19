@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import "../App.css";
+import { useWorldnotionUi } from "../i18n";
 
 export interface MessageDialogProps {
   isOpen: boolean;
@@ -14,11 +15,12 @@ export interface MessageDialogProps {
  */
 export function MessageDialog({
   isOpen,
-  title = "Notice",
+  title,
   message,
-  closeLabel = "OK",
+  closeLabel,
   onClose,
 }: MessageDialogProps) {
+  const ui = useWorldnotionUi();
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -40,19 +42,19 @@ export function MessageDialog({
         className="modal-dialog"
         role="alertdialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={title ?? ui.notice}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         <div className="modal-header">
-          <h2>{title}</h2>
+          <h2>{title ?? ui.notice}</h2>
         </div>
         <div className="modal-body">
           <p className="modal-message">{message}</p>
         </div>
         <div className="modal-footer">
           <button ref={closeRef} onClick={onClose} className="modal-button modal-button-confirm">
-            {closeLabel}
+            {closeLabel ?? ui.close}
           </button>
         </div>
       </div>

@@ -326,6 +326,8 @@ export type GraphSettings = {
 };
 
 export type AppSettingsV4 = {
+  /** Interface language only; universe/content language remains in the vault profile. */
+  localePreference?: import("./i18n").LocalePreference;
   theme: ThemeId;
   recentUniverse?: string;
   recentUniverses: string[];

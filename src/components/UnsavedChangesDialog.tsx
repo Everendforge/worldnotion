@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import "../App.css";
+import { useWorldnotionUi } from "../i18n";
 
 export interface UnsavedChangesDialogProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export function UnsavedChangesDialog({
   onCancel,
   isSaving = false,
 }: UnsavedChangesDialogProps) {
+  const ui = useWorldnotionUi();
   const saveRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -43,16 +45,16 @@ export function UnsavedChangesDialog({
         className="modal-dialog unsaved-dialog"
         role="alertdialog"
         aria-modal="true"
-        aria-label="Cambios sin guardar"
+        aria-label={ui.unsavedChanges}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         <div className="modal-header">
-          <h2>Cambios sin guardar</h2>
+          <h2>{ui.unsavedChanges}</h2>
         </div>
         <div className="modal-body">
           <p>
-            <strong>{fileName}</strong> tiene cambios sin guardar. ¿Qué deseas hacer?
+            {ui.unsavedChangesMessage.replace("{{fileName}}", fileName)}
           </p>
         </div>
         <div className="modal-footer">
@@ -62,7 +64,7 @@ export function UnsavedChangesDialog({
             disabled={isSaving}
             type="button"
           >
-            Cancelar
+            {ui.cancel}
           </button>
           <button
             onClick={onDiscard}
@@ -70,7 +72,7 @@ export function UnsavedChangesDialog({
             disabled={isSaving}
             type="button"
           >
-            Descartar
+            {ui.discard}
           </button>
           <button
             ref={saveRef}
@@ -79,7 +81,7 @@ export function UnsavedChangesDialog({
             disabled={isSaving}
             type="button"
           >
-            {isSaving ? "Guardando..." : "Guardar"}
+            {isSaving ? ui.saving : ui.save}
           </button>
         </div>
       </div>

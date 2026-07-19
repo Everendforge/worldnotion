@@ -5,6 +5,7 @@ import { openUrl as openExternalUrl } from "@tauri-apps/plugin-opener";
 import type { EditorView } from "@codemirror/view";
 import {
   Check,
+  BookOpen,
   Circle,
   ChevronDown,
   ChevronRight,
@@ -29,6 +30,7 @@ import {
   Code,
   Strikethrough,
   Link2,
+  MessageSquareText,
   Brackets,
   Table,
   List,
@@ -65,7 +67,10 @@ import { useInheritAppearanceDialog } from "./hooks/useInheritAppearanceDialog";
 import { useMissingRecentPaths } from "./hooks/useMissingRecentPaths";
 import { useWorkspaceState } from "./hooks/useWorkspaceState";
 import { SaveStatusIndicator } from "./components/SaveStatusIndicator";
+import { BrandLoadingScreen } from "./components/BrandLoadingScreen";
+import { OnboardingGuide, UniverseBasicsCard } from "./components/OnboardingGuide";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
+import { FeedbackModal } from "./components/FeedbackModal";
 import { ExplorerPanel, type ExplorerTreeAction } from "./components/ExplorerPanel";
 import { ImagePreviewDialog } from "./components/ImagePreviewDialog";
 import { InspectorPanel } from "./components/InspectorPanel";
@@ -114,6 +119,11 @@ import { applyPropertyTemplate, WORLDBUILDING_TEMPLATE } from "./utils/propertyT
 import { normalizeCoreBaseProperties } from "./utils/taxonomyConfig";
 import { recordFileAccessInSettings } from "./utils/fileAccessStats";
 import { loadSettings, saveSettings } from "./settings";
+import {
+  applyInterfaceLocale,
+  resolveInterfaceLocale,
+  WorldnotionLocaleProvider,
+} from "./i18n";
 import type { SuiteChrome } from "./suiteChrome";
 import {
   type BrowserDirectoryHandle,
@@ -241,6 +251,7 @@ import { indexCanonChangeSets, type IndexedCanonChangeSet } from "./utils/canonC
 
 const EVEREND_FORGE_GITHUB_URL = "https://github.com/Everendforge/everend-forge";
 const BUY_SUITE_URL = "https://everendforge.com/buy-suite";
+const WORLDNOTION_ONBOARDING_KEY = "worldnotion.onboarding.v1";
 
 type ExplorerSelection = { path: string; kind: "file" | "folder" };
 type ExplorerUndoMove = { fromPath: string; toFolderPath: string; kind: "file" | "folder" };
@@ -449,8 +460,13 @@ function pickImageFile(): Promise<File | null> {
   });
 }
 
+const STARTUP_LOADER_MIN_MS = 700;
+
 function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   const [settings, setSettings] = useState<AppSettingsV4>(() => loadSettings());
+  const interfaceLocale = resolveInterfaceLocale(
+    suiteChrome?.suiteSettings?.localePreference ?? settings.localePreference ?? "system",
+  );
   const activeTheme = (suiteChrome?.suiteSettings?.style ?? settings.theme) as ThemeId;
   const activeThemeIsDark = isDarkTheme(activeTheme);
   const [view, setView] = useState<AppView>("home");
@@ -467,6 +483,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   const [imagePreviewPath, setImagePreviewPath] = useState<string>();
   const [query, setQuery] = useState("");
   const [loadState, setLoadState] = useState<LoadState>("idle");
+  const [initialReady, setInitialReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const {
     tabs,
@@ -490,6 +507,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   const [activeWorkspacePreset, setActiveWorkspacePreset] =
     useState<ActiveWorkspacePreset>("default");
   const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    applyInterfaceLocale(suiteChrome?.suiteSettings?.localePreference ?? settings.localePreference ?? "system");
+  }, [settings.localePreference, suiteChrome?.suiteSettings?.localePreference]);
   const [settingsInitialSection, setSettingsInitialSection] = useState<
     "overview" | "tags" | "utils" | "editor" | "ai-advisor"
   >("overview");
@@ -497,8 +518,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     "template" | "blank"
   >("template");
   const [forgeMenuOpen, setForgeMenuOpen] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   const [graphResetSignal, setGraphResetSignal] = useState(0);
   const [appZoom, setAppZoom] = useState(1);
@@ -602,6 +625,46 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   }, [forgeMenuOpen]);
 
   const activeTab = tabs.find((tab) => tab.path === activeTabPath);
+  useEffect(() => {
+    const rootPath = index?.rootPath;
+    if (!rootPath) {
+      setOnboardingDismissed(false);
+      return;
+    }
+    setOnboardingDismissed(
+      window.localStorage.getItem(`${WORLDNOTION_ONBOARDING_KEY}:${rootPath}`) === "dismissed",
+    );
+  }, [index?.rootPath]);
+
+  const worldNotionOnboardingSteps = useMemo(() => {
+    const directories = index?.directories ?? [];
+    const markdownFiles = index?.markdownFiles ?? [];
+    const rootFolderCreated = directories.some((path) => path && !path.includes("/"));
+    const noteInFolderCreated = markdownFiles.some((file) => file.relativePath.includes("/"));
+    const nestedFolderCreated = directories.some((path) => path.includes("/"));
+    const noteInNestedFolderCreated = markdownFiles.some(
+      (file) => file.relativePath.split("/").length >= 3,
+    );
+    const noteOpened = Boolean(activeTab?.path?.toLowerCase().endsWith(".md"));
+    return [
+      { id: "open-universe", title: "Abrir un universo", description: "Selecciona una carpeta para comenzar.", complete: Boolean(index?.rootPath) },
+      { id: "root-folder", title: "Crear una carpeta en la raíz", description: "Crea una carpeta desde la pantalla inicial o el Explorer.", complete: rootFolderCreated },
+      { id: "folder-note", title: "Crear una nota dentro de la carpeta", description: "Selecciona la carpeta y crea una nota allí.", complete: noteInFolderCreated },
+      { id: "nested-folder", title: "Crear una carpeta anidada", description: "Entra en la carpeta y crea una subcarpeta.", complete: nestedFolderCreated },
+      { id: "nested-note", title: "Crear una nota anidada", description: "Crea otra nota dentro de la carpeta anidada.", complete: noteInNestedFolderCreated },
+      { id: "edit-note", title: "Abrir y editar una nota", description: "Abre una nota Markdown para empezar a escribir.", complete: noteOpened },
+    ];
+  }, [activeTab?.path, index]);
+
+  const dismissWorldNotionOnboarding = () => {
+    if (index?.rootPath) window.localStorage.setItem(`${WORLDNOTION_ONBOARDING_KEY}:${index.rootPath}`, "dismissed");
+    setOnboardingDismissed(true);
+  };
+
+  const restartWorldNotionOnboarding = () => {
+    if (index?.rootPath) window.localStorage.removeItem(`${WORLDNOTION_ONBOARDING_KEY}:${index.rootPath}`);
+    setOnboardingDismissed(false);
+  };
   const activeVariantId = useMemo(() => {
     if (!activeTab || !index?.rootPath) return BASE_VARIANT_ID;
     const requested = settings.sessions[index.rootPath]?.variantSelections?.[activeTab.path];
@@ -756,21 +819,45 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   }, [appZoom]);
 
   useEffect(() => {
-    const recent = settings.recentUniverse;
-    if (!recent || recent.startsWith("browser:") || !isTauriRuntime()) return;
-    const recentPath = recent;
+    if (suiteChrome?.sharedUniversePath) return;
 
     let cancelled = false;
+    let readyTimer: number | undefined;
+    const startupStartedAt = Date.now();
+    const finishInitialStartup = () => {
+      const remaining = Math.max(
+        0,
+        STARTUP_LOADER_MIN_MS - (Date.now() - startupStartedAt),
+      );
+      readyTimer = window.setTimeout(() => {
+        if (!cancelled) setInitialReady(true);
+      }, remaining);
+    };
+
+    const recent = settings.recentUniverse;
+    if (!recent || recent.startsWith("browser:") || !isTauriRuntime()) {
+      finishInitialStartup();
+      return () => {
+        cancelled = true;
+        if (readyTimer !== undefined) window.clearTimeout(readyTimer);
+      };
+    }
+    const recentPath = recent;
+
     async function openLastUniverse() {
       setLoadState("loading");
       try {
         const readResult = await invoke<VaultReadResult>("index_vault", { path: recentPath });
-        if (!cancelled) applyUniverse(readResult);
+        if (!cancelled) {
+          applyUniverse(readResult);
+          finishInitialStartup();
+        }
       } catch (error) {
         if (!cancelled) {
           setLoadState("error");
           setErrorMessage(error instanceof Error ? error.message : String(error));
           setMissingRecentPaths((current) => new Set(current).add(recentPath));
+          finishInitialStartup();
         }
       }
     }
@@ -778,6 +865,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     openLastUniverse();
     return () => {
       cancelled = true;
+      if (readyTimer !== undefined) window.clearTimeout(readyTimer);
     };
   }, []);
 
@@ -1035,6 +1123,15 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     });
   }
 
+  function handleCreateItemMenu(x: number, y: number) {
+    setContextMenu({
+      x,
+      y,
+      targetPath: focusedFolderPath ?? "",
+      targetKind: "empty",
+    });
+  }
+
   function handleRecentContextMenu(event: React.MouseEvent, path: string) {
     event.preventDefault();
     event.stopPropagation();
@@ -1214,7 +1311,11 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     if (!index) return;
 
     const parentPath =
-      targetKind === "folder" ? targetPath : targetPath.split("/").slice(0, -1).join("/");
+      targetKind === "folder"
+        ? targetPath
+        : targetKind === "empty"
+          ? targetPath
+          : targetPath.split("/").slice(0, -1).join("/");
 
     try {
       if (action === "open") {
@@ -2209,6 +2310,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     setView("workspace");
     setLoadState("ready");
     setErrorMessage("");
+    showToast(
+      "Esta carpeta será la raíz de tu universo. Todas las aplicaciones de Everend Forge trabajarán sobre ella.",
+      "success",
+    );
     setSettings((current) => {
       const remembered = rememberUniverse(current, readResult.rootPath, profileForRecent(nextIndex));
       return isSameUniverse
@@ -2275,19 +2380,21 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       .then((readResult) => {
         if (!disposed) {
           applyUniverse(readResult);
+          suiteChrome?.onReady?.();
         }
       })
       .catch((error) => {
         if (!disposed) {
           setLoadState("error");
           setErrorMessage(error instanceof Error ? error.message : String(error));
+          suiteChrome?.onReady?.();
         }
       });
 
     return () => {
       disposed = true;
     };
-  }, [index?.rootPath, suiteChrome?.sharedUniversePath]);
+  }, [index?.rootPath, suiteChrome?.onReady, suiteChrome?.sharedUniversePath]);
 
   async function readCurrentUniverse() {
     if (!index) return undefined;
@@ -3623,6 +3730,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     </>
   );
 
+  if (!suiteChrome && !initialReady) {
+    return <BrandLoadingScreen message={loadState === "loading" ? "Opening your universe…" : "Preparing your workspace…"} />;
+  }
+
   if (view === "home" || !index) {
     return (
       <>
@@ -3635,9 +3746,14 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
                 <p>Universe-first Markdown workspace</p>
               </div>
             </div>
-            <button type="button" onClick={toggleBuiltinTheme} title="Toggle theme">
-              {activeThemeIsDark ? <Sun size={15} /> : <Moon size={15} />}
-            </button>
+            <div className="home-topbar-actions">
+              <button type="button" onClick={() => setShowFeedback(true)} title="Enviar feedback" aria-label="Enviar feedback">
+                <MessageSquareText size={15} />
+              </button>
+              <button type="button" onClick={toggleBuiltinTheme} title="Toggle theme" aria-label="Toggle theme">
+                {activeThemeIsDark ? <Sun size={15} /> : <Moon size={15} />}
+              </button>
+            </div>
           </header>
 
           <section className="home-panel">
@@ -3668,13 +3784,17 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
             </div>
 
             <div className="home-actions">
-              <button type="button" className="primary-action" onClick={openUniverse}>
+              <button type="button" className="primary-action" data-onboarding-target="worldnotion.open-universe" onClick={openUniverse}>
                 <FolderOpen size={16} />
                 Open Universe
               </button>
-              <button type="button" onClick={createUniverseFromHome}>
+              <button type="button" data-onboarding-target="worldnotion.create-universe" onClick={createUniverseFromHome}>
                 <Plus size={16} />
                 Create Universe
+              </button>
+              <button type="button" onClick={openUniverse}>
+                <BookOpen size={16} />
+                Explore demo universe
               </button>
               {settings.recentUniverse && !settings.recentUniverse.startsWith("browser:") ? (
                 <button type="button" onClick={() => openRecentUniverse()}>
@@ -3683,6 +3803,8 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
                 </button>
               ) : null}
             </div>
+
+            {!index ? <UniverseBasicsCard onCreate={createUniverseFromHome} onOpen={openUniverse} /> : null}
 
             <div className="home-metrics">
               <div>
@@ -3804,6 +3926,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       onToggleExpand={toggleExpand}
       onTreeAction={handleExplorerTreeAction}
       onContextMenu={handleContextMenu}
+      onOpenCreateMenu={handleCreateItemMenu}
       onToggleFavorite={toggleFavorite}
       onToggleFolderFocus={toggleFolderFocus}
       onOpenFolderDescription={(folderPath, descriptionPath) => {
@@ -4152,9 +4275,25 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         <>
           <h2>No document selected</h2>
           <p>Select a file from the explorer or start a new note.</p>
-          <button type="button" onClick={createNoteFromTabButton}>
+          <button type="button" data-onboarding-target="worldnotion.create-note" onClick={createNoteFromTabButton}>
             <Plus size={15} />
             New note
+          </button>
+          <button
+            type="button"
+            data-onboarding-target="worldnotion.create-folder"
+            onClick={() => void handleContextMenuAction("newFolder", "", "empty")}
+          >
+            <FolderOpen size={15} />
+            New folder
+          </button>
+          <button type="button" data-onboarding-target="worldnotion.open-universe" onClick={() => void openUniverse()}>
+            <FolderOpen size={15} />
+            Open universe
+          </button>
+          <button type="button" data-onboarding-target="worldnotion.search-files-action" onClick={() => setShowCommandPalette(true)}>
+            <Search size={15} />
+            Search files
           </button>
         </>
       )}
@@ -4450,6 +4589,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   }
 
   return (
+    <WorldnotionLocaleProvider value={interfaceLocale}>
     <main
       className="app-shell dock-app-shell"
       style={{ "--dock-tab-scale": settings.editor.dockTabScale } as CSSProperties}
@@ -4473,6 +4613,15 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
                 onClick={() => void openUrl(BUY_SUITE_URL).then(() => setForgeMenuOpen(false))}
               >
                 Buy Suite
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgeMenuOpen(false);
+                  setShowFeedback(true);
+                }}
+              >
+                Enviar feedback
               </button>
             </div>
             <button
@@ -4618,8 +4767,18 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
           <button
             type="button"
             className="dock-icon-button"
+            onClick={() => setShowFeedback(true)}
+            title="Enviar feedback"
+            aria-label="Enviar feedback"
+          >
+            <MessageSquareText size={15} />
+          </button>
+          <button
+            type="button"
+            className="dock-icon-button"
             onClick={toggleBuiltinTheme}
             title="Toggle theme"
+            aria-label="Toggle theme"
           >
             {activeThemeIsDark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
@@ -4661,6 +4820,13 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
           </div>
         )}
       />
+      {!onboardingDismissed ? (
+        <OnboardingGuide
+          steps={worldNotionOnboardingSteps}
+          onDismiss={dismissWorldNotionOnboarding}
+          onRestart={restartWorldNotionOnboarding}
+        />
+      ) : null}
       <CanonChangesDialog
         open={showCanonChanges}
         changes={canonChangeSets}
@@ -4770,6 +4936,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
               void revealExplorerPath();
             }}
             onOpenUniverseNote={openUniverseNote}
+            onResetOnboarding={restartWorldNotionOnboarding}
             revealUniverseLabel={labels.revealUniverse}
             suiteSettings={suiteChrome?.suiteSettings}
           />
@@ -4981,7 +5148,9 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       ) : null}
 
       {inputOverlays}
+      {showFeedback ? <FeedbackModal screen="workspace" onClose={() => setShowFeedback(false)} onOpenExternal={openExternalUrl} /> : null}
     </main>
+    </WorldnotionLocaleProvider>
   );
 }
 
