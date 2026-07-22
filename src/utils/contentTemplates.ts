@@ -1,7 +1,8 @@
 import type { OpenTab } from "../editorTypes";
 import type { PropertiesConfig } from "../editorTypes";
 import type { VaultIndex } from "../domain";
-import { dirname, joinMarkdown, slugify, splitMarkdown } from "../domain";
+import { dirname, slugify, splitMarkdown } from "../domain";
+import { replaceMarkdownBodyPreservingEnvelope } from "./markdownFrontmatter";
 import { pathName } from "./pathUtils";
 import {
   conditionIsActive,
@@ -132,5 +133,5 @@ export function rawToEditorParts(rawMarkdown: string) {
 }
 
 export function bodyToRawMarkdown(tab: OpenTab, bodyMarkdown: string) {
-  return joinMarkdown(rawToEditorParts(tab.rawMarkdown).frontmatterRaw, bodyMarkdown);
+  return replaceMarkdownBodyPreservingEnvelope(tab.rawMarkdown, bodyMarkdown);
 }

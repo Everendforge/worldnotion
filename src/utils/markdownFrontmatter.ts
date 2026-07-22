@@ -79,3 +79,25 @@ export function joinMarkdown(frontmatterRaw: string, bodyMarkdown: string): stri
   const body = bodyMarkdown.replace(/^\n+/, "");
   return frontmatter ? `${frontmatter}\n\n${body}` : body;
 }
+
+/** Replaces only the body while preserving the original frontmatter envelope byte-for-byte. */
+export function replaceMarkdownBodyPreservingEnvelope(
+  content: string,
+  bodyMarkdown: string,
+): string {
+  const eol = content.includes("\r\n") ? "\r\n" : "\n";
+  const normalizedBody = bodyMarkdown.replace(/\r?\n/g, eol);
+  const opening = /^---(?:\r?\n)/.exec(content);
+  if (!opening) return normalizedBody;
+
+  const closing = /^---[ \t]*(?:\r?\n|$)/gm;
+  closing.lastIndex = opening[0].length;
+  const closingMatch = closing.exec(content);
+  if (!closingMatch) return normalizedBody;
+
+  let bodyStart = closingMatch.index + closingMatch[0].length;
+  while (content.startsWith("\r\n", bodyStart) || content[bodyStart] === "\n") {
+    bodyStart += content.startsWith("\r\n", bodyStart) ? 2 : 1;
+  }
+  return `${content.slice(0, bodyStart)}${normalizedBody}`;
+}

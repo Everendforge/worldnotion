@@ -96,7 +96,7 @@ export function planUniverseWorkspaceState(
                   absolutePath: file.absolutePath,
                   modifiedMs: file.modifiedMs,
                 }
-              : createOpenTabFromFile(file, tab.mode, tab.sourceView);
+              : createOpenTabFromFile(file, tab.mode, tab.sourceView, tab.writingMode);
           })
           .filter((tab): tab is OpenTab => Boolean(tab))
       : [];
@@ -108,7 +108,14 @@ export function planUniverseWorkspaceState(
       ? (restoredSession?.tabs ?? [])
           .map((tab) => {
             const file = nextIndex.files.find((candidate) => candidate.relativePath === tab.path);
-            return file ? createOpenTabFromFile(file, tab.mode, tab.sourceView) : undefined;
+            return file
+              ? createOpenTabFromFile(
+                  file,
+                  tab.mode,
+                  tab.sourceView,
+                  tab.writingMode ?? "processed",
+                )
+              : undefined;
           })
           .filter((tab): tab is OpenTab => Boolean(tab))
       : [];

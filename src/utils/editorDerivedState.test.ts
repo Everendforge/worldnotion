@@ -8,6 +8,7 @@ function tab(mode: OpenTab["mode"], rawMarkdown: string): OpenTab {
     title: "Ada",
     dirty: false,
     mode,
+    writingMode: "processed",
     isTemplate: false,
     rawMarkdown,
     savedMarkdown: rawMarkdown,

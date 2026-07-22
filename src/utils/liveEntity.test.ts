@@ -46,6 +46,7 @@ function tab(path: string, rawMarkdown: string): OpenTab {
     title: path,
     dirty: true,
     mode: "write",
+    writingMode: "processed",
     isTemplate: false,
     rawMarkdown,
     savedMarkdown: "",

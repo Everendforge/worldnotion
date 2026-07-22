@@ -38,6 +38,7 @@ function tab(path: string, dirty: boolean): OpenTab {
     savedMarkdown: "",
     dirty,
     mode: "write",
+    writingMode: "processed",
     isTemplate: false,
   };
 }

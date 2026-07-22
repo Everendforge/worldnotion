@@ -41,4 +41,21 @@ describe("variant content decorations", () => {
 
     expect(ranges.some(({ from, to }) => from === baseOpening && to > baseClose)).toBe(true);
   });
+
+  it("rejects changes in inactive variants and markers but allows active prose", () => {
+    const field = createVariantContentPlugin("alt");
+    let state = EditorState.create({ doc: documentText, extensions: field });
+    const baseText = documentText.indexOf("Base-only prose");
+    state = state.update({ changes: { from: baseText, to: baseText + 4, insert: "Gone" } }).state;
+    expect(state.doc.toString()).toBe(documentText);
+
+    const altText = documentText.indexOf("Alternate-only prose");
+    state = state.update({ changes: { from: altText, to: altText + 9, insert: "Changed" } }).state;
+    expect(state.doc.toString()).toContain("Changed-only prose");
+
+    const altMarker = state.doc.toString().indexOf('<!-- everend:variant id="alt" -->');
+    const beforeMarkerDelete = state.doc.toString();
+    state = state.update({ changes: { from: altMarker, to: altMarker + 4 } }).state;
+    expect(state.doc.toString()).toBe(beforeMarkerDelete);
+  });
 });

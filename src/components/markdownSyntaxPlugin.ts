@@ -9,6 +9,7 @@ import {
 } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { isStructuralChange, marker, selectionTouches, syntaxMarker } from "./pluginUtils";
+import type { WritingMode } from "../editorTypes";
 
 // List configuration - matches Obsidian standard
 const LIST_INDENT_WIDTH = 2; // 2 spaces per indent level
@@ -151,7 +152,10 @@ function calculateIndentLevel(indentStr: string): number {
  * syntax markers muted instead of hidden, so the characters under the cursor
  * are always visible while editing (Obsidian-style live preview).
  */
-export function buildProcessedDecorations(view: EditorView): DecorationSet {
+export function buildMarkdownDecorations(
+  view: EditorView,
+  presentation: WritingMode,
+): DecorationSet {
   const { state } = view;
   const selection = state.selection.main;
   const tree = syntaxTree(state);
@@ -162,7 +166,7 @@ export function buildProcessedDecorations(view: EditorView): DecorationSet {
   const listRanges: Array<{ from: number; to: number }> = [];
 
   const touches = (from: number, to: number) =>
-    selectionTouches(selection.from, selection.to, from, to);
+    presentation === "semi" && selectionTouches(selection.from, selection.to, from, to);
 
   const hideOrMute = (from: number, to: number, active: boolean) => {
     const decoration = syntaxMarker(from, to, active);
@@ -261,9 +265,7 @@ export function buildProcessedDecorations(view: EditorView): DecorationSet {
               : "•";
           const markerEnd = extendWithSpace(taskMarker ? taskMarker.to : node.to);
 
-          // List markers reveal only when the cursor enters the marker itself,
-          // so bullets stay rendered while the item text is being edited.
-          const active = touches(node.from, markerEnd);
+          const active = touches(line.from, line.to + 1);
           if (active) {
             styleContent(node.from, markerEnd, "cm-list-marker");
           } else {
@@ -331,6 +333,7 @@ export function buildProcessedDecorations(view: EditorView): DecorationSet {
         if (name === "FencedCode") {
           const firstLine = state.doc.lineAt(node.from);
           const lastLine = state.doc.lineAt(node.to);
+          const active = touches(node.from, node.to);
           for (let lineNumber = firstLine.number; lineNumber <= lastLine.number; lineNumber += 1) {
             const line = state.doc.line(lineNumber);
             const classes = ["cm-md-codeblock-line"];
@@ -339,10 +342,13 @@ export function buildProcessedDecorations(view: EditorView): DecorationSet {
             decorations.push(Decoration.line({ class: classes.join(" ") }).range(line.from));
           }
           node.node.getChildren("CodeMark").forEach((codeMark) => {
-            styleContent(codeMark.from, codeMark.to, "cm-markdown-syntax-muted");
+            hideOrMute(codeMark.from, codeMark.to, active);
           });
           const info = node.node.getChild("CodeInfo");
-          if (info) styleContent(info.from, info.to, "cm-md-code-lang");
+          if (info) {
+            if (active) styleContent(info.from, info.to, "cm-md-code-lang");
+            else hideOrMute(info.from, info.to, false);
+          }
           const codeText = node.node.getChild("CodeText");
           decorations.push(
             Decoration.widget({
@@ -379,27 +385,27 @@ export function buildProcessedDecorations(view: EditorView): DecorationSet {
   return Decoration.set(decorations, true);
 }
 
-export const markdownSyntaxPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
+export function markdownSyntaxPlugin(presentation: WritingMode) {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
 
-    constructor(view: EditorView) {
-      this.decorations = buildProcessedDecorations(view);
-    }
-
-    update(update: ViewUpdate) {
-      // Selection changes drive the reveal-on-touch behavior; tree changes
-      // arrive asynchronously while the parser catches up on large documents.
-      if (
-        isStructuralChange(update) ||
-        update.selectionSet ||
-        syntaxTree(update.state) !== syntaxTree(update.startState)
-      ) {
-        this.decorations = buildProcessedDecorations(update.view);
+      constructor(view: EditorView) {
+        this.decorations = buildMarkdownDecorations(view, presentation);
       }
-    }
-  },
-  {
-    decorations: (plugin) => plugin.decorations,
-  },
-);
+
+      update(update: ViewUpdate) {
+        if (
+          isStructuralChange(update) ||
+          update.selectionSet ||
+          syntaxTree(update.state) !== syntaxTree(update.startState)
+        ) {
+          this.decorations = buildMarkdownDecorations(update.view, presentation);
+        }
+      }
+    },
+    {
+      decorations: (plugin) => plugin.decorations,
+    },
+  );
+}

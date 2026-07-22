@@ -30,18 +30,19 @@ function appSettings(overrides: Partial<AppSettingsV4> = {}): AppSettingsV4 {
 }
 
 describe("SettingsModal", () => {
-  it("changes the Writing structure presentation from Editor settings", () => {
+  it("offers all three default modes without a duplicate structure setting", () => {
     const onChange = vi.fn();
     const settings = appSettings();
 
     render(<SettingsModal settings={settings} onChange={onChange} onClose={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Editor" }));
-    fireEvent.change(screen.getByLabelText("Writing structures"), { target: { value: "visible" } });
+    expect(screen.queryByLabelText("Writing structures")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Default mode"), { target: { value: "semi" } });
 
     expect(onChange).toHaveBeenCalledWith({
       ...settings,
-      editor: { ...settings.editor, writeStructureMode: "visible" },
+      editor: { ...settings.editor, defaultMode: "semi" },
     });
   });
 
@@ -51,7 +52,7 @@ describe("SettingsModal", () => {
 
     render(<SettingsModal settings={settings} onChange={onChange} onClose={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Explorer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
     fireEvent.click(screen.getByLabelText("Enable folder notes"));
 
     expect(onChange).toHaveBeenCalledWith({
@@ -71,7 +72,7 @@ describe("SettingsModal", () => {
 
     render(<SettingsModal settings={settings} onChange={onChange} onClose={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Tabs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
     fireEvent.change(screen.getByLabelText("Dock tab size"), { target: { value: "1.5" } });
 
     expect(onChange).toHaveBeenCalledWith({

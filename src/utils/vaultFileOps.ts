@@ -11,6 +11,7 @@ import {
   type BrowserDirectoryHandle,
 } from "./browserVault";
 import { relativeFromAbsolute } from "./pathUtils";
+import { isTauriRuntime } from "./appEnvironment";
 
 /**
  * Destino de una operación de archivos: un vault abierto vía File System
@@ -25,7 +26,13 @@ export function vaultHandleFor(
   rootPath: string,
   browserRoot: BrowserDirectoryHandle | undefined,
 ): VaultHandle {
-  return browserRoot ? { kind: "browser", root: browserRoot } : { kind: "tauri", rootPath };
+  if (browserRoot) return { kind: "browser", root: browserRoot };
+  if (!isTauriRuntime()) {
+    throw new Error(
+      "This browser-opened universe lost access to its folder. Reopen the universe to grant access again.",
+    );
+  }
+  return { kind: "tauri", rootPath };
 }
 
 async function invokeWrite(

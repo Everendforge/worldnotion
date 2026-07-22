@@ -7,13 +7,10 @@ import {
   ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import { isStructuralChange } from "./pluginUtils";
-import { parseImagePresentation, type ImagePresentation } from "../utils/attachments";
-
-// Standard Markdown image: ![alt](path). Path stops at the first ")".
-// Inline image syntax cannot span lines. Keeping the match single-line is
-// required because the live-preview widget is a Decoration.replace range.
-const IMAGE_MD_REGEX = /!\[([^\]\n]*)\]\(([^)\s\n]+)(?:\s+"([^"\n]*)")?\)/g;
+import { createStyledDecoration, isStructuralChange, selectionTouches } from "./pluginUtils";
+import type { ImagePresentation } from "../utils/attachments";
+import type { WritingMode } from "../editorTypes";
+import { buildStructuredRangeIndex } from "../utils/structuredRangeIndex";
 
 export type ImageResolver = (rawPath: string) => Promise<string | null>;
 
@@ -89,33 +86,33 @@ class ImageWidget extends WidgetType {
   }
 }
 
-export function imagePlugin(options: {
-  resolve: ImageResolver;
-  presentation?: "visible" | "processed";
-}) {
+export function imagePlugin(options: { resolve: ImageResolver; presentation: WritingMode }) {
   function getDecorations(view: EditorView): DecorationSet {
     const decorations: Range<Decoration>[] = [];
-    if (options.presentation === "visible") return Decoration.none;
-
-    for (const { from, to } of view.visibleRanges) {
-      const text = view.state.doc.sliceString(from, to);
-      let match: RegExpExecArray | null;
-
-      IMAGE_MD_REGEX.lastIndex = 0;
-      while ((match = IMAGE_MD_REGEX.exec(text)) !== null) {
-        const rawPath = match[2]?.trim();
-        if (!rawPath) continue;
-        const start = from + match.index;
-        const end = start + match[0].length;
-
-        const alt = match[1]?.trim() ?? "";
-        const presentation = parseImagePresentation(match[3]);
-        decorations.push(
-          Decoration.replace({
-            widget: new ImageWidget(rawPath, alt, presentation, options.resolve),
-          }).range(start, end),
-        );
+    for (const element of buildStructuredRangeIndex(view.state).ranges.filter(
+      (item) => item.kind === "image",
+    )) {
+      const rawPath = element.target?.trim();
+      if (!rawPath) continue;
+      const start = element.from;
+      const end = element.to;
+      const selection = view.state.selection.main;
+      if (
+        options.presentation === "semi" &&
+        selectionTouches(selection.from, selection.to, start, end)
+      ) {
+        const activeDecoration = createStyledDecoration(start, end, "cm-markdown-syntax-muted");
+        if (activeDecoration) decorations.push(activeDecoration);
+        continue;
       }
+
+      const alt = element.label;
+      const presentation = element.imagePresentation;
+      decorations.push(
+        Decoration.replace({
+          widget: new ImageWidget(rawPath, alt, presentation, options.resolve),
+        }).range(start, end),
+      );
     }
 
     return Decoration.set(decorations, true);

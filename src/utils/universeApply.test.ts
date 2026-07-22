@@ -40,6 +40,7 @@ function tab(path: string, dirty = false): OpenTab {
     title: path.replace(/\.md$/i, ""),
     dirty,
     mode: "write",
+    writingMode: "processed",
     isTemplate: false,
     rawMarkdown: dirty ? "unsaved" : "saved",
     savedMarkdown: "saved",

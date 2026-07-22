@@ -11,6 +11,7 @@ import {
   pendingCloseQueueFromDirtyPaths,
   serializeWorkspaceSession,
   updateOpenTabsForPathChange,
+  withTabEditorMode,
 } from "./tabUtils";
 
 function tab(path: string, dirty = false): OpenTab {
@@ -22,6 +23,7 @@ function tab(path: string, dirty = false): OpenTab {
     savedMarkdown: "",
     dirty,
     mode: "write",
+    writingMode: "processed",
     isTemplate: false,
   };
 }
@@ -87,6 +89,19 @@ describe("tab utilities", () => {
     });
   });
 
+  it("switches each tab independently without changing content or dirty state", () => {
+    const original = tab("A.md", true);
+    const semi = withTabEditorMode(original, "semi");
+    const source = withTabEditorMode(semi, "source");
+    const restored = withTabEditorMode(source, "write");
+
+    expect(semi).toMatchObject({ mode: "write", writingMode: "semi", dirty: true });
+    expect(source).toMatchObject({ mode: "source", writingMode: "semi", dirty: true });
+    expect(restored).toMatchObject({ mode: "write", writingMode: "semi", dirty: true });
+    expect(restored.rawMarkdown).toBe(original.rawMarkdown);
+    expect(original).toMatchObject({ mode: "write", writingMode: "processed" });
+  });
+
   it("serializes only persisted session fields", () => {
     const session = serializeWorkspaceSession("C:/vault", "A.md", [tab("A.md", true)]);
 
@@ -98,12 +113,15 @@ describe("tab utilities", () => {
           path: "A.md",
           title: "A",
           mode: "write",
+          writingMode: "processed",
           sourceView: undefined,
           modifiedMs: undefined,
           isTemplate: false,
         },
       ],
       layout: undefined,
+      documentTabGroups: undefined,
+      explorerExpandedPaths: undefined,
     });
   });
 

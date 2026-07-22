@@ -7,12 +7,16 @@ export type StructuredElementKind =
   | "footnote"
   | "bold"
   | "italic"
+  | "strikethrough"
   | "inline-code"
+  | "fenced-code"
   | "heading"
   | "task"
   | "list"
   | "quote"
+  | "divider"
   | "table"
+  | "font-span"
   | "variant";
 
 export type StructuredElement = {
@@ -208,4 +212,57 @@ export function wikilinkMarkdown(target: string, alias: string): string {
   return cleanAlias && cleanAlias !== cleanTarget
     ? `[[${cleanTarget}|${cleanAlias}]]`
     : `[[${cleanTarget}]]`;
+}
+
+/** Editable text boundaries for a rendered structure, excluding its portable syntax. */
+export function visibleTextRange(element: StructuredElement): { from: number; to: number } {
+  const offsetRange = (from: number, to: number) => ({
+    from: element.from + from,
+    to: element.from + to,
+  });
+
+  switch (element.kind) {
+    case "wikilink": {
+      const pipe = element.text.indexOf("|");
+      return pipe >= 0
+        ? offsetRange(pipe + 1, element.text.length - 2)
+        : offsetRange(2, element.text.length - 2);
+    }
+    case "link": {
+      const labelEnd = element.text.indexOf("](");
+      return offsetRange(1, labelEnd >= 0 ? labelEnd : element.text.length);
+    }
+    case "footnote":
+      return offsetRange(2, element.text.length - 1);
+    case "bold":
+      return offsetRange(2, element.text.length - 2);
+    case "italic":
+    case "strikethrough":
+    case "inline-code":
+      return offsetRange(1, element.text.length - 1);
+    case "fenced-code":
+    case "divider":
+    case "font-span":
+      return { from: element.from, to: element.to };
+    case "heading": {
+      const prefix = /^#{1,6}\s+/.exec(element.text)?.[0].length ?? 0;
+      return offsetRange(prefix, element.text.length);
+    }
+    case "task": {
+      const prefix = /^(\s*)- \[[ xX]\]\s+/.exec(element.text)?.[0].length ?? 0;
+      return offsetRange(prefix, element.text.length);
+    }
+    case "list": {
+      const prefix = /^(\s*)(?:[-*]|\d+\.)\s+/.exec(element.text)?.[0].length ?? 0;
+      return offsetRange(prefix, element.text.length);
+    }
+    case "quote": {
+      const prefix = /^(\s*)>\s?/.exec(element.text)?.[0].length ?? 0;
+      return offsetRange(prefix, element.text.length);
+    }
+    case "image":
+    case "table":
+    case "variant":
+      return { from: element.from, to: element.to };
+  }
 }

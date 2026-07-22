@@ -30,7 +30,7 @@ describe("settings persistence", () => {
 
     const settings = loadSettings();
 
-    expect(settings.editor.writeStructureMode).toBe("processed");
+    expect(settings.editor.defaultMode).toBe("processed");
     expect(settings.plugins.enabled["ai-advisor"]).toBe(false);
     expect(settings.plugins.enabled["unity-adapter"]).toBe(false);
     expect(settings.aiAdvisor.activeProviderId).toBe("chatgpt");
@@ -43,7 +43,7 @@ describe("settings persistence", () => {
       JSON.stringify({ editor: { hideMarkdownSyntaxInWrite: false } }),
     );
 
-    expect(loadSettings().editor.writeStructureMode).toBe("visible");
+    expect(loadSettings().editor.defaultMode).toBe("semi");
   });
 
   it("uses the legacy plugin opt-out when settings disagree", () => {
@@ -55,7 +55,26 @@ describe("settings persistence", () => {
       }),
     );
 
-    expect(loadSettings().editor.writeStructureMode).toBe("visible");
+    expect(loadSettings().editor.defaultMode).toBe("semi");
+  });
+
+  it("migrates legacy Write tabs to the matching per-tab Writing mode", () => {
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        editor: { defaultMode: "write", writeStructureMode: "visible" },
+        sessions: {
+          "C:/Vault": {
+            rootPath: "C:/Vault",
+            tabs: [{ path: "Notes.md", title: "Notes", mode: "write", isTemplate: false }],
+          },
+        },
+      }),
+    );
+
+    const settings = loadSettings();
+    expect(settings.editor.defaultMode).toBe("semi");
+    expect(settings.sessions["C:/Vault"].tabs[0].writingMode).toBe("semi");
   });
 
   it("migrates the legacy folder-note setting and defaults images out of All Files", () => {

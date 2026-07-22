@@ -12,6 +12,8 @@ import {
 } from "@codemirror/commands";
 import { foldGutter, foldKeymap } from "@codemirror/language";
 import { markdownSyntaxPlugin } from "./markdownSyntaxPlugin";
+import { createSyntaxDeletionPlugin } from "./syntaxDeletionPlugin";
+import { createSyntaxBoundaryPlugin } from "./syntaxBoundaryPlugin";
 import { wikilinkPlugin } from "./wikilinkPlugin";
 import { footnotePlugin } from "./footnotePlugin";
 import { tablePlugin } from "./tablePlugin";
@@ -28,13 +30,15 @@ import {
   ResolvedWikilink,
   SlashCommandDefinition,
   ThemeId,
+  WritingMode,
 } from "../editorTypes";
 import { isDarkTheme, selectionColorForTheme } from "../themes";
 import { isPluginEnabled } from "../utils/pluginRegistry";
 import { imageMarkdown } from "../utils/attachments";
 import { isImagePath } from "../utils/vaultImages";
 import { tableInsertion } from "../utils/markdownEditing";
-import { structureAt, type StructuredElement } from "../utils/structuredMarkdown";
+import type { StructuredElement } from "../utils/structuredMarkdown";
+import { buildStructuredRangeIndex, type StructuredRange } from "../utils/structuredRangeIndex";
 import { paragraphSpacingExtension } from "../utils/paragraphSpacing";
 import { exitEmptyBlockLine, toggleInlineFormat } from "../utils/formatCommands";
 import { linkHoverTooltip } from "./linkHoverTooltip";
@@ -50,6 +54,7 @@ export interface CodeMirrorEditorProps {
   theme?: ThemeId;
   readOnly?: boolean;
   mode?: EditorMode;
+  writingMode?: WritingMode;
   settings: EditorSettings;
   pluginSettings?: PluginSettings;
   documentName?: string;
@@ -70,6 +75,8 @@ export interface CodeMirrorEditorProps {
   onSelectionChange?: (rect?: DOMRect) => void;
   onCursorMove?: () => void; // Called on any cursor/selection change
   onEditorReady?: (view: EditorView) => void;
+  /** Called when the user edits the document header name. */
+  onDocumentNameChange?: (newName: string) => Promise<void> | void;
   /** Local presentation selection used only by Write-mode decorations. */
   activeVariantId?: string;
   activeVariantLabel?: string;
@@ -95,7 +102,8 @@ type WikilinkMenuState = {
 };
 
 type StructureMenuState = {
-  element: StructuredElement;
+  element: StructuredRange;
+  parents: StructuredRange[];
   x: number;
   y: number;
 };
@@ -143,6 +151,7 @@ export function CodeMirrorEditor({
   theme = "worldnotion-light",
   readOnly = false,
   mode = "write",
+  writingMode = "processed",
   settings,
   pluginSettings,
   documentName,
@@ -160,6 +169,7 @@ export function CodeMirrorEditor({
   onSelectionChange,
   onCursorMove,
   onEditorReady,
+  onDocumentNameChange,
   activeVariantId,
   activeVariantLabel,
   onOpenSource,
@@ -174,7 +184,8 @@ export function CodeMirrorEditor({
   // Debounce timers for menu detection (100ms debounce)
   const slashMenuDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const wikilinkMenuDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const processedWriting = mode === "write" && settings.writeStructureMode === "processed";
+  const writing = mode === "write";
+  const processedWriting = writing && writingMode === "processed";
   const handleChange = useCallback(
     (newValue: string) => {
       onChange(newValue);
@@ -375,22 +386,41 @@ export function CodeMirrorEditor({
   function structureAtEvent(view: EditorView, event: MouseEvent): StructureMenuState | undefined {
     const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
     if (position === null) return undefined;
-    const element = structureAt(view.state.doc, position);
+    const index = buildStructuredRangeIndex(view.state);
+    const element = index.at(position);
     if (!element) return undefined;
     const coords = view.coordsAtPos(element.from);
     return {
       element,
+      parents: index.parentsOf(element),
       x: coords?.right ?? event.clientX,
       y: (coords?.top ?? event.clientY) - 4,
     };
   }
 
   function openStructureMenu(view: EditorView, event: MouseEvent) {
-    if (!processedWriting) return false;
+    if (!writing || (event.type !== "contextmenu" && !processedWriting)) return false;
     const next = structureAtEvent(view, event);
     if (!next) return false;
     event.preventDefault();
-    setStructureMenu({ ...next, x: event.clientX, y: event.clientY });
+    if (event.type !== "contextmenu") {
+      const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
+      const visible = next.element.visibleRanges[0];
+      if (position !== null && visible) {
+        view.dispatch({
+          selection: {
+            anchor: Math.max(visible.from, Math.min(visible.to, position)),
+          },
+          userEvent: "select.pointer",
+        });
+      }
+    }
+    setWikilinkMenu(undefined);
+    setStructureMenu({
+      ...next,
+      x: Math.max(12, Math.min(event.clientX, window.innerWidth - 332)),
+      y: Math.max(12, Math.min(event.clientY, window.innerHeight - 360)),
+    });
     return true;
   }
 
@@ -557,6 +587,15 @@ export function CodeMirrorEditor({
       return;
     }
 
+    if (
+      buildStructuredRangeIndex(view.state)
+        .containing(selection.from)
+        .some((element) => element.kind === "wikilink")
+    ) {
+      setWikilinkMenu(undefined);
+      return;
+    }
+
     const line = view.state.doc.lineAt(selection.from);
     const before = view.state.doc.sliceString(line.from, selection.from);
     const lastOpen = before.lastIndexOf("[[");
@@ -689,13 +728,7 @@ export function CodeMirrorEditor({
           // nodes — the processed-mode decorations are built from that tree.
           markdown({ base: markdownLanguage }),
           ...(mode === "write" && activeVariantId
-            ? [
-                createVariantContentPlugin(
-                  activeVariantId,
-                  activeVariantLabel,
-                  settings.writeStructureMode,
-                ),
-              ]
+            ? [createVariantContentPlugin(activeVariantId, activeVariantLabel)]
             : []),
           ...(isPluginEnabled(pluginSettings, "document-header", settings.documentHeaderEnabled) &&
           documentName &&
@@ -706,6 +739,7 @@ export function CodeMirrorEditor({
                   documentName,
                   projectName,
                   showProjectName: settings.showProjectNameInHeader,
+                  onDocumentNameChange,
                 }),
               ]
             : []),
@@ -724,24 +758,26 @@ export function CodeMirrorEditor({
                   resolveWikilink,
                   onOpenWikilink,
                   onMissingWikilink,
-                  presentation: settings.writeStructureMode,
+                  presentation: writingMode,
                 }),
               ]
             : []),
-          ...(processedWriting && isPluginEnabled(pluginSettings, "footnotes")
-            ? [footnotePlugin({ presentation: "processed" })]
+          ...(writing && isPluginEnabled(pluginSettings, "footnotes")
+            ? [footnotePlugin({ presentation: writingMode })]
             : []),
-          ...(processedWriting && isPluginEnabled(pluginSettings, "table-tools")
-            ? [tablePlugin()]
+          ...(processedWriting ? [createSyntaxDeletionPlugin()] : []),
+          ...(processedWriting ? [createSyntaxBoundaryPlugin()] : []),
+          ...(writing && isPluginEnabled(pluginSettings, "table-tools")
+            ? [tablePlugin(writingMode)]
             : []),
-          ...(processedWriting ? [markdownSyntaxPlugin] : []),
+          ...(writing ? [markdownSyntaxPlugin(writingMode)] : []),
           ...(mode === "write" && onOpenUrl ? [linkHoverTooltip(onOpenUrl)] : []),
           ...(mode === "write" ? [paragraphSpacingExtension()] : []),
-          ...(processedWriting && isPluginEnabled(pluginSettings, "font-family-rendering")
-            ? [fontFamilyPlugin]
+          ...(writing && isPluginEnabled(pluginSettings, "font-family-rendering")
+            ? [fontFamilyPlugin(writingMode)]
             : []),
-          ...(processedWriting && resolveImage && isPluginEnabled(pluginSettings, "image-rendering")
-            ? [imagePlugin({ resolve: resolveImage, presentation: "processed" })]
+          ...(writing && resolveImage && isPluginEnabled(pluginSettings, "image-rendering")
+            ? [imagePlugin({ resolve: resolveImage, presentation: writingMode })]
             : []),
           ...(settings.lineWrap ? [EditorView.lineWrapping] : []),
           CodeMirrorState.tabSize.of(settings.tabSize),
@@ -771,6 +807,8 @@ export function CodeMirrorEditor({
                 }),
               ]
             : []),
+          // CodeMirror 6 has built-in undo/redo support via history extension;
+          // keybindings are handled through the main keymap below
           Prec.highest(
             keymap.of([
               {
@@ -956,7 +994,8 @@ export function CodeMirrorEditor({
               return handleMenuKey(event);
             },
             mousedown(event, view) {
-              return openUrlAtEvent(event, view);
+              if (openUrlAtEvent(event, view)) return true;
+              return event.button === 0 ? openStructureMenu(view, event) : false;
             },
             contextmenu(event, view) {
               return openStructureMenu(view, event);
@@ -1081,10 +1120,22 @@ export function CodeMirrorEditor({
       />
       {structureMenu ? (
         <StructureActionsMenu
+          key={structureMenu.element.id}
           {...structureMenu}
           resolveWikilink={resolveWikilink}
           onDismiss={() => setStructureMenu(undefined)}
           onReplace={replaceStructuredElement}
+          onSelectElement={(element) =>
+            setStructureMenu((current) =>
+              current && editorView
+                ? {
+                    ...current,
+                    element,
+                    parents: buildStructuredRangeIndex(editorView.state).parentsOf(element),
+                  }
+                : current,
+            )
+          }
           onOpenSource={() => {
             setStructureMenu(undefined);
             onOpenSource?.();

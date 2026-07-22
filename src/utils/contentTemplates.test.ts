@@ -89,4 +89,13 @@ describe("content template helpers", () => {
     expect(bodyToRawMarkdown(tab, "# New Body")).toContain("type: universe");
     expect(bodyToRawMarkdown(tab, "# New Body")).toContain("# New Body");
   });
+
+  it("preserves the exact CRLF frontmatter envelope when saving body edits", () => {
+    const raw = "---\r\nid: note\r\nname: Note # keep\r\n---\r\n\r\n# Note\r\n\r\nBody";
+    const tab = { rawMarkdown: raw } as OpenTab;
+
+    expect(bodyToRawMarkdown(tab, "# Changed\n\nBody")).toBe(
+      "---\r\nid: note\r\nname: Note # keep\r\n---\r\n\r\n# Changed\r\n\r\nBody",
+    );
+  });
 });

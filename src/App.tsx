@@ -66,6 +66,7 @@ import { useInputDialog } from "./hooks/useInputDialog";
 import { useInheritAppearanceDialog } from "./hooks/useInheritAppearanceDialog";
 import { useMissingRecentPaths } from "./hooks/useMissingRecentPaths";
 import { useWorkspaceState } from "./hooks/useWorkspaceState";
+import { useUndoRedo } from "./hooks/useUndoRedo";
 import { SaveStatusIndicator } from "./components/SaveStatusIndicator";
 import { BrandLoadingScreen } from "./components/BrandLoadingScreen";
 import { OnboardingGuide, UniverseBasicsCard } from "./components/OnboardingGuide";
@@ -76,6 +77,7 @@ import { ImagePreviewDialog } from "./components/ImagePreviewDialog";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { JsonReader } from "./components/JsonReader";
 import { XmlReader } from "./components/XmlReader";
+import { EditorModeSelector } from "./components/EditorModeSelector";
 import { LazyPanelFallback } from "./components/LazyPanelFallback";
 import { UniverseIconFrame } from "./components/UniverseIconFrame";
 import { DockWorkspace, type DockMoveRequest } from "./components/DockWorkspace";
@@ -92,6 +94,7 @@ import {
   OpenTab,
   ThemeId,
   GraphSettings,
+  WritingMode,
 } from "./editorTypes";
 import {
   Entity,
@@ -123,6 +126,7 @@ import {
   applyInterfaceLocale,
   resolveInterfaceLocale,
   WorldnotionLocaleProvider,
+  worldnotionEditorModeCopy,
 } from "./i18n";
 import type { SuiteChrome } from "./suiteChrome";
 import {
@@ -151,6 +155,7 @@ import {
   type ExplorerIconsData,
 } from "./utils/explorerIconsStorage";
 import { isImagePath, resolveNoteImageUrl, setBrowserVaultRoot } from "./utils/vaultImages";
+import { normalizeDocumentName, planDocumentRename } from "./utils/documentRename";
 import {
   VAULT_APPEARANCE_SETTINGS_PATH,
   applyVaultAppearanceSettings,
@@ -208,6 +213,7 @@ import {
   updateOpenTabsForPathChange,
   isJsonPath,
   isXmlPath,
+  withTabEditorMode,
 } from "./utils/tabUtils";
 import {
   DOCUMENT_TAB_GROUP_COLORS,
@@ -259,7 +265,6 @@ const BUY_SUITE_URL = "https://everendforge.com/buy-suite";
 const WORLDNOTION_ONBOARDING_KEY = "worldnotion.onboarding.v1";
 
 type ExplorerSelection = { path: string; kind: "file" | "folder" };
-type ExplorerUndoMove = { fromPath: string; toFolderPath: string; kind: "file" | "folder" };
 
 function ForgeCornerLogo() {
   return (
@@ -472,6 +477,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   const interfaceLocale = resolveInterfaceLocale(
     suiteChrome?.suiteSettings?.localePreference ?? settings.localePreference ?? "system",
   );
+  const editorModeText = worldnotionEditorModeCopy(interfaceLocale);
   const activeTheme = (suiteChrome?.suiteSettings?.style ?? settings.theme) as ThemeId;
   const activeThemeIsDark = isDarkTheme(activeTheme);
   const [view, setView] = useState<AppView>("home");
@@ -484,7 +490,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   }>();
   const [explorerSelection, setExplorerSelection] = useState<ExplorerSelection[]>([]);
   const [pointerDragTargetPath, setPointerDragTargetPath] = useState<string>();
-  const [lastExplorerMoves, setLastExplorerMoves] = useState<ExplorerUndoMove[]>();
+  const undoRedo = useUndoRedo();
   const [imagePreviewPath, setImagePreviewPath] = useState<string>();
   const [query, setQuery] = useState("");
   const [loadState, setLoadState] = useState<LoadState>("idle");
@@ -514,7 +520,9 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
-    applyInterfaceLocale(suiteChrome?.suiteSettings?.localePreference ?? settings.localePreference ?? "system");
+    applyInterfaceLocale(
+      suiteChrome?.suiteSettings?.localePreference ?? settings.localePreference ?? "system",
+    );
   }, [settings.localePreference, suiteChrome?.suiteSettings?.localePreference]);
   const [settingsInitialSection, setSettingsInitialSection] = useState<
     "overview" | "utils" | "appearance-behavior" | "ai-advisor"
@@ -647,9 +655,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     // or notes—otherwise the onboarding steps appear complete from the start.
     const isHiddenPath = (path: string) =>
       path.split("/").some((segment) => segment.startsWith("."));
-    const directories = (index?.directories ?? []).filter(
-      (path) => path && !isHiddenPath(path),
-    );
+    const directories = (index?.directories ?? []).filter((path) => path && !isHiddenPath(path));
     const markdownFiles = (index?.markdownFiles ?? []).filter(
       (file) => !isHiddenPath(file.relativePath),
     );
@@ -661,22 +667,54 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     );
     const noteOpened = Boolean(activeTab?.path?.toLowerCase().endsWith(".md"));
     return [
-      { id: "open-universe", title: "Abrir un universo", description: "Selecciona una carpeta para comenzar.", complete: Boolean(index?.rootPath) },
-      { id: "root-folder", title: "Crear una carpeta en la raíz", description: "Crea una carpeta desde la pantalla inicial o el Explorer.", complete: rootFolderCreated },
-      { id: "folder-note", title: "Crear una nota dentro de la carpeta", description: "Selecciona la carpeta y crea una nota allí.", complete: noteInFolderCreated },
-      { id: "nested-folder", title: "Crear una carpeta anidada", description: "Entra en la carpeta y crea una subcarpeta.", complete: nestedFolderCreated },
-      { id: "nested-note", title: "Crear una nota anidada", description: "Crea otra nota dentro de la carpeta anidada.", complete: noteInNestedFolderCreated },
-      { id: "edit-note", title: "Abrir y editar una nota", description: "Abre una nota Markdown para empezar a escribir.", complete: noteOpened },
+      {
+        id: "open-universe",
+        title: "Abrir un universo",
+        description: "Selecciona una carpeta para comenzar.",
+        complete: Boolean(index?.rootPath),
+      },
+      {
+        id: "root-folder",
+        title: "Crear una carpeta en la raíz",
+        description: "Crea una carpeta desde la pantalla inicial o el Explorer.",
+        complete: rootFolderCreated,
+      },
+      {
+        id: "folder-note",
+        title: "Crear una nota dentro de la carpeta",
+        description: "Selecciona la carpeta y crea una nota allí.",
+        complete: noteInFolderCreated,
+      },
+      {
+        id: "nested-folder",
+        title: "Crear una carpeta anidada",
+        description: "Entra en la carpeta y crea una subcarpeta.",
+        complete: nestedFolderCreated,
+      },
+      {
+        id: "nested-note",
+        title: "Crear una nota anidada",
+        description: "Crea otra nota dentro de la carpeta anidada.",
+        complete: noteInNestedFolderCreated,
+      },
+      {
+        id: "edit-note",
+        title: "Abrir y editar una nota",
+        description: "Abre una nota Markdown para empezar a escribir.",
+        complete: noteOpened,
+      },
     ];
   }, [activeTab?.path, index]);
 
   const dismissWorldNotionOnboarding = () => {
-    if (index?.rootPath) window.localStorage.setItem(`${WORLDNOTION_ONBOARDING_KEY}:${index.rootPath}`, "dismissed");
+    if (index?.rootPath)
+      window.localStorage.setItem(`${WORLDNOTION_ONBOARDING_KEY}:${index.rootPath}`, "dismissed");
     setOnboardingDismissed(true);
   };
 
   const restartWorldNotionOnboarding = () => {
-    if (index?.rootPath) window.localStorage.removeItem(`${WORLDNOTION_ONBOARDING_KEY}:${index.rootPath}`);
+    if (index?.rootPath)
+      window.localStorage.removeItem(`${WORLDNOTION_ONBOARDING_KEY}:${index.rootPath}`);
     setOnboardingDismissed(false);
   };
   const activeVariantId = useMemo(() => {
@@ -835,7 +873,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   // Load explorer icons from persistent storage when vault opens
   useEffect(() => {
     if (!index?.rootPath) return;
-    
+
     const loadIcons = async () => {
       const vault = vaultHandleFor(index.rootPath, browserRoot);
       try {
@@ -847,7 +885,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         console.warn("Failed to load explorer icons:", err);
       }
     };
-    
+
     loadIcons();
   }, [index?.rootPath, browserRoot]);
 
@@ -858,10 +896,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     let readyTimer: number | undefined;
     const startupStartedAt = Date.now();
     const finishInitialStartup = () => {
-      const remaining = Math.max(
-        0,
-        STARTUP_LOADER_MIN_MS - (Date.now() - startupStartedAt),
-      );
+      const remaining = Math.max(0, STARTUP_LOADER_MIN_MS - (Date.now() - startupStartedAt));
       readyTimer = window.setTimeout(() => {
         if (!cancelled) setInitialReady(true);
       }, remaining);
@@ -1091,22 +1126,33 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   }, [pointerDragItem, explorerSelection]);
 
   useEffect(() => {
-    function handleUndo(event: KeyboardEvent) {
+    function handleUndoRedo(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (
-        !(event.metaKey || event.ctrlKey) ||
-        event.key.toLowerCase() !== "z" ||
-        !lastExplorerMoves?.length ||
-        target?.closest("input, textarea, [contenteditable='true'], .cm-content")
-      ) {
+      const isUndo =
+        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && !event.shiftKey;
+      const isRedo =
+        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && event.shiftKey;
+
+      // Don't prevent default in CodeMirror (handled internally by @codemirror/history)
+      if (target?.closest(".cm-content")) {
         return;
       }
-      event.preventDefault();
-      void undoExplorerMoves();
+
+      // Only handle explorer-level undo/redo if not in editor
+      if (!isUndo && !isRedo) return;
+
+      if (isUndo && undoRedo.canUndo) {
+        event.preventDefault();
+        performUndo();
+      } else if (isRedo && undoRedo.canRedo) {
+        event.preventDefault();
+        performRedo();
+      }
     }
-    window.addEventListener("keydown", handleUndo);
-    return () => window.removeEventListener("keydown", handleUndo);
-  }, [lastExplorerMoves]);
+
+    window.addEventListener("keydown", handleUndoRedo);
+    return () => window.removeEventListener("keydown", handleUndoRedo);
+  }, [undoRedo.canUndo, undoRedo.canRedo, undoRedo.undoStack, undoRedo.redoStack]);
 
   function toggleExpand(path: string) {
     setExpandedPaths((prev) => {
@@ -1203,8 +1249,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   function setCustomIcon(path: string, iconName: IconName) {
     const nextIcons = { ...settings.explorer.customIcons };
     delete nextIcons[path];
-    const updated =
-      iconName === "default" ? nextIcons : { ...nextIcons, [path]: iconName };
+    const updated = iconName === "default" ? nextIcons : { ...nextIcons, [path]: iconName };
     updateExplorer({ customIcons: updated });
 
     // Save to persistent storage
@@ -1251,8 +1296,14 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     });
   }
 
-  function updateTabsForPathChange(change: PathChangeSet) {
-    setTabs((current) => updateOpenTabsForPathChange(current, change, index?.rootPath));
+  function updateTabsForPathChange(
+    change: PathChangeSet,
+    updateChangedTab?: (tab: OpenTab) => OpenTab,
+  ) {
+    setTabs((current) => {
+      const changed = updateOpenTabsForPathChange(current, change, index?.rootPath);
+      return updateChangedTab ? changed.map(updateChangedTab) : changed;
+    });
     setWorkspaceLayout((current) => updateLayoutForPathChange(current, change));
     setDocumentTabGroups((current) => updateGroupsForPathChange(current, change));
     setExpandedPaths((current) => {
@@ -1280,13 +1331,13 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
             icon,
           ]),
         );
-        
+
         // Save updated icons to persistent storage
         const vault = vaultHandleFor(index.rootPath, browserRoot);
         saveExplorerIcons(vault, customIcons as ExplorerIconsData).catch((err) => {
           console.warn("Failed to save explorer icons after path change:", err);
         });
-        
+
         return {
           ...current,
           explorer: {
@@ -1350,6 +1401,80 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     return plan.change;
   }
 
+  async function renameDocument(notePath: string, requestedName: string) {
+    if (!index) throw new Error("Open a universe before renaming a document.");
+    const noteFile = index.files.find((file) => file.relativePath === notePath);
+    if (!noteFile) throw new Error(`Document not found: ${notePath}`);
+    const openTab = tabs.find((tab) => tab.path === notePath);
+    const plan = planDocumentRename(
+      index,
+      notePath,
+      requestedName,
+      noteFile.content,
+      openTab?.rawMarkdown ?? noteFile.content,
+    );
+    if (plan.newName === plan.oldName && plan.newNotePath === notePath) return plan;
+
+    const vault = vaultHandleFor(index.rootPath, browserRoot);
+    let folderRenamed = false;
+    let noteRenamed = false;
+    try {
+      if (plan.folderPath && plan.newFolderPath && plan.folderPath !== plan.newFolderPath) {
+        await renameVaultPath(vault, plan.folderPath, plan.newName, "folder");
+        folderRenamed = true;
+      }
+      if (plan.newNotePath !== plan.oldNotePath) {
+        await renameVaultPath(vault, plan.oldNotePath, plan.newFileName, "file");
+        noteRenamed = true;
+      }
+      await saveVaultFile(
+        vault,
+        plan.newNotePath,
+        plan.diskContent,
+        "Could not update the renamed document.",
+      );
+    } catch (error) {
+      let rollbackFailed = false;
+      if (noteRenamed) {
+        try {
+          await renameVaultPath(vault, plan.newNotePath, pathName(plan.oldNotePath), "file");
+          await saveVaultFile(vault, plan.oldNotePath, noteFile.content);
+        } catch {
+          rollbackFailed = true;
+        }
+      }
+      if (folderRenamed && plan.folderPath && plan.newFolderPath) {
+        try {
+          await renameVaultPath(vault, plan.newFolderPath, pathName(plan.folderPath), "folder");
+        } catch {
+          rollbackFailed = true;
+        }
+      }
+      if (rollbackFailed) {
+        throw new Error(
+          "Rename failed and WorldNotion could not fully restore the original paths.",
+          {
+            cause: error,
+          },
+        );
+      }
+      throw error;
+    }
+
+    const changeSet: PathChangeSet = plan.changes;
+    updateTabsForPathChange(changeSet, (tab) => {
+      if (tab.path !== plan.newNotePath) return tab;
+      return {
+        ...tab,
+        rawMarkdown: plan.liveContent,
+        savedMarkdown: plan.diskContent,
+        dirty: plan.liveContent !== plan.diskContent,
+      };
+    });
+    await refreshUniverse(plan.newNotePath, changeSet);
+    return plan;
+  }
+
   async function handleContextMenuAction(
     action: ContextMenuAction,
     targetPath: string,
@@ -1398,6 +1523,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
           "Could not create page.",
         );
 
+        undoRedo.recordAction({
+          type: "create",
+          data: { path: filePath, kind: "file", parentPath },
+        });
         const nextIndex = await refreshUniverse(filePath);
         selectPathAfterRefresh(filePath, nextIndex);
         showToast(`Created blank page: ${fileName}`, "success");
@@ -1418,6 +1547,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
           browserContent: contentFromTemplate(index, templateType, name),
         });
 
+        undoRedo.recordAction({
+          type: "create",
+          data: { path: filePath, kind: "file", parentPath },
+        });
         const nextIndex = await refreshUniverse(filePath);
         selectPathAfterRefresh(filePath, nextIndex);
         showToast(`Created ${templateType}: ${name}`, "success");
@@ -1430,23 +1563,48 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         const folderPath = parentPath ? `${parentPath}/${name}` : name;
         const vault = vaultHandleFor(index.rootPath, browserRoot);
         await createVaultFolder(vault, folderPath);
+        undoRedo.recordAction({
+          type: "create",
+          data: { path: folderPath, kind: "folder", parentPath },
+        });
         await refreshUniverse();
         setExpandedPaths((prev) => new Set(prev).add(folderPath));
         selectFolder(folderPath);
         showToast(`Created folder: ${name}`, "success");
       } else if (action === "rename" && targetKind !== "empty") {
         const currentName = pathName(targetPath);
-        const newName = await promptUser("New name:", "new name", currentName);
-        if (!newName || newName === currentName) return;
+        const currentDisplayName =
+          targetKind === "file" && targetPath.toLowerCase().endsWith(".md")
+            ? currentName.replace(/\.md$/i, "")
+            : currentName;
+        const newName = await promptUser("New name:", "new name", currentDisplayName);
+        if (!newName || normalizeDocumentName(newName) === currentDisplayName) return;
+        if (targetKind === "file" && targetPath.toLowerCase().endsWith(".md")) {
+          const plan = await renameDocument(targetPath, newName);
+          undoRedo.recordAction({
+            type: "rename",
+            data: { oldPath: targetPath, newPath: plan.newNotePath, kind: "file" },
+          });
+          showToast(`Renamed ${currentDisplayName} to ${plan.newName}.`, "success");
+          return;
+        }
         if (targetKind === "folder") {
           planFolderDescriptionRename(index, targetPath, newName);
         }
+        const newPath =
+          targetKind === "folder"
+            ? `${dirname(targetPath)}/${newName}`
+            : `${dirname(targetPath)}/${newName}.${targetPath.split(".").pop()}`;
         await renameVaultPath(
           vaultHandleFor(index.rootPath, browserRoot),
           targetPath,
           newName,
           targetKind,
         );
+        undoRedo.recordAction({
+          type: "rename",
+          data: { oldPath: targetPath, newPath, kind: targetKind },
+        });
         const folderDescriptionChange =
           targetKind === "folder"
             ? await renameFolderDescriptionIfNeeded(targetPath, newName)
@@ -1457,12 +1615,17 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         await refreshUniverse(undefined, changes);
         showToast(`Renamed ${currentName}.`, "success");
       } else if (action === "duplicate" && targetKind !== "empty") {
+        const newPath = duplicatePathFor(index, targetPath, targetKind);
         const nextPath = await duplicateVaultPath(
           vaultHandleFor(index.rootPath, browserRoot),
           targetPath,
           targetKind,
-          duplicatePathFor(index, targetPath, targetKind),
+          newPath,
         );
+        undoRedo.recordAction({
+          type: "duplicate",
+          data: { sourcePath: targetPath, newPath: nextPath, kind: targetKind },
+        });
         await refreshUniverse(nextPath);
         showToast("Duplicated item.", "success");
       } else if (action === "move" && targetKind !== "empty") {
@@ -1511,6 +1674,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         await revealExplorerPath(targetKind === "empty" ? undefined : targetPath);
       } else if (action === "trash" && targetKind !== "empty") {
         await trashExplorerPath(targetPath, targetKind);
+        undoRedo.recordAction({
+          type: "delete",
+          data: { path: targetPath, kind: targetKind, canRestore: false },
+        });
       } else if (action === "refresh") {
         await refreshUniverse();
       } else if (action === "collapseAll") {
@@ -1577,7 +1744,9 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       updateTabsForPathChange(changes);
       await refreshUniverse(undefined, changes);
       const undoMove = { fromPath: movedPath, toFolderPath: dirname(fromPath), kind: itemKind };
-      if (options.recordUndo !== false) setLastExplorerMoves([undoMove]);
+      if (options.recordUndo !== false) {
+        undoRedo.recordAction({ type: "move", data: undoMove });
+      }
       showToast(`Moved ${pathName(fromPath)}.`, "success");
       return undoMove;
     } catch (error) {
@@ -1608,7 +1777,8 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       );
       if (!confirmed) return;
     }
-    const completed: ExplorerUndoMove[] = [];
+    const completed: Array<{ fromPath: string; toFolderPath: string; kind: "file" | "folder" }> =
+      [];
     for (const target of targets) {
       const move = await moveExplorerPath(target.path, toFolderPath, target.kind, {
         recordUndo: false,
@@ -1630,31 +1800,105 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       }
       completed.push(move);
     }
-    setLastExplorerMoves(completed);
+    // Record moves in undo system
+    for (const move of completed) {
+      undoRedo.recordAction({ type: "move", data: move });
+    }
     setExplorerSelection(completed.map((move) => ({ path: move.fromPath, kind: move.kind })));
     showToast(`Moved ${completed.length} items. Press Ctrl/⌘+Z to undo.`, "success");
   }
 
-  async function undoExplorerMoves() {
-    const moves = lastExplorerMoves;
-    if (!moves?.length) return;
-    setLastExplorerMoves(undefined);
-    for (const move of moves.slice().reverse()) {
-      const restored = await moveExplorerPath(move.fromPath, move.toFolderPath, move.kind, {
-        recordUndo: false,
-        skipConfirmation: true,
-      });
-      if (!restored) return;
+  async function performUndo() {
+    if (!index || undoRedo.undoStack.length === 0) return;
+
+    const lastAction = undoRedo.undoStack[undoRedo.undoStack.length - 1];
+    if (!lastAction) return;
+
+    try {
+      switch (lastAction.type) {
+        case "move": {
+          const { fromPath, toFolderPath, kind } = lastAction.data;
+          await moveExplorerPath(fromPath, toFolderPath, kind, {
+            recordUndo: false,
+            skipConfirmation: true,
+          });
+          undoRedo.undo();
+          showToast(`Undid move.`, "success");
+          break;
+        }
+        case "create": {
+          const { path, kind } = lastAction.data;
+          await trashExplorerPath(path, kind);
+          undoRedo.undo();
+          showToast(`Undid ${kind} creation.`, "success");
+          break;
+        }
+        case "delete": {
+          // Note: Cannot undo delete if file was permanently deleted
+          const { canRestore } = lastAction.data;
+          if (!canRestore) {
+            showToast("Cannot undo: file was permanently deleted.", "warning");
+            undoRedo.undo();
+          } else {
+            showToast("Cannot restore deleted file (no backup available).", "warning");
+          }
+          break;
+        }
+        case "rename": {
+          const { oldPath, newPath, kind } = lastAction.data;
+          await renameVaultPath(
+            vaultHandleFor(index.rootPath, browserRoot),
+            newPath,
+            pathName(oldPath),
+            kind,
+          );
+          await refreshUniverse(undefined, [renamePathChange(newPath, pathName(oldPath), kind)]);
+          undoRedo.undo();
+          showToast(`Undid rename.`, "success");
+          break;
+        }
+        case "duplicate": {
+          const { newPath, kind } = lastAction.data;
+          await trashExplorerPath(newPath, kind);
+          undoRedo.undo();
+          showToast(`Undid duplication.`, "success");
+          break;
+        }
+      }
+    } catch (error) {
+      showToast(
+        `Could not undo: ${error instanceof Error ? error.message : String(error)}`,
+        "error",
+      );
     }
-    setExplorerSelection(
-      moves.map((move) => ({
-        path: move.toFolderPath
-          ? `${move.toFolderPath}/${pathName(move.fromPath)}`
-          : pathName(move.fromPath),
-        kind: move.kind,
-      })),
-    );
-    showToast(`Undid ${moves.length} move${moves.length === 1 ? "" : "s"}.`, "success");
+  }
+
+  async function performRedo() {
+    if (!index || undoRedo.redoStack.length === 0) return;
+
+    const nextAction = undoRedo.redoStack[undoRedo.redoStack.length - 1];
+    if (!nextAction) return;
+
+    try {
+      switch (nextAction.type) {
+        case "move": {
+          const { fromPath, toFolderPath, kind } = nextAction.data;
+          await moveExplorerPath(fromPath, toFolderPath, kind, {
+            recordUndo: false,
+            skipConfirmation: true,
+          });
+          undoRedo.redo();
+          showToast(`Redid move.`, "success");
+          break;
+        }
+        // Other redo cases would be similar...
+      }
+    } catch (error) {
+      showToast(
+        `Could not redo: ${error instanceof Error ? error.message : String(error)}`,
+        "error",
+      );
+    }
   }
 
   async function revealExplorerPath(path?: string) {
@@ -1885,10 +2129,11 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       return;
     }
 
-    const { folderName, descriptionPath: targetPath, hasDescription } = folderDescriptionInfo(
-      index,
-      parentPath,
-    );
+    const {
+      folderName,
+      descriptionPath: targetPath,
+      hasDescription,
+    } = folderDescriptionInfo(index, parentPath);
     if (hasDescription) {
       showToast(`${folderName} already has a folder note.`, "warning");
       return;
@@ -2363,7 +2608,11 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       "success",
     );
     setSettings((current) => {
-      const remembered = rememberUniverse(current, readResult.rootPath, profileForRecent(nextIndex));
+      const remembered = rememberUniverse(
+        current,
+        readResult.rootPath,
+        profileForRecent(nextIndex),
+      );
       return isSameUniverse
         ? remembered
         : applyVaultAppearanceSettings(remembered, nextIndex.vaultAppearanceSettings);
@@ -2419,6 +2668,13 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
     const path = suiteChrome?.sharedUniversePath;
     if (!path || index?.rootPath === path) return;
 
+    if (!isTauriRuntime()) {
+      setLoadState("error");
+      setErrorMessage("A shared desktop universe cannot be opened from the web runtime.");
+      suiteChrome?.onReady?.();
+      return;
+    }
+
     let disposed = false;
     setLoadState("loading");
     setErrorMessage("");
@@ -2447,6 +2703,9 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   async function readCurrentUniverse() {
     if (!index) return undefined;
     if (browserRoot) return readBrowserUniverse(browserRoot);
+    if (!isTauriRuntime()) {
+      throw new Error("Folder access expired. Reopen this universe from the Home screen.");
+    }
     return invoke<VaultReadResult>("index_vault", { path: index.rootPath });
   }
 
@@ -2701,11 +2960,27 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       const root = picked.root;
 
       await ensureBrowserWritePermission(root);
-      setBrowserRoot(root);
       const universeData = await readBrowserUniverse(root);
+      setBrowserRoot(root);
       applyUniverse(universeData);
     } catch (error) {
       console.error("[openUniverse] Error:", error);
+      setLoadState("error");
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function openDemoUniverse() {
+    setLoadState("loading");
+    setErrorMessage("");
+    try {
+      const { createDemoBrowserUniverse } = await import("./utils/demoBrowserUniverse");
+      const root = createDemoBrowserUniverse();
+      const universeData = await readBrowserUniverse(root);
+      setBrowserRoot(root);
+      applyUniverse(universeData, "demo-universe.md");
+    } catch (error) {
+      console.error("[openDemoUniverse] Error:", error);
       setLoadState("error");
       setErrorMessage(error instanceof Error ? error.message : String(error));
     }
@@ -2737,7 +3012,10 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       let inheritFrom: string | undefined;
       if (inheritCandidates.length) {
         const choice = await chooseAppearanceSource(
-          inheritCandidates.map((path) => ({ path, profile: settings.recentUniverseProfiles[path] })),
+          inheritCandidates.map((path) => ({
+            path,
+            profile: settings.recentUniverseProfiles[path],
+          })),
         );
         if (!choice) {
           setLoadState(index ? "ready" : "idle");
@@ -2818,19 +3096,13 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
 
   function setTabMode(path: string, mode: OpenTab["mode"]) {
     setTabs((current) =>
-      current.map((tab) =>
-        tab.path === path
-          ? {
-              ...tab,
-              mode: isJsonPath(tab.path) || isXmlPath(tab.path) ? "source" : mode,
-              sourceView:
-                mode === "source"
-                  ? (tab.sourceView ??
-                    (isJsonPath(tab.path) ? "json" : isXmlPath(tab.path) ? "xml" : "raw"))
-                  : tab.sourceView,
-            }
-          : tab,
-      ),
+      current.map((tab) => (tab.path === path ? withTabEditorMode(tab, mode) : tab)),
+    );
+  }
+
+  function setTabWritingMode(path: string, writingMode: WritingMode) {
+    setTabs((current) =>
+      current.map((tab) => (tab.path === path ? withTabEditorMode(tab, writingMode) : tab)),
     );
   }
 
@@ -3592,7 +3864,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
           setTabs((current) =>
             current.map((tab) =>
               tab.path === activeTabPath
-                ? { ...tab, mode: tab.mode === "write" ? "source" : "write" }
+                ? withTabEditorMode(tab, tab.mode === "write" ? "source" : "write")
                 : tab,
             ),
           );
@@ -3779,7 +4051,11 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
   );
 
   if (!suiteChrome && !initialReady) {
-    return <BrandLoadingScreen message={loadState === "loading" ? "Opening your universe…" : "Preparing your workspace…"} />;
+    return (
+      <BrandLoadingScreen
+        message={loadState === "loading" ? "Opening your universe…" : "Preparing your workspace…"}
+      />
+    );
   }
 
   if (view === "home" || !index) {
@@ -3795,10 +4071,20 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
               </div>
             </div>
             <div className="home-topbar-actions">
-              <button type="button" onClick={() => setShowFeedback(true)} title="Enviar feedback" aria-label="Enviar feedback">
+              <button
+                type="button"
+                onClick={() => setShowFeedback(true)}
+                title="Enviar feedback"
+                aria-label="Enviar feedback"
+              >
                 <MessageSquareText size={15} />
               </button>
-              <button type="button" onClick={toggleBuiltinTheme} title="Toggle theme" aria-label="Toggle theme">
+              <button
+                type="button"
+                onClick={toggleBuiltinTheme}
+                title="Toggle theme"
+                aria-label="Toggle theme"
+              >
                 {activeThemeIsDark ? <Sun size={15} /> : <Moon size={15} />}
               </button>
             </div>
@@ -3832,15 +4118,24 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
             </div>
 
             <div className="home-actions">
-              <button type="button" className="primary-action" data-onboarding-target="worldnotion.open-universe" onClick={openUniverse}>
+              <button
+                type="button"
+                className="primary-action"
+                data-onboarding-target="worldnotion.open-universe"
+                onClick={openUniverse}
+              >
                 <FolderOpen size={16} />
                 Open Universe
               </button>
-              <button type="button" data-onboarding-target="worldnotion.create-universe" onClick={createUniverseFromHome}>
+              <button
+                type="button"
+                data-onboarding-target="worldnotion.create-universe"
+                onClick={createUniverseFromHome}
+              >
                 <Plus size={16} />
                 Create Universe
               </button>
-              <button type="button" onClick={openUniverse}>
+              <button type="button" onClick={() => void openDemoUniverse()}>
                 <BookOpen size={16} />
                 Explore demo universe
               </button>
@@ -3852,7 +4147,9 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
               ) : null}
             </div>
 
-            {!index ? <UniverseBasicsCard onCreate={createUniverseFromHome} onOpen={openUniverse} /> : null}
+            {!index ? (
+              <UniverseBasicsCard onCreate={createUniverseFromHome} onOpen={openUniverse} />
+            ) : null}
 
             <div className="home-metrics">
               <div>
@@ -3966,6 +4263,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
       customIcons={settings.explorer.customIcons}
       pointerDragActive={Boolean(pointerDragItem?.active)}
       templatesExpanded={templatesExpanded}
+      expandedPaths={expandedPaths}
       onToggleTemplatesExpanded={() => setTemplatesExpanded((expanded) => !expanded)}
       onCreateTemplate={createTemplate}
       onSelectPath={selectPath}
@@ -4030,24 +4328,15 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         }}
       >
         <div className="floating-control-panel">
-          <div className="mode-toggle" aria-label="Editor mode">
-            <button
-              type="button"
-              className={documentTab.mode === "write" ? "active" : ""}
-              onClick={() => setTabMode(documentTab.path, "write")}
-              disabled={!documentTab || isJsonDocument || isXmlDocument}
-            >
-              Write
-            </button>
-            <button
-              type="button"
-              className={documentTab.mode === "source" ? "active" : ""}
-              onClick={() => setTabMode(documentTab.path, "source")}
-              disabled={!documentTab}
-            >
-              Source
-            </button>
-          </div>
+          <EditorModeSelector
+            mode={documentTab.mode}
+            writingMode={documentTab.writingMode}
+            disabled={isJsonDocument || isXmlDocument}
+            labels={editorModeText}
+            onWritingModeChange={(writingMode) => setTabWritingMode(documentTab.path, writingMode)}
+            onOpenWriting={() => setTabMode(documentTab.path, "write")}
+            onOpenSource={() => setTabMode(documentTab.path, "source")}
+          />
           {documentTab.mode === "source" ? (
             <label className="source-view-select-wrap">
               <span className="sr-only">Source view</span>
@@ -4205,6 +4494,7 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
                 }
                 theme={settings.theme}
                 mode={documentTab.mode}
+                writingMode={documentTab.writingMode}
                 settings={settings.editor}
                 pluginSettings={settings.plugins}
                 documentName={documentTab.title}
@@ -4258,6 +4548,25 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
                 }}
                 onRequestUrl={() => promptUser("Insert link", "https://example.com", "https://")}
                 onOpenSource={() => setTabMode(documentTab.path, "source")}
+                onDocumentNameChange={async (newName) => {
+                  if (newName === documentTab.title || !index) return;
+                  try {
+                    const plan = await renameDocument(documentTab.path, newName);
+                    showToast(
+                      plan.folderPath
+                        ? `Renamed folder note and folder to "${plan.newName}".`
+                        : `Renamed to "${plan.newName}".`,
+                      "success",
+                    );
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    showToast(
+                      `Could not rename "${documentTab.title}" to "${newName}": ${message}`,
+                      "warning",
+                    );
+                    throw error;
+                  }
+                }}
                 onCursorMove={() => {
                   if (documentTab.path !== activeTabPath) return;
                   if (editorViewRef.current) {
@@ -4329,7 +4638,11 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
         <>
           <h2>No document selected</h2>
           <p>Select a file from the explorer or start a new note.</p>
-          <button type="button" data-onboarding-target="worldnotion.create-note" onClick={createNoteFromTabButton}>
+          <button
+            type="button"
+            data-onboarding-target="worldnotion.create-note"
+            onClick={createNoteFromTabButton}
+          >
             <Plus size={15} />
             New note
           </button>
@@ -4341,11 +4654,19 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
             <FolderOpen size={15} />
             New folder
           </button>
-          <button type="button" data-onboarding-target="worldnotion.open-universe" onClick={() => void openUniverse()}>
+          <button
+            type="button"
+            data-onboarding-target="worldnotion.open-universe"
+            onClick={() => void openUniverse()}
+          >
             <FolderOpen size={15} />
             Open universe
           </button>
-          <button type="button" data-onboarding-target="worldnotion.search-files-action" onClick={() => setShowCommandPalette(true)}>
+          <button
+            type="button"
+            data-onboarding-target="worldnotion.search-files-action"
+            onClick={() => setShowCommandPalette(true)}
+          >
             <Search size={15} />
             Search files
           </button>
@@ -4644,566 +4965,572 @@ function App({ suiteChrome }: { suiteChrome?: SuiteChrome } = {}) {
 
   return (
     <WorldnotionLocaleProvider value={interfaceLocale}>
-    <main
-      className="app-shell dock-app-shell"
-      style={{ "--dock-tab-scale": settings.editor.dockTabScale } as CSSProperties}
-    >
-      <div className="dock-top-bar" aria-label="Workspace controls">
-        {suiteChrome ? (
-          suiteChrome.renderAppSwitcher()
-        ) : (
-          <div ref={forgeMenuRef} className={`forge-corner-menu ${forgeMenuOpen ? "open" : ""}`}>
-            <div className="forge-orbit-panel" aria-label="Everend menu">
-              <button
-                type="button"
-                onClick={() =>
-                  void openUrl(EVEREND_FORGE_GITHUB_URL).then(() => setForgeMenuOpen(false))
-                }
-              >
-                Github
-              </button>
-              <button
-                type="button"
-                onClick={() => void openUrl(BUY_SUITE_URL).then(() => setForgeMenuOpen(false))}
-              >
-                Buy Suite
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setForgeMenuOpen(false);
-                  setShowFeedback(true);
-                }}
-              >
-                Enviar feedback
-              </button>
-            </div>
-            <button
-              type="button"
-              className="forge-corner-button"
-              onClick={() => setForgeMenuOpen((open) => !open)}
-              aria-expanded={forgeMenuOpen}
-              aria-label="Open Everend menu"
-              title="Everend menu"
-            >
-              <ForgeCornerLogo />
-            </button>
-          </div>
-        )}
-
-        <div className="dock-top-left">
-          <button
-            type="button"
-            className="dock-icon-button"
-            onClick={suiteChrome?.onHome ?? (() => setView("home"))}
-            title="Home"
-          >
-            <Home size={15} />
-          </button>
-
-          <div className="dock-top-divider" />
-
-          <button
-            type="button"
-            className="dock-universe-button"
-            onClick={() => openSettingsAt("overview")}
-            title="Universe settings"
-          >
-            <UniverseIconFrame profile={index.universeProfile} size={28} />
-            <span className="dock-universe-copy">
-              <strong>{universeDisplayName(index)}</strong>
-              <span>{pathName(index.rootPath)}</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            className="dock-icon-button dock-settings-button"
-            onClick={() => openSettingsAt("appearance-behavior")}
-            title="Application settings"
-          >
-            <Settings size={14} />
-          </button>
-          <button
-            type="button"
-            className="dock-icon-button"
-            onClick={() => revealExplorerPath()}
-            title={browserRoot ? "Reveal is available in the desktop app" : labels.revealUniverse}
-            disabled={Boolean(browserRoot)}
-          >
-            <ExternalLink size={14} />
-          </button>
-        </div>
-
-        <div className="dock-top-right">
-          <SaveStatusIndicator path={activeTab?.path} dirty={Boolean(activeTab?.dirty)} />
-          <label className="dock-layout-select" title="Workspace layout">
-            <span>{layoutPresetLabel(activeWorkspacePreset)}</span>
-            <select
-              aria-label="Workspace layout"
-              value={activeWorkspacePreset === "custom" ? "custom" : activeWorkspacePreset}
-              onChange={(event) => {
-                const preset = event.target.value as ActiveWorkspacePreset;
-                if (preset !== "custom") applyDockPreset(preset);
-              }}
-            >
-              {activeWorkspacePreset === "custom" ? <option value="custom">Custom</option> : null}
-              <option value="default">Default</option>
-              <option value="writing">Writing</option>
-              <option value="graph">Flow Map</option>
-              <option value="focus">Focus</option>
-            </select>
-            <ChevronDown size={13} />
-          </label>
-
-          <div className="dock-panel-menu-anchor">
-            <button
-              type="button"
-              className={`topbar-menu-trigger dock-panel-menu-toggle ${dockPanelMenuOpen ? "active" : ""}`}
-              onClick={() => setDockPanelMenuOpen((current) => !current)}
-              aria-haspopup="dialog"
-              aria-expanded={Boolean(dockPanelMenuOpen)}
-              title="Show workspace panels"
-            >
-              <SlidersHorizontal size={14} />
-              <span>View</span>
-              <small>{openPanelCount}</small>
-            </button>
-            {dockPanelMenuOpen ? (
-              <div
-                className="topbar-menu-popover dock-panel-menu"
-                role="dialog"
-                aria-label="View workspace panels"
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="dock-panel-menu-header">
-                  <strong>View</strong>
-                  <button
-                    type="button"
-                    className="dock-panel-menu-close"
-                    aria-label="Close workspace panels"
-                    onClick={closeDockPanelMenu}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-                <div className="dock-panel-menu-options" role="group" aria-label="Toggle panels">
-                  {panelMenuItems.map((item) => (
-                    <button
-                      key={item.kind}
-                      type="button"
-                      className={`dock-panel-menu-option ${item.open ? "active" : ""}`}
-                      aria-pressed={item.open}
-                      onClick={() => toggleDockPanel(item.kind)}
-                    >
-                      <span className="dock-panel-menu-check">
-                        {item.open ? <Check size={12} /> : null}
-                      </span>
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="dock-panel-menu-divider" />
+      <main
+        className="app-shell dock-app-shell"
+        style={{ "--dock-tab-scale": settings.editor.dockTabScale } as CSSProperties}
+      >
+        <div className="dock-top-bar" aria-label="Workspace controls">
+          {suiteChrome ? (
+            suiteChrome.renderAppSwitcher()
+          ) : (
+            <div ref={forgeMenuRef} className={`forge-corner-menu ${forgeMenuOpen ? "open" : ""}`}>
+              <div className="forge-orbit-panel" aria-label="Everend menu">
                 <button
                   type="button"
-                  className={`dock-panel-menu-option dock-panel-menu-action ${showCanonChanges ? "active" : ""}`}
+                  onClick={() =>
+                    void openUrl(EVEREND_FORGE_GITHUB_URL).then(() => setForgeMenuOpen(false))
+                  }
+                >
+                  Github
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void openUrl(BUY_SUITE_URL).then(() => setForgeMenuOpen(false))}
+                >
+                  Buy Suite
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
-                    setShowCanonChanges(true);
-                    closeDockPanelMenu();
+                    setForgeMenuOpen(false);
+                    setShowFeedback(true);
                   }}
                 >
-                  <GitPullRequest size={14} />
-                  <span>Review changes</span>
+                  Enviar feedback
                 </button>
               </div>
-            ) : null}
-          </div>
+              <button
+                type="button"
+                className="forge-corner-button"
+                onClick={() => setForgeMenuOpen((open) => !open)}
+                aria-expanded={forgeMenuOpen}
+                aria-label="Open Everend menu"
+                title="Everend menu"
+              >
+                <ForgeCornerLogo />
+              </button>
+            </div>
+          )}
 
-          <button
-            type="button"
-            className="dock-icon-button"
-            onClick={() => setShowFeedback(true)}
-            title="Enviar feedback"
-            aria-label="Enviar feedback"
-          >
-            <MessageSquareText size={15} />
-          </button>
-          <button
-            type="button"
-            className="dock-icon-button"
-            onClick={toggleBuiltinTheme}
-            title="Toggle theme"
-            aria-label="Toggle theme"
-          >
-            {activeThemeIsDark ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
-        </div>
-      </div>
-      <DockWorkspace
-        layout={workspaceLayout}
-        renderTab={renderDockTab}
-        dirtyDocumentPaths={dirtyTabPaths}
-        folderDescriptionPaths={folderDescriptionPaths}
-        documentTabGroups={documentTabGroups}
-        onSelectTab={handleDockSelect}
-        onCloseTab={handleDockClose}
-        onTabContextMenu={(tab, x, y) => {
-          if (tab.kind === "document" && tab.path) {
-            setTabContextMenu({ x, y, path: tab.path });
-          }
-        }}
-        onGroupContextMenu={(groupId, x, y) => setDockPanelContextMenu({ groupId, x, y })}
-        onMoveTab={handleDockMove}
-        onDocumentGroupToggle={(group) => toggleDocumentGroup(group.id)}
-        onDocumentGroupContextMenu={(group, x, y) =>
-          setDocumentGroupContextMenu({ groupId: group.id, x, y })
-        }
-        onResizeSplit={handleDockResize}
-        onOpenDocument={() => setShowCommandPalette(true)}
-        renderEmptyDocuments={() => (
-          <div className="writing-empty-widget">
-            <FileText size={28} />
-            <strong>Explore {universeDisplayName(index)}</strong>
+          <div className="dock-top-left">
             <button
               type="button"
-              onClick={() => setShowCommandPalette(true)}
-              title="Open Command Palette"
+              className="dock-icon-button"
+              onClick={suiteChrome?.onHome ?? (() => setView("home"))}
+              title="Home"
             >
-              <Search size={14} />
-              Search
+              <Home size={15} />
+            </button>
+
+            <div className="dock-top-divider" />
+
+            <button
+              type="button"
+              className="dock-universe-button"
+              onClick={() => openSettingsAt("overview")}
+              title="Universe settings"
+            >
+              <UniverseIconFrame profile={index.universeProfile} size={28} />
+              <span className="dock-universe-copy">
+                <strong>{universeDisplayName(index)}</strong>
+                <span>{pathName(index.rootPath)}</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="dock-icon-button dock-settings-button"
+              onClick={() => openSettingsAt("appearance-behavior")}
+              title="Application settings"
+            >
+              <Settings size={14} />
+            </button>
+            <button
+              type="button"
+              className="dock-icon-button"
+              onClick={() => revealExplorerPath()}
+              title={browserRoot ? "Reveal is available in the desktop app" : labels.revealUniverse}
+              disabled={Boolean(browserRoot)}
+            >
+              <ExternalLink size={14} />
             </button>
           </div>
-        )}
-      />
-      {!onboardingDismissed ? (
-        <OnboardingGuide
-          steps={worldNotionOnboardingSteps}
-          onDismiss={dismissWorldNotionOnboarding}
-          onRestart={restartWorldNotionOnboarding}
-        />
-      ) : null}
-      <CanonChangesDialog
-        open={showCanonChanges}
-        changes={canonChangeSets}
-        onApply={(change) => void applyCanonChangeSet(change)}
-        onDismiss={(change) => void dismissCanonChangeSet(change)}
-        onRefresh={() => void reindexUniverseMetadata()}
-        onClose={() => setShowCanonChanges(false)}
-      />
-      {dockPanelContextMenu ? (
-        <div
-          className="context-menu dock-panel-context-menu"
-          style={{ left: `${dockPanelContextMenu.x}px`, top: `${dockPanelContextMenu.y}px` }}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          {[
-            ["explorer", "Explorer", isExplorerPanelOpen],
-            ["graph", "Flow Map", isGraphPanelOpen],
-            ["inspector", "Inspector", isInspectorPanelOpen],
-            ...(aiAdvisorEnabled ? [["ai-advisor", "AI Advisor", isAiAdvisorPanelOpen]] : []),
-            ["links", "Links", isLinksPanelOpen],
-            ["backlinks", "Backlinks", isBacklinksPanelOpen],
-          ].map(([kind, label, checked]) => (
+
+          <div className="dock-top-right">
+            <SaveStatusIndicator path={activeTab?.path} dirty={Boolean(activeTab?.dirty)} />
+            <label className="dock-layout-select" title="Workspace layout">
+              <span>{layoutPresetLabel(activeWorkspacePreset)}</span>
+              <select
+                aria-label="Workspace layout"
+                value={activeWorkspacePreset === "custom" ? "custom" : activeWorkspacePreset}
+                onChange={(event) => {
+                  const preset = event.target.value as ActiveWorkspacePreset;
+                  if (preset !== "custom") applyDockPreset(preset);
+                }}
+              >
+                {activeWorkspacePreset === "custom" ? <option value="custom">Custom</option> : null}
+                <option value="default">Default</option>
+                <option value="writing">Writing</option>
+                <option value="graph">Flow Map</option>
+                <option value="focus">Focus</option>
+              </select>
+              <ChevronDown size={13} />
+            </label>
+
+            <div className="dock-panel-menu-anchor">
+              <button
+                type="button"
+                className={`topbar-menu-trigger dock-panel-menu-toggle ${dockPanelMenuOpen ? "active" : ""}`}
+                onClick={() => setDockPanelMenuOpen((current) => !current)}
+                aria-haspopup="dialog"
+                aria-expanded={Boolean(dockPanelMenuOpen)}
+                title="Show workspace panels"
+              >
+                <SlidersHorizontal size={14} />
+                <span>View</span>
+                <small>{openPanelCount}</small>
+              </button>
+              {dockPanelMenuOpen ? (
+                <div
+                  className="topbar-menu-popover dock-panel-menu"
+                  role="dialog"
+                  aria-label="View workspace panels"
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  <div className="dock-panel-menu-header">
+                    <strong>View</strong>
+                    <button
+                      type="button"
+                      className="dock-panel-menu-close"
+                      aria-label="Close workspace panels"
+                      onClick={closeDockPanelMenu}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="dock-panel-menu-options" role="group" aria-label="Toggle panels">
+                    {panelMenuItems.map((item) => (
+                      <button
+                        key={item.kind}
+                        type="button"
+                        className={`dock-panel-menu-option ${item.open ? "active" : ""}`}
+                        aria-pressed={item.open}
+                        onClick={() => toggleDockPanel(item.kind)}
+                      >
+                        <span className="dock-panel-menu-check">
+                          {item.open ? <Check size={12} /> : null}
+                        </span>
+                        <span>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="dock-panel-menu-divider" />
+                  <button
+                    type="button"
+                    className={`dock-panel-menu-option dock-panel-menu-action ${showCanonChanges ? "active" : ""}`}
+                    onClick={() => {
+                      setShowCanonChanges(true);
+                      closeDockPanelMenu();
+                    }}
+                  >
+                    <GitPullRequest size={14} />
+                    <span>Review changes</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
             <button
-              key={kind as string}
               type="button"
-              className="context-menu-item"
-              onClick={() =>
-                setDockPanelInContextGroup(kind as Exclude<DockPanelKind, "document" | "outline">)
-              }
+              className="dock-icon-button"
+              onClick={() => setShowFeedback(true)}
+              title="Enviar feedback"
+              aria-label="Enviar feedback"
             >
-              <span className="dock-panel-check">{checked ? <Check size={12} /> : null}</span>
-              <span>{label}</span>
+              <MessageSquareText size={15} />
             </button>
-          ))}
-        </div>
-      ) : null}
-      {documentGroupContextMenu ? (
-        <div
-          className="context-menu document-group-context-menu"
-          style={{
-            left: `${documentGroupContextMenu.x}px`,
-            top: `${documentGroupContextMenu.y}px`,
-          }}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => void renameDocumentGroup(documentGroupContextMenu.groupId)}
-          >
-            <FileEdit size={16} />
-            <span>Rename group</span>
-          </button>
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => cycleDocumentGroupColor(documentGroupContextMenu.groupId)}
-          >
-            <Circle size={16} />
-            <span>Change color</span>
-          </button>
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => toggleDocumentGroup(documentGroupContextMenu.groupId)}
-          >
-            <ChevronRight size={16} />
-            <span>Collapse / Expand</span>
-          </button>
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => ungroupDocumentGroup(documentGroupContextMenu.groupId)}
-          >
-            <Files size={16} />
-            <span>Ungroup tabs</span>
-          </button>
-          <button
-            type="button"
-            className="context-menu-item danger"
-            onClick={() => closeDocumentGroupTabs(documentGroupContextMenu.groupId)}
-          >
-            <X size={16} />
-            <span>Close group tabs</span>
-          </button>
-        </div>
-      ) : null}
-      {showSettings ? (
-        <Suspense fallback={<LazyPanelFallback label="Loading settings..." />}>
-          <SettingsModal
-            settings={settings}
-            universe={universeSettings}
-            initialSection={settingsInitialSection}
-            initialPropertiesMode={settingsInitialPropertiesMode}
-            onChange={setSettings}
-            onSaveUniverseProfile={saveUniverseProfile}
-            onSavePropertiesConfig={savePropertiesConfig}
-            onInitializePropertiesWorkspace={initializeUniverseProperties}
-            onScanFrontmatterNormalization={scanFrontmatterNormalization}
-            onApplyFrontmatterNormalization={applyFrontmatterNormalization}
-            onScanPropertyNormalization={scanPropertyNormalization}
-            onApplyPropertyNormalization={applyFrontmatterNormalization}
-            onScanPropertyStructureMigration={scanPropertyStructureMigration}
-            onApplyPropertyStructureMigration={applyPropertyStructureMigration}
-            onClose={() => setShowSettings(false)}
-            onRevealUniverse={() => {
-              void revealExplorerPath();
-            }}
-            onOpenUniverseNote={openUniverseNote}
-            onResetOnboarding={restartWorldNotionOnboarding}
-            revealUniverseLabel={labels.revealUniverse}
-            suiteSettings={suiteChrome?.suiteSettings}
-          />
-        </Suspense>
-      ) : null}
-
-      {showCommandPalette ? (
-        <Suspense fallback={<LazyPanelFallback label="Loading command palette..." />}>
-          <CommandPalette
-            isOpen={showCommandPalette}
-            onClose={() => setShowCommandPalette(false)}
-            fileResults={buildFileResults(index)}
-            commandResults={buildCommandResults(settings.keybindings)}
-            headerResults={buildHeaderResults(activeTab?.rawMarkdown || "")}
-            tagResults={buildTagResults(index)}
-            recentFiles={settings.explorer.recentFiles}
-            favorites={settings.explorer.favorites.map((f) => f.path)}
-            fileAccessStats={currentSession?.fileAccessStats}
-            taxonomyConfig={index?.propertiesConfig}
-            onSelectFile={(path) => {
-              openOrCreateTab(path);
-              setShowCommandPalette(false);
-            }}
-            onSelectCommand={(commandId) => {
-              setShowCommandPalette(false);
-              void executeCommand(commandId);
-            }}
-            onSelectHeader={(line) => {
-              if (editorViewRef.current) {
-                const state = editorViewRef.current.state;
-                const lineInfo = state.doc.line(line);
-                void scrollEditorTo(lineInfo.from);
-              }
-              setShowCommandPalette(false);
-            }}
-            onSelectTag={(tag) => {
-              setQuery(tag);
-              setShowCommandPalette(false);
-            }}
-          />
-        </Suspense>
-      ) : null}
-
-      {showQuickSwitcher ? (
-        <Suspense fallback={<LazyPanelFallback label="Loading quick switcher..." />}>
-          <CommandPalette
-            isOpen={showQuickSwitcher}
-            onClose={() => setShowQuickSwitcher(false)}
-            fileResults={buildFileResults(index)}
-            commandResults={[]}
-            headerResults={[]}
-            tagResults={[]}
-            fileAccessStats={currentSession?.fileAccessStats}
-            quickSwitcherMode={true}
-            taxonomyConfig={index?.propertiesConfig}
-            onSelectFile={(path) => {
-              openOrCreateTab(path);
-              setShowQuickSwitcher(false);
-            }}
-            onSelectCommand={() => {}}
-            onSelectHeader={() => {}}
-            onSelectTag={() => {}}
-          />
-        </Suspense>
-      ) : null}
-
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          targetPath={contextMenu.targetPath}
-          targetKind={contextMenu.targetKind}
-          templates={index?.templates.map((t) => t.type) || []}
-          isFavorite={favoritePaths.has(contextMenu.targetPath)}
-          isImage={isImagePath(contextMenu.targetPath)}
-          canReveal={!browserRoot}
-          revealLabel={labels.revealItem}
-          revealUniverseLabel={labels.revealUniverse}
-          trashLabel={browserRoot ? "Delete" : labels.trashAction}
-          hasFolderDescription={
-            contextMenu.targetKind === "folder" && index
-              ? folderDescriptionInfo(index, contextMenu.targetPath).hasDescription
-              : false
-          }
-          folderNotesEnabled={settings.explorer.folderNotesEnabled}
-          canPromoteToFolderNote={
-            contextMenu.targetKind === "file" && index && dirname(contextMenu.targetPath)
-              ? !folderDescriptionInfo(index, dirname(contextMenu.targetPath)).hasDescription
-              : false
-          }
-          onAction={handleContextMenuAction}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-
-      {imagePreviewPath && index ? (
-        <ImagePreviewDialog
-          index={index}
-          path={imagePreviewPath}
-          onClose={() => setImagePreviewPath(undefined)}
-        />
-      ) : null}
-
-      {iconPickerState && (
-        <IconPicker
-          x={iconPickerState.x}
-          y={iconPickerState.y}
-          onSelect={(iconName) => {
-            setCustomIcon(iconPickerState.targetPath, iconName);
-            showToast(`Icon changed to ${iconName}`, "success");
-          }}
-          onClose={() => setIconPickerState(null)}
-        />
-      )}
-
-      {tabContextMenu ? (
-        <div
-          className="context-menu tab-context-menu"
-          style={{ left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px` }}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => createDocumentGroup(tabContextMenu.path)}
-          >
-            <Files size={16} />
-            <span>New group from tab</span>
-          </button>
-          {documentTabGroups.map((group) => (
             <button
-              key={group.id}
               type="button"
-              className="context-menu-item"
-              onClick={() => addTabToDocumentGroup(tabContextMenu.path, group.id)}
+              className="dock-icon-button"
+              onClick={toggleBuiltinTheme}
+              title="Toggle theme"
+              aria-label="Toggle theme"
             >
-              <Circle size={16} style={{ color: group.color }} />
-              <span>Add to {group.name}</span>
+              {activeThemeIsDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
-          ))}
-          {documentTabGroups.some((group) => group.tabPaths.includes(tabContextMenu.path)) ? (
+          </div>
+        </div>
+        <DockWorkspace
+          layout={workspaceLayout}
+          renderTab={renderDockTab}
+          dirtyDocumentPaths={dirtyTabPaths}
+          folderDescriptionPaths={folderDescriptionPaths}
+          documentTabGroups={documentTabGroups}
+          onSelectTab={handleDockSelect}
+          onCloseTab={handleDockClose}
+          onTabContextMenu={(tab, x, y) => {
+            if (tab.kind === "document" && tab.path) {
+              setTabContextMenu({ x, y, path: tab.path });
+            }
+          }}
+          onGroupContextMenu={(groupId, x, y) => setDockPanelContextMenu({ groupId, x, y })}
+          onMoveTab={handleDockMove}
+          onDocumentGroupToggle={(group) => toggleDocumentGroup(group.id)}
+          onDocumentGroupContextMenu={(group, x, y) =>
+            setDocumentGroupContextMenu({ groupId: group.id, x, y })
+          }
+          onResizeSplit={handleDockResize}
+          onOpenDocument={() => setShowCommandPalette(true)}
+          renderEmptyDocuments={() => (
+            <div className="writing-empty-widget">
+              <FileText size={28} />
+              <strong>Explore {universeDisplayName(index)}</strong>
+              <button
+                type="button"
+                onClick={() => setShowCommandPalette(true)}
+                title="Open Command Palette"
+              >
+                <Search size={14} />
+                Search
+              </button>
+            </div>
+          )}
+        />
+        {!onboardingDismissed ? (
+          <OnboardingGuide
+            steps={worldNotionOnboardingSteps}
+            onDismiss={dismissWorldNotionOnboarding}
+            onRestart={restartWorldNotionOnboarding}
+          />
+        ) : null}
+        <CanonChangesDialog
+          open={showCanonChanges}
+          changes={canonChangeSets}
+          onApply={(change) => void applyCanonChangeSet(change)}
+          onDismiss={(change) => void dismissCanonChangeSet(change)}
+          onRefresh={() => void reindexUniverseMetadata()}
+          onClose={() => setShowCanonChanges(false)}
+        />
+        {dockPanelContextMenu ? (
+          <div
+            className="context-menu dock-panel-context-menu"
+            style={{ left: `${dockPanelContextMenu.x}px`, top: `${dockPanelContextMenu.y}px` }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {[
+              ["explorer", "Explorer", isExplorerPanelOpen],
+              ["graph", "Flow Map", isGraphPanelOpen],
+              ["inspector", "Inspector", isInspectorPanelOpen],
+              ...(aiAdvisorEnabled ? [["ai-advisor", "AI Advisor", isAiAdvisorPanelOpen]] : []),
+              ["links", "Links", isLinksPanelOpen],
+              ["backlinks", "Backlinks", isBacklinksPanelOpen],
+            ].map(([kind, label, checked]) => (
+              <button
+                key={kind as string}
+                type="button"
+                className="context-menu-item"
+                onClick={() =>
+                  setDockPanelInContextGroup(kind as Exclude<DockPanelKind, "document" | "outline">)
+                }
+              >
+                <span className="dock-panel-check">{checked ? <Check size={12} /> : null}</span>
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {documentGroupContextMenu ? (
+          <div
+            className="context-menu document-group-context-menu"
+            style={{
+              left: `${documentGroupContextMenu.x}px`,
+              top: `${documentGroupContextMenu.y}px`,
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <button
               type="button"
               className="context-menu-item"
-              onClick={() => removeTabFromDocumentGroup(tabContextMenu.path)}
+              onClick={() => void renameDocumentGroup(documentGroupContextMenu.groupId)}
+            >
+              <FileEdit size={16} />
+              <span>Rename group</span>
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => cycleDocumentGroupColor(documentGroupContextMenu.groupId)}
+            >
+              <Circle size={16} />
+              <span>Change color</span>
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => toggleDocumentGroup(documentGroupContextMenu.groupId)}
+            >
+              <ChevronRight size={16} />
+              <span>Collapse / Expand</span>
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => ungroupDocumentGroup(documentGroupContextMenu.groupId)}
             >
               <Files size={16} />
-              <span>Remove from group</span>
+              <span>Ungroup tabs</span>
             </button>
-          ) : null}
-          <div className="context-menu-separator" />
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => {
-              const path = tabContextMenu.path;
-              setTabContextMenu(null);
-              void closeTab(path);
-            }}
-          >
-            <X size={16} />
-            <span>Close tab</span>
-          </button>
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => {
-              closeOtherTabs(tabContextMenu.path);
-              setTabContextMenu(null);
-            }}
-          >
-            <X size={16} />
-            <span>Close others</span>
-          </button>
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => {
-              closeTabsToRight(tabContextMenu.path);
-              setTabContextMenu(null);
-            }}
-          >
-            <X size={16} />
-            <span>Close tabs to right</span>
-          </button>
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => {
-              void closeAllTabs();
-              setTabContextMenu(null);
-            }}
-          >
-            <X size={16} />
-            <span>Close all tabs</span>
-          </button>
-          <button
-            type="button"
-            className="context-menu-item"
-            onClick={() => {
-              closeSavedTabs();
-              setTabContextMenu(null);
-            }}
-          >
-            <X size={16} />
-            <span>Close saved tabs</span>
-          </button>
-        </div>
-      ) : null}
+            <button
+              type="button"
+              className="context-menu-item danger"
+              onClick={() => closeDocumentGroupTabs(documentGroupContextMenu.groupId)}
+            >
+              <X size={16} />
+              <span>Close group tabs</span>
+            </button>
+          </div>
+        ) : null}
+        {showSettings ? (
+          <Suspense fallback={<LazyPanelFallback label="Loading settings..." />}>
+            <SettingsModal
+              settings={settings}
+              universe={universeSettings}
+              initialSection={settingsInitialSection}
+              initialPropertiesMode={settingsInitialPropertiesMode}
+              onChange={setSettings}
+              onSaveUniverseProfile={saveUniverseProfile}
+              onSavePropertiesConfig={savePropertiesConfig}
+              onInitializePropertiesWorkspace={initializeUniverseProperties}
+              onScanFrontmatterNormalization={scanFrontmatterNormalization}
+              onApplyFrontmatterNormalization={applyFrontmatterNormalization}
+              onScanPropertyNormalization={scanPropertyNormalization}
+              onApplyPropertyNormalization={applyFrontmatterNormalization}
+              onScanPropertyStructureMigration={scanPropertyStructureMigration}
+              onApplyPropertyStructureMigration={applyPropertyStructureMigration}
+              onClose={() => setShowSettings(false)}
+              onRevealUniverse={() => {
+                void revealExplorerPath();
+              }}
+              onOpenUniverseNote={openUniverseNote}
+              onResetOnboarding={restartWorldNotionOnboarding}
+              revealUniverseLabel={labels.revealUniverse}
+              suiteSettings={suiteChrome?.suiteSettings}
+            />
+          </Suspense>
+        ) : null}
 
-      {inputOverlays}
-      {showFeedback ? <FeedbackModal screen="workspace" onClose={() => setShowFeedback(false)} onOpenExternal={openExternalUrl} /> : null}
-    </main>
+        {showCommandPalette ? (
+          <Suspense fallback={<LazyPanelFallback label="Loading command palette..." />}>
+            <CommandPalette
+              isOpen={showCommandPalette}
+              onClose={() => setShowCommandPalette(false)}
+              fileResults={buildFileResults(index)}
+              commandResults={buildCommandResults(settings.keybindings)}
+              headerResults={buildHeaderResults(activeTab?.rawMarkdown || "")}
+              tagResults={buildTagResults(index)}
+              recentFiles={settings.explorer.recentFiles}
+              favorites={settings.explorer.favorites.map((f) => f.path)}
+              fileAccessStats={currentSession?.fileAccessStats}
+              taxonomyConfig={index?.propertiesConfig}
+              onSelectFile={(path) => {
+                openOrCreateTab(path);
+                setShowCommandPalette(false);
+              }}
+              onSelectCommand={(commandId) => {
+                setShowCommandPalette(false);
+                void executeCommand(commandId);
+              }}
+              onSelectHeader={(line) => {
+                if (editorViewRef.current) {
+                  const state = editorViewRef.current.state;
+                  const lineInfo = state.doc.line(line);
+                  void scrollEditorTo(lineInfo.from);
+                }
+                setShowCommandPalette(false);
+              }}
+              onSelectTag={(tag) => {
+                setQuery(tag);
+                setShowCommandPalette(false);
+              }}
+            />
+          </Suspense>
+        ) : null}
+
+        {showQuickSwitcher ? (
+          <Suspense fallback={<LazyPanelFallback label="Loading quick switcher..." />}>
+            <CommandPalette
+              isOpen={showQuickSwitcher}
+              onClose={() => setShowQuickSwitcher(false)}
+              fileResults={buildFileResults(index)}
+              commandResults={[]}
+              headerResults={[]}
+              tagResults={[]}
+              fileAccessStats={currentSession?.fileAccessStats}
+              quickSwitcherMode={true}
+              taxonomyConfig={index?.propertiesConfig}
+              onSelectFile={(path) => {
+                openOrCreateTab(path);
+                setShowQuickSwitcher(false);
+              }}
+              onSelectCommand={() => {}}
+              onSelectHeader={() => {}}
+              onSelectTag={() => {}}
+            />
+          </Suspense>
+        ) : null}
+
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            targetPath={contextMenu.targetPath}
+            targetKind={contextMenu.targetKind}
+            templates={index?.templates.map((t) => t.type) || []}
+            isFavorite={favoritePaths.has(contextMenu.targetPath)}
+            isImage={isImagePath(contextMenu.targetPath)}
+            canReveal={!browserRoot}
+            revealLabel={labels.revealItem}
+            revealUniverseLabel={labels.revealUniverse}
+            trashLabel={browserRoot ? "Delete" : labels.trashAction}
+            hasFolderDescription={
+              contextMenu.targetKind === "folder" && index
+                ? folderDescriptionInfo(index, contextMenu.targetPath).hasDescription
+                : false
+            }
+            folderNotesEnabled={settings.explorer.folderNotesEnabled}
+            canPromoteToFolderNote={
+              contextMenu.targetKind === "file" && index && dirname(contextMenu.targetPath)
+                ? !folderDescriptionInfo(index, dirname(contextMenu.targetPath)).hasDescription
+                : false
+            }
+            onAction={handleContextMenuAction}
+            onClose={() => setContextMenu(null)}
+          />
+        )}
+
+        {imagePreviewPath && index ? (
+          <ImagePreviewDialog
+            index={index}
+            path={imagePreviewPath}
+            onClose={() => setImagePreviewPath(undefined)}
+          />
+        ) : null}
+
+        {iconPickerState && (
+          <IconPicker
+            x={iconPickerState.x}
+            y={iconPickerState.y}
+            onSelect={(iconName) => {
+              setCustomIcon(iconPickerState.targetPath, iconName);
+              showToast(`Icon changed to ${iconName}`, "success");
+            }}
+            onClose={() => setIconPickerState(null)}
+          />
+        )}
+
+        {tabContextMenu ? (
+          <div
+            className="context-menu tab-context-menu"
+            style={{ left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px` }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => createDocumentGroup(tabContextMenu.path)}
+            >
+              <Files size={16} />
+              <span>New group from tab</span>
+            </button>
+            {documentTabGroups.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                className="context-menu-item"
+                onClick={() => addTabToDocumentGroup(tabContextMenu.path, group.id)}
+              >
+                <Circle size={16} style={{ color: group.color }} />
+                <span>Add to {group.name}</span>
+              </button>
+            ))}
+            {documentTabGroups.some((group) => group.tabPaths.includes(tabContextMenu.path)) ? (
+              <button
+                type="button"
+                className="context-menu-item"
+                onClick={() => removeTabFromDocumentGroup(tabContextMenu.path)}
+              >
+                <Files size={16} />
+                <span>Remove from group</span>
+              </button>
+            ) : null}
+            <div className="context-menu-separator" />
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                const path = tabContextMenu.path;
+                setTabContextMenu(null);
+                void closeTab(path);
+              }}
+            >
+              <X size={16} />
+              <span>Close tab</span>
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                closeOtherTabs(tabContextMenu.path);
+                setTabContextMenu(null);
+              }}
+            >
+              <X size={16} />
+              <span>Close others</span>
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                closeTabsToRight(tabContextMenu.path);
+                setTabContextMenu(null);
+              }}
+            >
+              <X size={16} />
+              <span>Close tabs to right</span>
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                void closeAllTabs();
+                setTabContextMenu(null);
+              }}
+            >
+              <X size={16} />
+              <span>Close all tabs</span>
+            </button>
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                closeSavedTabs();
+                setTabContextMenu(null);
+              }}
+            >
+              <X size={16} />
+              <span>Close saved tabs</span>
+            </button>
+          </div>
+        ) : null}
+
+        {inputOverlays}
+        {showFeedback ? (
+          <FeedbackModal
+            screen="workspace"
+            onClose={() => setShowFeedback(false)}
+            onOpenExternal={openExternalUrl}
+          />
+        ) : null}
+      </main>
     </WorldnotionLocaleProvider>
   );
 }

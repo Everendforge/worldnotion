@@ -12,11 +12,11 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function createView(doc: string, anchor: number) {
+function createView(doc: string, anchor: number, presentation: "processed" | "semi" = "semi") {
   const state = EditorState.create({
     doc,
     selection: { anchor },
-    extensions: [markdown({ base: markdownLanguage }), markdownSyntaxPlugin],
+    extensions: [markdown({ base: markdownLanguage }), markdownSyntaxPlugin(presentation)],
   });
   ensureSyntaxTree(state, doc.length, 5000);
   const view = new EditorView({ state, parent: document.body });
@@ -69,6 +69,13 @@ describe("markdownSyntaxPlugin", () => {
     expect(view.dom.querySelector(".cm-markdown-syntax-muted")).not.toBeNull();
   });
 
+  it("never reveals markers under the cursor in processed mode", () => {
+    const view = createView(doc, doc.indexOf("bold") + 2, "processed");
+
+    expect(view.dom.textContent).not.toContain("**bold**");
+    expect(view.dom.querySelector(".cm-markdown-syntax-muted")).toBeNull();
+  });
+
   it("reveals heading syntax when the cursor is on the heading line", () => {
     const view = createView(doc, doc.indexOf("Heading"));
     const text = view.dom.textContent ?? "";
@@ -106,7 +113,7 @@ describe("markdownSyntaxPlugin", () => {
 
   it("styles fenced code blocks with muted fences and a copy button", () => {
     const codeDoc = "intro\n\n```js\nconst x = 1;\n```\n";
-    const view = createView(codeDoc, 0);
+    const view = createView(codeDoc, codeDoc.indexOf("const"));
 
     expect(view.dom.querySelector(".cm-md-codeblock-line")).not.toBeNull();
     expect(view.dom.querySelector(".cm-md-code-lang")?.textContent).toBe("js");

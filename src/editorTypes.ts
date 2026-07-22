@@ -1,4 +1,6 @@
 export type EditorMode = "write" | "source";
+export type WritingMode = "processed" | "semi";
+export type DefaultEditorMode = WritingMode | "source";
 export type SourceViewMode = "raw" | "json" | "xml";
 export type EditorPageStyle = "theme" | "white" | "warm-paper" | "system" | "custom";
 export type ThemeId =
@@ -117,13 +119,11 @@ export type EditorSettings = {
   activeLine: boolean;
   fontSize: number;
   tabSize: number;
-  defaultMode: EditorMode;
+  defaultMode: DefaultEditorMode;
   pageStyle: EditorPageStyle;
   customPageColor: string;
   writeFontFamily: string;
   sourceFontFamily: string;
-  /** Controls whether Write mode exposes portable Markdown syntax. */
-  writeStructureMode: "visible" | "processed";
   persistTabs: boolean;
   reuseOpenTabs: boolean;
   dockTabScale: number;
@@ -178,6 +178,8 @@ export type OpenTab = {
   title: string;
   dirty: boolean;
   mode: EditorMode;
+  /** Last Writing presentation used by this tab, retained while Source is active. */
+  writingMode: WritingMode;
   sourceView?: SourceViewMode;
   modifiedMs?: number | null;
   isTemplate: boolean;
@@ -189,7 +191,7 @@ export type OpenTab = {
 export type PersistedOpenTab = Pick<
   OpenTab,
   "path" | "title" | "mode" | "sourceView" | "modifiedMs" | "isTemplate"
->;
+> & { writingMode?: WritingMode };
 
 export type DocumentTabGroup = {
   id: string;
@@ -571,13 +573,12 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   activeLine: true,
   fontSize: 14,
   tabSize: 2,
-  defaultMode: "write",
+  defaultMode: "processed",
   pageStyle: "theme",
   customPageColor: "#ffffff",
   writeFontFamily:
     'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   sourceFontFamily: '"SFMono-Regular", Consolas, monospace',
-  writeStructureMode: "processed",
   persistTabs: true,
   reuseOpenTabs: true,
   dockTabScale: 1.25,

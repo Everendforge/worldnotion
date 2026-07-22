@@ -8,6 +8,7 @@ function tab(overrides: Partial<OpenTab> = {}): OpenTab {
     title: "Ada",
     dirty: true,
     mode: "write",
+    writingMode: "processed",
     modifiedMs: 10,
     isTemplate: false,
     absolutePath: "C:/Vault/Notes/Ada.md",

@@ -69,12 +69,9 @@ export function validateBrowserPathSegment(
   }
   if (segment.startsWith(".")) {
     const isEverendRoot = segment === ".everend" && (context.index ?? 0) === 0;
-    const isPathBranchingMetadata =
-      segment === ".pathbranching" && context.index === 1 && context.parts?.[0] === ".everend";
-    if (!isEverendRoot && !isPathBranchingMetadata) {
-      throw new Error(
-        "Browser vault paths can only use .everend and .everend/.pathbranching as hidden segments.",
-      );
+    const isEverendMetadata = (context.index ?? 0) > 0 && context.parts?.[0] === ".everend";
+    if (!isEverendRoot && !isEverendMetadata) {
+      throw new Error("Browser vault paths can only use hidden segments inside .everend.");
     }
   }
 }
@@ -85,42 +82,55 @@ export async function readBrowserUniverse(root: BrowserDirectoryHandle): Promise
   const errors: VaultReadResult["errors"] = [];
 
   async function walk(directory: BrowserDirectoryHandle, prefix: string) {
-    for await (const [name, handle] of directory.entries()) {
-      const relativePath = prefix ? `${prefix}/${name}` : name;
-      const maybeDirectory = handle as BrowserDirectoryHandle;
-      const maybeFile = handle as BrowserFileHandle;
+    try {
+      for await (const [name, handle] of directory.entries()) {
+        const relativePath = prefix ? `${prefix}/${name}` : name;
+        const maybeDirectory = handle as BrowserDirectoryHandle;
+        const maybeFile = handle as BrowserFileHandle;
 
-      if ("entries" in maybeDirectory) {
-        // Allow dot-folders inside .everend (like .worldnotion)
-        // Otherwise, only allow .everend at root level
-        const isInsideEverend = prefix === ".everend" || prefix.startsWith(".everend/");
-        if (name.startsWith(".") && !isInsideEverend && name !== ".everend") continue;
-        directories.push(relativePath);
-        await walk(maybeDirectory, relativePath);
-        continue;
+        if ("entries" in maybeDirectory) {
+          // Allow dot-folders inside .everend (like .worldnotion)
+          // Otherwise, only allow .everend at root level
+          const isInsideEverend = prefix === ".everend" || prefix.startsWith(".everend/");
+          if (name.startsWith(".") && !isInsideEverend && name !== ".everend") continue;
+          directories.push(relativePath);
+          await walk(maybeDirectory, relativePath);
+          continue;
+        }
+
+        const isTextFile = isIndexedTextFile(relativePath);
+        const isImageFile = isVaultImageFile(relativePath);
+        if (!isTextFile && !isImageFile) continue;
+
+        try {
+          const file = await maybeFile.getFile();
+          files.push({
+            relativePath,
+            // Images must be present in the index so Markdown references and
+            // image property pickers can find them. Do not decode their binary
+            // contents as text: previews read the File on demand instead.
+            content: isTextFile ? await file.text() : "",
+            binary: isImageFile || undefined,
+            modifiedMs: file.lastModified,
+          });
+        } catch (error) {
+          errors.push({
+            relativePath,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
-
-      const isTextFile = isIndexedTextFile(relativePath);
-      const isImageFile = isVaultImageFile(relativePath);
-      if (!isTextFile && !isImageFile) continue;
-
-      try {
-        const file = await maybeFile.getFile();
-        files.push({
-          relativePath,
-          // Images must be present in the index so Markdown references and
-          // image property pickers can find them. Do not decode their binary
-          // contents as text: previews read the File on demand instead.
-          content: isTextFile ? await file.text() : "",
-          binary: isImageFile || undefined,
-          modifiedMs: file.lastModified,
-        });
-      } catch (error) {
-        errors.push({
-          relativePath,
-          message: error instanceof Error ? error.message : String(error),
-        });
+    } catch (error) {
+      if (!prefix) {
+        throw new Error(
+          `WorldNotion could not read the selected folder: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error },
+        );
       }
+      errors.push({
+        relativePath: prefix,
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

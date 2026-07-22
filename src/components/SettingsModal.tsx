@@ -55,8 +55,12 @@ import {
   normalizeLocaleNames,
 } from "../utils/localization";
 import "../App.css";
-import { interfaceLocaleCopy, resolveInterfaceLocale, worldnotionSettingsCopy } from "../i18n";
-
+import {
+  interfaceLocaleCopy,
+  resolveInterfaceLocale,
+  worldnotionEditorModeCopy,
+  worldnotionSettingsCopy,
+} from "../i18n";
 
 type SettingsModalProps = {
   settings: AppSettingsV4;
@@ -281,10 +285,6 @@ function readImageFile(file: File) {
   });
 }
 
-
-
-
-
 function SuiteLicenseSettings({ license }: { license: SuiteSettings["license"] }) {
   const [keyDraft, setKeyDraft] = useState("");
   const isActive = license.status === "active";
@@ -347,7 +347,11 @@ function SuiteLicenseSettings({ license }: { license: SuiteSettings["license"] }
                 <h4 id="forge-license-devices-title">Dispositivos</h4>
                 <p>Consulta y desactiva las activaciones de esta licencia.</p>
               </div>
-              <button type="button" onClick={license.onLoadDevices} disabled={isBusy || license.devicesStatus === "loading"}>
+              <button
+                type="button"
+                onClick={license.onLoadDevices}
+                disabled={isBusy || license.devicesStatus === "loading"}
+              >
                 {license.devicesStatus === "loading"
                   ? "Cargando..."
                   : license.instances
@@ -355,7 +359,11 @@ function SuiteLicenseSettings({ license }: { license: SuiteSettings["license"] }
                     : "Ver dispositivos"}
               </button>
             </div>
-            {license.devicesError ? <p className="forge-license-error" role="alert">{license.devicesError}</p> : null}
+            {license.devicesError ? (
+              <p className="forge-license-error" role="alert">
+                {license.devicesError}
+              </p>
+            ) : null}
             {license.instances ? (
               license.instances.length ? (
                 <ul className="forge-license-device-list">
@@ -379,17 +387,26 @@ function SuiteLicenseSettings({ license }: { license: SuiteSettings["license"] }
                   })}
                 </ul>
               ) : (
-                <p className="forge-license-devices-empty">No hay dispositivos activos para esta licencia.</p>
+                <p className="forge-license-devices-empty">
+                  No hay dispositivos activos para esta licencia.
+                </p>
               )
             ) : null}
           </section>
         </>
       ) : (
         <>
-          <div className={`forge-license-status ${license.status === "error" ? "error" : ""}`} role="status">
+          <div
+            className={`forge-license-status ${license.status === "error" ? "error" : ""}`}
+            role="status"
+          >
             <KeyRound size={18} />
             <div>
-              <strong>{license.status === "error" ? "No se pudo verificar la licencia" : "Licencia no activada"}</strong>
+              <strong>
+                {license.status === "error"
+                  ? "No se pudo verificar la licencia"
+                  : "Licencia no activada"}
+              </strong>
               <p>Introduce una clave de Lemon Squeezy para habilitar la Suite.</p>
             </div>
           </div>
@@ -411,7 +428,11 @@ function SuiteLicenseSettings({ license }: { license: SuiteSettings["license"] }
               />
             </label>
             <div className="settings-actions">
-              <button type="submit" className="primary-action" disabled={!keyDraft.trim() || isBusy}>
+              <button
+                type="submit"
+                className="primary-action"
+                disabled={!keyDraft.trim() || isBusy}
+              >
                 {isBusy ? "Verificando..." : "Activar licencia"}
               </button>
             </div>
@@ -419,12 +440,15 @@ function SuiteLicenseSettings({ license }: { license: SuiteSettings["license"] }
         </>
       )}
 
-      {license.error ? <p className="forge-license-error" role="alert">{license.error}</p> : null}
+      {license.error ? (
+        <p className="forge-license-error" role="alert">
+          {license.error}
+        </p>
+      ) : null}
       <small>La clave se guarda en el llavero seguro del sistema operativo.</small>
     </div>
   );
 }
-
 
 type SettingsSection =
   | "suite"
@@ -438,10 +462,7 @@ type SettingsSection =
   | "ai-advisor"
   | "help";
 
-type AppearanceBehaviorTab =
-  | "appearance"
-  | "editor"
-  | "workspace";
+type AppearanceBehaviorTab = "appearance" | "editor" | "workspace";
 
 const primaryFontOptions = [
   ["sans", "Sans serif"],
@@ -474,13 +495,14 @@ export function SettingsModal({
   const [activeSection, setActiveSection] = useState<SettingsSection>(
     initialSection ?? (universe ? "overview" : "appearance-behavior"),
   );
-  const [appearanceBehaviorTab, setAppearanceBehaviorTab] = useState<AppearanceBehaviorTab>("appearance");
-  const interfaceCopy = interfaceLocaleCopy(
-    resolveInterfaceLocale(suiteSettings?.localePreference ?? settings.localePreference ?? "system"),
+  const [appearanceBehaviorTab, setAppearanceBehaviorTab] =
+    useState<AppearanceBehaviorTab>("appearance");
+  const interfaceLocale = resolveInterfaceLocale(
+    suiteSettings?.localePreference ?? settings.localePreference ?? "system",
   );
-  const settingsText = worldnotionSettingsCopy(
-    resolveInterfaceLocale(suiteSettings?.localePreference ?? settings.localePreference ?? "system"),
-  );
+  const interfaceCopy = interfaceLocaleCopy(interfaceLocale);
+  const settingsText = worldnotionSettingsCopy(interfaceLocale);
+  const editorModeText = worldnotionEditorModeCopy(interfaceLocale);
   const [conflictMessage, setConflictMessage] = useState("");
   const [profileDraft, setProfileDraft] = useState<UniverseProfile>(() => ({
     name: universe?.profile?.name ?? universe?.name,
@@ -763,7 +785,7 @@ export function SettingsModal({
             ) : null}
             {universe ? (
               <div className="settings-nav-group">
-              <p>{settingsText.universe}</p>
+                <p>{settingsText.universe}</p>
                 <button
                   className={activeSection === "overview" ? "active" : ""}
                   onClick={() => setActiveSection("overview")}
@@ -840,7 +862,11 @@ export function SettingsModal({
                     <span>{interfaceCopy.interfaceLanguage}</span>
                     <select
                       value={suiteSettings.localePreference}
-                      onChange={(event) => suiteSettings.onLocalePreferenceChange(event.target.value as "system" | "en" | "es")}
+                      onChange={(event) =>
+                        suiteSettings.onLocalePreferenceChange(
+                          event.target.value as "system" | "en" | "es",
+                        )
+                      }
                     >
                       <option value="system">{interfaceCopy.system}</option>
                       <option value="en">English</option>
@@ -1190,7 +1216,10 @@ export function SettingsModal({
                         <select
                           value={settings.localePreference ?? "system"}
                           onChange={(event) =>
-                            onChange({ ...settings, localePreference: event.target.value as "system" | "en" | "es" })
+                            onChange({
+                              ...settings,
+                              localePreference: event.target.value as "system" | "en" | "es",
+                            })
                           }
                         >
                           <option value="system">{interfaceCopy.system}</option>
@@ -1245,7 +1274,9 @@ export function SettingsModal({
                       <input
                         type="checkbox"
                         checked={settings.editor.showPaperShadow}
-                        onChange={(event) => updateEditor({ showPaperShadow: event.target.checked })}
+                        onChange={(event) =>
+                          updateEditor({ showPaperShadow: event.target.checked })
+                        }
                       />
                     </label>
                     <h3
@@ -1315,7 +1346,9 @@ export function SettingsModal({
                           min={2}
                           max={8}
                           value={settings.editor.tabSize}
-                          onChange={(event) => updateEditor({ tabSize: Number(event.target.value) })}
+                          onChange={(event) =>
+                            updateEditor({ tabSize: Number(event.target.value) })
+                          }
                         />
                       </label>
                       <label>
@@ -1335,21 +1368,6 @@ export function SettingsModal({
                         />
                       </label>
                       <label>
-                        <span>{settingsText.writingStructures}</span>
-                        <select
-                          value={settings.editor.writeStructureMode}
-                          onChange={(event) =>
-                            updateEditor({
-                              writeStructureMode: event.target
-                                .value as EditorSettings["writeStructureMode"],
-                            })
-                          }
-                        >
-                          <option value="processed">{settingsText.processed}</option>
-                          <option value="visible">{settingsText.visibleStructures}</option>
-                        </select>
-                      </label>
-                      <label>
                         <span>{settingsText.defaultMode}</span>
                         <select
                           value={settings.editor.defaultMode}
@@ -1359,8 +1377,9 @@ export function SettingsModal({
                             })
                           }
                         >
-                          <option value="write">{settingsText.write}</option>
-                          <option value="source">{settingsText.source}</option>
+                          <option value="processed">{editorModeText.processed}</option>
+                          <option value="semi">{editorModeText.semi}</option>
+                          <option value="source">{editorModeText.source}</option>
                         </select>
                       </label>
 
@@ -1421,7 +1440,9 @@ export function SettingsModal({
                           <select
                             value={settings.editor.outlinePosition}
                             onChange={(event) =>
-                              updateEditor({ outlinePosition: event.target.value as "left" | "right" })
+                              updateEditor({
+                                outlinePosition: event.target.value as "left" | "right",
+                              })
                             }
                           >
                             <option value="left">{settingsText.left}</option>
@@ -1522,7 +1543,9 @@ export function SettingsModal({
                           step={0.05}
                           value={settings.editor.dockTabScale}
                           onChange={(event) =>
-                            updateEditor({ dockTabScale: dockTabScaleFromInput(event.target.value) })
+                            updateEditor({
+                              dockTabScale: dockTabScaleFromInput(event.target.value),
+                            })
                           }
                         />
                       </label>
@@ -1556,7 +1579,9 @@ export function SettingsModal({
                         <input
                           type="checkbox"
                           checked={settings.editor.reuseOpenTabs}
-                          onChange={(event) => updateEditor({ reuseOpenTabs: event.target.checked })}
+                          onChange={(event) =>
+                            updateEditor({ reuseOpenTabs: event.target.checked })
+                          }
                         />
                       </label>
                       <label>
@@ -1631,7 +1656,10 @@ export function SettingsModal({
                           onChange={(event) =>
                             onChange({
                               ...settings,
-                              explorer: { ...settings.explorer, confirmDragMove: event.target.checked },
+                              explorer: {
+                                ...settings.explorer,
+                                confirmDragMove: event.target.checked,
+                              },
                             })
                           }
                         />
@@ -1644,7 +1672,10 @@ export function SettingsModal({
                           onChange={(event) =>
                             onChange({
                               ...settings,
-                              explorer: { ...settings.explorer, showHiddenEverend: event.target.checked },
+                              explorer: {
+                                ...settings.explorer,
+                                showHiddenEverend: event.target.checked,
+                              },
                             })
                           }
                         />
@@ -2222,8 +2253,6 @@ export function SettingsModal({
                 </div>
               </div>
             ) : null}
-
-
           </section>
         </div>
       </div>

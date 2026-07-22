@@ -42,6 +42,7 @@ function renderPanel(
       folderNotesEnabled={false}
       pointerDragActive={false}
       templatesExpanded={false}
+      expandedPaths={new Set()}
       onToggleTemplatesExpanded={vi.fn()}
       onCreateTemplate={vi.fn()}
       onSelectPath={vi.fn()}

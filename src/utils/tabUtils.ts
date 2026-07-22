@@ -1,8 +1,11 @@
 import type { VaultFile } from "../domain";
 import type {
   DocumentTabGroup,
+  DefaultEditorMode,
+  EditorMode,
   OpenTab,
   SourceViewMode,
+  WritingMode,
   WorkspaceLayoutV1,
   WorkspaceSession,
 } from "../editorTypes";
@@ -29,10 +32,14 @@ function defaultSourceView(path: string): SourceViewMode {
 
 export function createOpenTabFromFile(
   file: VaultFile,
-  mode: OpenTab["mode"],
+  requestedMode: DefaultEditorMode | EditorMode,
   sourceView?: SourceViewMode,
+  retainedWritingMode: WritingMode = "processed",
 ): OpenTab {
   const opensAsStructuredSource = isJsonPath(file.relativePath) || isXmlPath(file.relativePath);
+  const mode = requestedMode === "source" ? "source" : "write";
+  const writingMode =
+    requestedMode === "processed" || requestedMode === "semi" ? requestedMode : retainedWritingMode;
   return {
     path: file.relativePath,
     title: fileTitle(file.relativePath),
@@ -42,8 +49,29 @@ export function createOpenTabFromFile(
     modifiedMs: file.modifiedMs,
     dirty: false,
     mode: opensAsStructuredSource ? "source" : mode,
+    writingMode,
     sourceView: sourceView ?? defaultSourceView(file.relativePath),
     isTemplate: file.relativePath.startsWith(".everend/templates/"),
+  };
+}
+
+/** Changes only editor presentation; content, save metadata, and dirty state stay untouched. */
+export function withTabEditorMode(tab: OpenTab, requestedMode: EditorMode | WritingMode): OpenTab {
+  if (isJsonPath(tab.path) || isXmlPath(tab.path)) {
+    return {
+      ...tab,
+      mode: "source",
+      sourceView: tab.sourceView ?? defaultSourceView(tab.path),
+    };
+  }
+  if (requestedMode === "processed" || requestedMode === "semi") {
+    return { ...tab, mode: "write", writingMode: requestedMode };
+  }
+  return {
+    ...tab,
+    mode: requestedMode,
+    sourceView:
+      requestedMode === "source" ? (tab.sourceView ?? defaultSourceView(tab.path)) : tab.sourceView,
   };
 }
 
@@ -62,6 +90,7 @@ export function serializeWorkspaceSession(
       path: tab.path,
       title: tab.title,
       mode: tab.mode,
+      writingMode: tab.writingMode,
       sourceView: tab.sourceView,
       modifiedMs: tab.modifiedMs,
       isTemplate: tab.isTemplate,

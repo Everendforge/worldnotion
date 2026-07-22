@@ -1,5 +1,7 @@
 import { EditorState, Range, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import type { WritingMode } from "../editorTypes";
+import { selectionTouches } from "./pluginUtils";
 
 type TableAlignment = "left" | "center" | "right";
 
@@ -312,9 +314,16 @@ class EditableTableWidget extends WidgetType {
   }
 }
 
-function tableDecorations(state: EditorState): DecorationSet {
+function tableDecorations(state: EditorState, presentation: WritingMode): DecorationSet {
   const decorations: Range<Decoration>[] = [];
+  const selection = state.selection.main;
   for (const tableData of tablesInDocument(state)) {
+    if (
+      presentation === "semi" &&
+      selectionTouches(selection.from, selection.to, tableData.from, tableData.to)
+    ) {
+      continue;
+    }
     decorations.push(
       Decoration.replace({
         block: true,
@@ -326,16 +335,16 @@ function tableDecorations(state: EditorState): DecorationSet {
   return Decoration.set(decorations, true);
 }
 
-const tableDecorationField = StateField.define<DecorationSet>({
-  create: tableDecorations,
-  update(decorations, transaction) {
-    if (transaction.docChanged) return tableDecorations(transaction.state);
-    return decorations;
-  },
-  provide: (field) => EditorView.decorations.from(field),
-});
-
 /** Renders GFM tables as an in-place editable grid in Write mode. */
-export function tablePlugin() {
-  return tableDecorationField;
+export function tablePlugin(presentation: WritingMode = "processed") {
+  return StateField.define<DecorationSet>({
+    create: (state) => tableDecorations(state, presentation),
+    update(decorations, transaction) {
+      if (transaction.docChanged || transaction.selection) {
+        return tableDecorations(transaction.state, presentation);
+      }
+      return decorations;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+  });
 }

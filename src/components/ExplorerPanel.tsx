@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
+  ChevronsDown,
+  ChevronsUp,
   FileEdit,
   FileText,
   Files,
@@ -112,6 +114,7 @@ export type ExplorerPanelProps = {
   customIcons?: Record<string, string>;
   pointerDragActive: boolean;
   templatesExpanded: boolean;
+  expandedPaths: Set<string>;
   onToggleTemplatesExpanded: () => void;
   onCreateTemplate: () => void;
   onSelectPath: (path: string) => void;
@@ -157,6 +160,7 @@ export function ExplorerPanel({
   customIcons,
   pointerDragActive,
   templatesExpanded,
+  expandedPaths,
   onToggleTemplatesExpanded,
   onCreateTemplate,
   onSelectPath,
@@ -179,6 +183,7 @@ export function ExplorerPanel({
   const [ecosystemGroupBy, setEcosystemGroupBy] = useState("type");
   const [ecosystemMatchMode, setEcosystemMatchMode] = useState<"all" | "any">("all");
   const [ecosystemFilters, setEcosystemFilters] = useState<EcosystemPropertyFilter[]>([]);
+  const [depthMenuOpen, setDepthMenuOpen] = useState(false);
   const nextEcosystemFilterId = useRef(1);
   const sidebarMainRef = useRef<HTMLDivElement>(null);
   const scrollFrameRef = useRef<number>(undefined);
@@ -259,6 +264,20 @@ export function ExplorerPanel({
     });
     return groups;
   }, [ecosystemEntities, ecosystemGroupBy, index]);
+
+  const maxDepth = useMemo(() => {
+    return Math.max(...visibleRows.map((row) => row.depth ?? 0), 0);
+  }, [visibleRows]);
+
+  const scrollToSelected = useCallback(() => {
+    if (!selectedPath || !sidebarMainRef.current) return;
+    const element = sidebarMainRef.current.querySelector(
+      `[data-explorer-path="${selectedPath.replace(/"/g, '\\"')}"]`,
+    );
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedPath]);
 
   useEffect(() => {
     const element = sidebarMainRef.current;
@@ -358,21 +377,72 @@ export function ExplorerPanel({
       </nav>
 
       <nav className="explorer-tree-actions" aria-label="Explorer expansion actions">
-        <button type="button" onClick={() => onTreeAction("collapseAll")}>
-          Collapse
+        {(() => {
+          const relevantRows = focusedFolderPath
+            ? visibleRows.filter((row) => row.path.startsWith(focusedFolderPath))
+            : visibleRows;
+          const hasExpandedFolders = relevantRows.some(
+            (row) => row.kind === "folder" && expandedPaths.has(row.path),
+          );
+          return (
+            <button
+              type="button"
+              onClick={() => onTreeAction(hasExpandedFolders ? "collapseAll" : "expandDepth1")}
+              title={hasExpandedFolders ? "Collapse all folders" : "Expand all folders"}
+              className="explorer-action-button"
+            >
+              {hasExpandedFolders ? (
+                <ChevronsUp size={16} />
+              ) : (
+                <ChevronsDown size={16} />
+              )}
+            </button>
+          );
+        })()}
+        <button
+          type="button"
+          onClick={() => scrollToSelected()}
+          title="Go to selected item"
+          className="explorer-action-button"
+          disabled={!selectedPath}
+        >
+          <Target size={16} />
         </button>
-        <button type="button" onClick={() => onTreeAction("expandSelected")}>
-          Selected
-        </button>
-        <button type="button" onClick={() => onTreeAction("expandDepth1")}>
-          D1
-        </button>
-        <button type="button" onClick={() => onTreeAction("expandDepth2")}>
-          D2
-        </button>
-        <button type="button" onClick={() => onTreeAction("expandDepth3")}>
-          D3
-        </button>
+        <div className="explorer-depth-menu">
+          <button
+            type="button"
+            onClick={() => setDepthMenuOpen(!depthMenuOpen)}
+            title="Expand by depth"
+            className="explorer-action-button explorer-depth-button"
+          >
+            <span className="depth-label">⋯</span>
+          </button>
+          {depthMenuOpen && maxDepth > 0 && (
+            <div className="explorer-depth-dropdown">
+              {Array.from({ length: maxDepth }, (_, i) => i + 1).map((depth) => (
+                <button
+                  key={depth}
+                  type="button"
+                  onClick={() => {
+                    onTreeAction(
+                      depth === 1
+                        ? "expandDepth1"
+                        : depth === 2
+                          ? "expandDepth2"
+                          : depth === 3
+                            ? "expandDepth3"
+                            : "expandDepth1",
+                    );
+                    setDepthMenuOpen(false);
+                  }}
+                  className="explorer-depth-option"
+                >
+                  Depth {depth}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </nav>
 
       {focusedFolderPath && focusBreadcrumb.length ? (
@@ -855,6 +925,7 @@ const ExplorerTreeRow = memo(function ExplorerTreeRow({
         tabIndex={0}
         draggable={row.kind === "file" && isImagePath(row.path)}
         data-tree-node="true"
+        data-explorer-path={row.path}
         data-tree-drop-path={row.kind === "folder" ? row.path : undefined}
         aria-pressed={multiSelectedPaths.has(row.path)}
         className={`tree-button ${selectedPath === row.path ? "active" : ""} ${multiSelectedPaths.has(row.path) ? "multi-selected" : ""} ${row.hasDescription ? "has-description" : ""} ${row.isFolderDescription ? "is-folder-description" : ""} ${isOpen ? "is-open" : ""} ${pointerDragTargetPath === row.path ? "tree-drop-into" : ""} ${isDragOver && dropPosition ? `tree-drop-${dropPosition}` : ""}`}

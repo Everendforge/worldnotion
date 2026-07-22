@@ -25,6 +25,7 @@ function tab(path: string): OpenTab {
     title: path.replace(/\.md$/i, ""),
     dirty: false,
     mode: "write",
+    writingMode: "processed",
     isTemplate: false,
     rawMarkdown: "",
     savedMarkdown: "",

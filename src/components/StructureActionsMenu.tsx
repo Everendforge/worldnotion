@@ -19,16 +19,19 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { StructuredElement } from "../utils/structuredMarkdown";
+import type { StructuredRange } from "../utils/structuredRangeIndex";
 import { wikilinkMarkdown } from "../utils/structuredMarkdown";
 import { imageMarkdown } from "../utils/attachments";
 import type { ResolvedWikilink } from "../editorTypes";
 
 export type StructureActionsMenuProps = {
   element: StructuredElement;
+  parents?: StructuredRange[];
   x: number;
   y: number;
   onDismiss: () => void;
   onReplace: (element: StructuredElement, replacement: string) => void;
+  onSelectElement?: (element: StructuredRange) => void;
   onOpenSource: () => void;
   onOpenWikilink?: (target: string) => void;
   onOpenUrl?: (url: string) => void;
@@ -42,12 +45,16 @@ const KIND_META: Record<StructuredElement["kind"], { icon: LucideIcon; label: st
   footnote: { icon: Superscript, label: "Footnote" },
   bold: { icon: Bold, label: "Bold" },
   italic: { icon: Italic, label: "Italic" },
+  strikethrough: { icon: Type, label: "Strikethrough" },
   "inline-code": { icon: Code2, label: "Inline code" },
+  "fenced-code": { icon: Code2, label: "Code block" },
   heading: { icon: Hash, label: "Heading" },
   task: { icon: CheckSquare, label: "Task" },
   list: { icon: List, label: "List item" },
   quote: { icon: Quote, label: "Quote" },
+  divider: { icon: FileText, label: "Divider" },
   table: { icon: FileText, label: "Table" },
+  "font-span": { icon: Type, label: "Font span" },
   variant: { icon: FileText, label: "Variant" },
 };
 
@@ -93,10 +100,12 @@ function ActionChip({
 
 export function StructureActionsMenu({
   element,
+  parents = [],
   x,
   y,
   onDismiss,
   onReplace,
+  onSelectElement,
   onOpenSource,
   onOpenWikilink,
   onOpenUrl,
@@ -204,6 +213,20 @@ export function StructureActionsMenu({
           </span>
         ) : null}
       </header>
+
+      {parents.length ? (
+        <nav className="format-panel-parents" aria-label="Containing structures">
+          {parents.map((parent) => (
+            <button
+              key={`${parent.kind}:${parent.from}:${parent.to}`}
+              type="button"
+              onClick={() => onSelectElement?.(parent)}
+            >
+              {KIND_META[parent.kind].label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
       {element.kind === "wikilink" ? (
         <div className="format-panel-fields">
@@ -333,7 +356,11 @@ export function StructureActionsMenu({
           <ActionChip icon={Copy} label="Copy" onClick={() => void copyReference()} />
         ) : null}
 
-        {element.kind === "bold" || element.kind === "italic" || element.kind === "inline-code" ? (
+        {element.kind === "bold" ||
+        element.kind === "italic" ||
+        element.kind === "strikethrough" ||
+        element.kind === "inline-code" ||
+        element.kind === "font-span" ? (
           <ActionChip
             icon={Type}
             label="Remove formatting"
@@ -379,6 +406,16 @@ export function StructureActionsMenu({
             icon={Type}
             label="Turn into text"
             onClick={() => replace(plainBlockText(element))}
+          />
+        ) : null}
+
+        {element.kind === "fenced-code" || element.kind === "table" ? (
+          <ActionChip
+            icon={Type}
+            label="Turn into text"
+            onClick={() =>
+              replace("plainText" in element ? String(element.plainText) : element.label)
+            }
           />
         ) : null}
 

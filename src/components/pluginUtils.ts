@@ -79,7 +79,7 @@ export function syntaxMarker(
 
 /**
  * Creates a decoration for hiding syntax characters (brackets, pipes, etc.)
- * while preserving the actual content.
+ * while preserving the actual content. Hidden elements are not selectable or clickable.
  *
  * @param from - Start position
  * @param to - End position
@@ -91,6 +91,10 @@ export function createSyntaxHiddenDecoration(from: number, to: number): Range<De
     inclusive: false,
     inclusiveStart: false,
     inclusiveEnd: false,
+    attributes: {
+      style: "pointer-events: none; user-select: none;",
+      "aria-hidden": "true",
+    },
   }).range(from, to);
 }
 

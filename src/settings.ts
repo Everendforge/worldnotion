@@ -6,6 +6,7 @@ import {
   DEFAULT_KEYBINDINGS,
   DEFAULT_PLUGIN_SETTINGS,
 } from "./editorTypes";
+import type { DefaultEditorMode, WritingMode, WorkspaceSession } from "./editorTypes";
 import { normalizeThemeId } from "./themes";
 import { DEFAULT_AI_ADVISOR_SETTINGS, normalizeAiAdvisorSettings } from "./utils/aiProviders";
 import { normalizePluginSettings } from "./utils/pluginRegistry";
@@ -13,6 +14,46 @@ import { normalizeLocalePreference } from "./i18n";
 
 export const SETTINGS_KEY = "worldnotion.settings.v4";
 export const LEGACY_SETTINGS_KEY = "worldnotion.settings.v3";
+
+function legacyWritingMode(
+  editor: Record<string, unknown>,
+  legacyPluginEnabled: unknown,
+): WritingMode {
+  if (editor.writeStructureMode === "semi" || editor.writeStructureMode === "visible") {
+    return "semi";
+  }
+  if (editor.writeStructureMode === "processed") return "processed";
+  return editor.hideMarkdownSyntaxInWrite === false || legacyPluginEnabled === false
+    ? "semi"
+    : "processed";
+}
+
+function normalizeDefaultMode(value: unknown, writingMode: WritingMode): DefaultEditorMode {
+  if (value === "source" || value === "processed" || value === "semi") return value;
+  if (value === "write") return writingMode;
+  return writingMode;
+}
+
+function normalizeSessions(
+  sessions: AppSettingsV4["sessions"] | undefined,
+  writingMode: WritingMode,
+): Record<string, WorkspaceSession> {
+  return Object.fromEntries(
+    Object.entries(sessions ?? {}).map(([rootPath, session]) => [
+      rootPath,
+      {
+        ...session,
+        tabs: (session.tabs ?? []).map((tab) => ({
+          ...tab,
+          writingMode:
+            tab.writingMode === "semi" || tab.writingMode === "processed"
+              ? tab.writingMode
+              : writingMode,
+        })),
+      },
+    ]),
+  );
+}
 
 export function loadSettings(): AppSettingsV4 {
   try {
@@ -56,13 +97,14 @@ export function loadSettings(): AppSettingsV4 {
     const legacyPluginEnabled = (parsed.plugins?.enabled as Record<string, unknown> | undefined)?.[
       "markdown-syntax-hiding"
     ];
-    const writeStructureMode =
-      legacyEditor.writeStructureMode === "visible" ||
-      legacyEditor.writeStructureMode === "processed"
-        ? legacyEditor.writeStructureMode
-        : legacyEditor.hideMarkdownSyntaxInWrite === false || legacyPluginEnabled === false
-          ? "visible"
-          : "processed";
+    const writingMode = legacyWritingMode(legacyEditor, legacyPluginEnabled);
+    const defaultMode = normalizeDefaultMode(legacyEditor.defaultMode, writingMode);
+    const {
+      hideMarkdownSyntaxInWrite: _legacySyntaxSetting,
+      writeStructureMode: _legacyStructureMode,
+      defaultMode: _legacyDefaultMode,
+      ...editorSettings
+    } = legacyEditor;
 
     return {
       localePreference: normalizeLocalePreference(parsed.localePreference),
@@ -70,7 +112,7 @@ export function loadSettings(): AppSettingsV4 {
       recentUniverse: parsed.recentUniverse,
       recentUniverses,
       recentUniverseProfiles: parsed.recentUniverseProfiles ?? {},
-      editor: { ...DEFAULT_EDITOR_SETTINGS, ...(parsed.editor ?? {}), writeStructureMode },
+      editor: { ...DEFAULT_EDITOR_SETTINGS, ...editorSettings, defaultMode },
       explorer: {
         ...DEFAULT_EXPLORER_SETTINGS,
         ...parsedExplorer,
@@ -82,7 +124,7 @@ export function loadSettings(): AppSettingsV4 {
       plugins: normalizePluginSettings(parsed.plugins ?? DEFAULT_PLUGIN_SETTINGS),
       aiAdvisor: normalizeAiAdvisorSettings(parsed.aiAdvisor ?? DEFAULT_AI_ADVISOR_SETTINGS),
       keybindings: mergedKeybindings,
-      sessions: parsed.sessions ?? {},
+      sessions: normalizeSessions(parsed.sessions, writingMode),
     };
   } catch {
     return {
@@ -109,10 +151,11 @@ function settingsReplacer(key: string, value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
 
   if (key === "editor") {
-    const { hideMarkdownSyntaxInWrite: _legacySyntaxSetting, ...editor } = value as Record<
-      string,
-      unknown
-    >;
+    const {
+      hideMarkdownSyntaxInWrite: _legacySyntaxSetting,
+      writeStructureMode: _legacyStructureMode,
+      ...editor
+    } = value as Record<string, unknown>;
     return editor;
   }
 

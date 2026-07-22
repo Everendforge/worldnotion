@@ -4,48 +4,52 @@ import {
   isStructuralChange,
   createSyntaxHiddenDecoration,
   createStyledDecoration,
+  selectionTouches,
 } from "./pluginUtils";
+import type { WritingMode } from "../editorTypes";
+import { buildStructuredRangeIndex } from "../utils/structuredRangeIndex";
 
-// Compiled once at module load - matches [^1], [^abc], etc. (inline footnote references)
-const FOOTNOTE_REF_REGEX = /\[\^([^\]\n]+)\]/g;
-
-export function footnotePlugin(options: { presentation?: "visible" | "processed" } = {}) {
+export function footnotePlugin(options: { presentation: WritingMode }) {
   function getDecorations(view: EditorView): DecorationSet {
     const decorations: Range<Decoration>[] = [];
-    if (options.presentation === "visible") return Decoration.none;
+    for (const element of buildStructuredRangeIndex(view.state).ranges.filter(
+      (item) => item.kind === "footnote",
+    )) {
+      const refId = element.label;
+      const start = element.from;
+      const end = element.to;
+      const selection = view.state.selection.main;
+      const isSelected =
+        options.presentation === "semi" &&
+        selectionTouches(selection.from, selection.to, start, end);
 
-    // Process inline footnote references [^1]
-    for (const { from, to } of view.visibleRanges) {
-      const text = view.state.doc.sliceString(from, to);
-      let match: RegExpExecArray | null;
+      if (!isSelected) {
+        // Show the semantic superscript while hiding its Markdown wrapper.
+        // Hide opening bracket [
+        const openHidden = createSyntaxHiddenDecoration(start, start + 1);
+        if (openHidden) decorations.push(openHidden);
 
-      FOOTNOTE_REF_REGEX.lastIndex = 0;
-      while ((match = FOOTNOTE_REF_REGEX.exec(text)) !== null) {
-        const refId = match[1];
-        const start = from + match.index;
-        const end = start + match[0].length;
-        const isSelected = false;
+        // Hide caret ^
+        const caretHidden = createSyntaxHiddenDecoration(start + 1, start + 2);
+        if (caretHidden) decorations.push(caretHidden);
 
-        if (!isSelected) {
-          // Show as superscript, hide the brackets
-          // Hide opening bracket [
-          const openHidden = createSyntaxHiddenDecoration(start, start + 1);
-          if (openHidden) decorations.push(openHidden);
+        // Style the reference ID as superscript
+        const refDecoration = createStyledDecoration(start + 2, end - 1, "cm-footnote-ref", {
+          "data-footnote": refId,
+        });
+        if (refDecoration) decorations.push(refDecoration);
 
-          // Hide caret ^
-          const caretHidden = createSyntaxHiddenDecoration(start + 1, start + 2);
-          if (caretHidden) decorations.push(caretHidden);
-
-          // Style the reference ID as superscript
-          const refDecoration = createStyledDecoration(start + 2, end - 1, "cm-footnote-ref", {
-            "data-footnote": refId,
-          });
-          if (refDecoration) decorations.push(refDecoration);
-
-          // Hide closing bracket ]
-          const closeHidden = createSyntaxHiddenDecoration(end - 1, end);
-          if (closeHidden) decorations.push(closeHidden);
-        }
+        // Hide closing bracket ]
+        const closeHidden = createSyntaxHiddenDecoration(end - 1, end);
+        if (closeHidden) decorations.push(closeHidden);
+      } else {
+        const activeDecoration = createStyledDecoration(
+          start,
+          end,
+          "cm-footnote-ref cm-markdown-syntax-muted",
+          { "data-footnote": refId },
+        );
+        if (activeDecoration) decorations.push(activeDecoration);
       }
     }
 
